@@ -14,6 +14,9 @@ import Academy from "./pages/Academy";
 import Bestellung from "./pages/Bestellung";
 import Kamera from "./pages/Kamera";
 import Suche from "./pages/Suche";
+import Expose from "./pages/Expose";
+import Newsletter from "./pages/Newsletter";
+import ImmoZ from "./pages/ImmoZ";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +39,9 @@ const App = () => (
             <Route path="/bestellung" element={<Bestellung />} />
             <Route path="/kamera" element={<Kamera />} />
             <Route path="/suche" element={<Suche />} />
+            <Route path="/expose" element={<Expose />} />
+            <Route path="/newsletter" element={<Newsletter />} />
+            <Route path="/immoz" element={<ImmoZ />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
