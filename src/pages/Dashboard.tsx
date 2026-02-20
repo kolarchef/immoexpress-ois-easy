@@ -1,9 +1,24 @@
-import { TrendingUp, Euro, Building2, Users, CheckSquare, Calendar, ChevronRight, MapPin, Clock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  CheckSquare, Calendar, MapPin, Clock,
+  Users, Building2, ShieldAlert, GraduationCap,
+  ShoppingCart, FileText, Mail, ArrowLeftRight,
+  Search, Camera
+} from "lucide-react";
 
-const metrics = [
-  { label: "Jahresumsatz (YTD)", value: "€452.000", sub: "+12.4%", icon: Euro, trend: true },
-  { label: "Aktive Objekte", value: "128", sub: "Wien & Bundesländer", icon: Building2, trend: false },
-  { label: "CRM Kunden", value: "347", sub: "+8 diese Woche", icon: Users, trend: true },
+const modules = [
+  { label: "CRM Kunden", icon: Users, path: "/crm", color: "bg-blue-50 text-blue-600" },
+  { label: "Objekte", icon: Building2, path: "/objekte", color: "bg-amber-50 text-amber-600" },
+  { label: "Standort", icon: MapPin, path: "/standort", color: "bg-emerald-50 text-emerald-600" },
+  { label: "SOS Recht", icon: ShieldAlert, path: "/sos-recht", color: "bg-red-50 text-red-600" },
+  { label: "Exposé", icon: FileText, path: "/expose", color: "bg-primary-light text-primary" },
+  { label: "Newsletter", icon: Mail, path: "/newsletter", color: "bg-purple-50 text-purple-600" },
+  { label: "ImmoZ", icon: ArrowLeftRight, path: "/immoz", color: "bg-cyan-50 text-cyan-600" },
+  { label: "Academy", icon: GraduationCap, path: "/academy", color: "bg-indigo-50 text-indigo-600" },
+  { label: "Bestellung", icon: ShoppingCart, path: "/bestellung", color: "bg-orange-50 text-orange-500" },
+  { label: "Kamera", icon: Camera, path: "/kamera", color: "bg-slate-100 text-slate-600" },
+  { label: "Suche", icon: Search, path: "/suche", color: "bg-teal-50 text-teal-600" },
+  { label: "Kalender", icon: Calendar, path: "/kalender", color: "bg-rose-50 text-rose-600" },
 ];
 
 const todos = [
@@ -21,13 +36,6 @@ const appointments = [
   { time: "16:30", duration: "45 MIN", title: "Marktanalyse: 1220 Wien Donaustadt", location: "Online Meeting", type: "analyse" },
 ];
 
-const typeColors: Record<string, string> = {
-  besichtigung: "bg-accent border-l-primary",
-  notar: "bg-primary border-l-primary",
-  vertrag: "bg-accent border-l-primary",
-  analyse: "bg-accent border-l-primary",
-};
-
 const days = ["MO", "DI", "MI", "DO", "FR", "SA", "SO"];
 const today = new Date().getDay();
 const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -40,36 +48,41 @@ const weekDates = Array.from({ length: 7 }, (_, i) => {
 });
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+
   return (
-    <div className="p-4 lg:p-8 space-y-6 animate-fade-in max-w-5xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-6 animate-fade-in max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Guten Morgen, Max – heute ist viel zu tun! 🏠</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Guten Morgen, Max 🏠</p>
         </div>
         <div className="text-right">
           <div className="text-xs text-muted-foreground">Wien, Österreich</div>
-          <div className="text-sm font-semibold text-foreground">{new Date().toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "long" })}</div>
+          <div className="text-sm font-semibold text-foreground">
+            {new Date().toLocaleDateString("de-AT", { weekday: "long", day: "2-digit", month: "long" })}
+          </div>
         </div>
       </div>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {metrics.map((m) => (
-          <div key={m.label} className="bg-card rounded-2xl p-5 shadow-card border border-border flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary-light flex items-center justify-center flex-shrink-0">
-              <m.icon size={22} className="text-primary" />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{m.label}</div>
-              <div className="text-xl font-bold text-foreground mt-0.5">{m.value}</div>
-              <div className={`text-xs font-medium flex items-center gap-1 mt-0.5 ${m.trend ? "text-primary" : "text-muted-foreground"}`}>
-                {m.trend && <TrendingUp size={12} />}{m.sub}
+      {/* Module Grid */}
+      <div className="bg-card rounded-2xl p-4 shadow-card border border-border">
+        <h2 className="font-bold text-foreground text-sm mb-3 uppercase tracking-wide text-muted-foreground">Module</h2>
+        <div className="grid grid-cols-4 gap-3">
+          {modules.map(({ label, icon: Icon, path, color }) => (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-accent transition-all group"
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-card transition-all group-hover:scale-105 ${color}`}>
+                <Icon size={22} />
               </div>
-            </div>
-          </div>
-        ))}
+              <span className="text-[10px] font-semibold text-foreground text-center leading-tight">{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Two columns: To-Do & Termine */}
@@ -89,7 +102,7 @@ export default function Dashboard() {
             {todos.map((todo) => (
               <div key={todo.id} className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${todo.done ? "opacity-50 bg-muted" : "bg-accent hover:bg-secondary border-border"}`}>
                 <div className={`mt-0.5 w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border-2 ${todo.done ? "bg-primary border-primary" : "border-muted-foreground"}`}>
-                  {todo.done && <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-primary-foreground fill-current"><path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  {todo.done && <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-primary-foreground fill-current"><path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-medium leading-snug ${todo.done ? "line-through text-muted-foreground" : "text-foreground"}`}>{todo.text}</p>
@@ -115,7 +128,7 @@ export default function Dashboard() {
           </div>
           <div className="space-y-2">
             {appointments.map((apt, i) => (
-              <div key={i} className={`flex gap-3 p-3 rounded-xl border-l-4 ${apt.type === "notar" ? "bg-primary text-primary-foreground border-l-primary-dark" : "bg-accent border-l-primary"}`}>
+              <div key={i} className={`flex gap-3 p-3 rounded-xl border-l-4 ${apt.type === "notar" ? "bg-primary text-primary-foreground border-l-primary" : "bg-accent border-l-primary"}`}>
                 <div className="flex-shrink-0 text-right">
                   <div className={`font-bold text-sm tabular-nums ${apt.type === "notar" ? "text-primary-foreground" : "text-primary"}`}>{apt.time}</div>
                   <div className={`text-xs ${apt.type === "notar" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{apt.duration}</div>
