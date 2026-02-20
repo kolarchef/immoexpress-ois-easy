@@ -1,1 +1,4 @@
 project_id = "jmssrlvqlhgexfjvghcu"
+
+[functions.expose-ki]
+verify_jwt = false

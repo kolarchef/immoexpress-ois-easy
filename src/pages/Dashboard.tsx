@@ -66,25 +66,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Module Grid */}
-      <div className="bg-card rounded-2xl p-4 shadow-card border border-border">
-        <h2 className="font-bold text-foreground text-sm mb-3 uppercase tracking-wide text-muted-foreground">Module</h2>
-        <div className="grid grid-cols-4 gap-3">
-          {modules.map(({ label, icon: Icon, path, color }) => (
-            <button
-              key={path}
-              onClick={() => navigate(path)}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-accent transition-all group"
-            >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-card transition-all group-hover:scale-105 ${color}`}>
-                <Icon size={22} />
-              </div>
-              <span className="text-[10px] font-semibold text-foreground text-center leading-tight">{label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Two columns: To-Do & Termine */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* To-Do Liste */}
@@ -142,6 +123,25 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Module Grid – kompakt, unter To-Do & Termine */}
+      <div className="bg-card rounded-2xl p-4 shadow-card border border-border">
+        <h2 className="font-bold text-foreground text-xs mb-3 uppercase tracking-wide text-muted-foreground">Module</h2>
+        <div className="grid grid-cols-4 gap-2">
+          {modules.map(({ label, icon: Icon, path, color }) => (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl hover:bg-accent transition-all group"
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-card transition-all group-hover:scale-105 ${color}`}>
+                <Icon size={20} />
+              </div>
+              <span className="text-[10px] font-semibold text-foreground text-center leading-tight">{label}</span>
+            </button>
+          ))}
         </div>
       </div>
 

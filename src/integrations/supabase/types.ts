@@ -14,7 +14,201 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      crm_kunden: {
+        Row: {
+          budget: string | null
+          created_at: string
+          dsgvo_einwilligung: boolean | null
+          einzugsdatum: string | null
+          email: string | null
+          geburtsdatum: string | null
+          id: string
+          kaufdatum: string | null
+          liste: string | null
+          name: string
+          newsletter_aktiv: boolean | null
+          notiz: string | null
+          ort: string | null
+          phone: string | null
+          status: string | null
+          sterne: number | null
+          typ: string | null
+          updated_at: string
+        }
+        Insert: {
+          budget?: string | null
+          created_at?: string
+          dsgvo_einwilligung?: boolean | null
+          einzugsdatum?: string | null
+          email?: string | null
+          geburtsdatum?: string | null
+          id?: string
+          kaufdatum?: string | null
+          liste?: string | null
+          name: string
+          newsletter_aktiv?: boolean | null
+          notiz?: string | null
+          ort?: string | null
+          phone?: string | null
+          status?: string | null
+          sterne?: number | null
+          typ?: string | null
+          updated_at?: string
+        }
+        Update: {
+          budget?: string | null
+          created_at?: string
+          dsgvo_einwilligung?: boolean | null
+          einzugsdatum?: string | null
+          email?: string | null
+          geburtsdatum?: string | null
+          id?: string
+          kaufdatum?: string | null
+          liste?: string | null
+          name?: string
+          newsletter_aktiv?: boolean | null
+          notiz?: string | null
+          ort?: string | null
+          phone?: string | null
+          status?: string | null
+          sterne?: number | null
+          typ?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      immoz_exporte: {
+        Row: {
+          anzahl: number | null
+          dateiname: string | null
+          erstellt_am: string
+          id: string
+          objekte_ids: string[] | null
+          status: string | null
+        }
+        Insert: {
+          anzahl?: number | null
+          dateiname?: string | null
+          erstellt_am?: string
+          id?: string
+          objekte_ids?: string[] | null
+          status?: string | null
+        }
+        Update: {
+          anzahl?: number | null
+          dateiname?: string | null
+          erstellt_am?: string
+          id?: string
+          objekte_ids?: string[] | null
+          status?: string | null
+        }
+        Relationships: []
+      }
+      newsletter_kampagnen: {
+        Row: {
+          betreff: string
+          created_at: string
+          empfaenger: number | null
+          gesendet_am: string | null
+          id: string
+          liste: string | null
+          status: string | null
+          text: string | null
+          typ: string | null
+        }
+        Insert: {
+          betreff: string
+          created_at?: string
+          empfaenger?: number | null
+          gesendet_am?: string | null
+          id?: string
+          liste?: string | null
+          status?: string | null
+          text?: string | null
+          typ?: string | null
+        }
+        Update: {
+          betreff?: string
+          created_at?: string
+          empfaenger?: number | null
+          gesendet_am?: string | null
+          id?: string
+          liste?: string | null
+          status?: string | null
+          text?: string | null
+          typ?: string | null
+        }
+        Relationships: []
+      }
+      objekte: {
+        Row: {
+          beschreibung: string | null
+          created_at: string
+          flaeche_m2: number | null
+          hnr: string | null
+          id: string
+          immoz_export_datum: string | null
+          immoz_exportiert: boolean | null
+          kaufpreis: number | null
+          ki_text: string | null
+          kurzinfo: string | null
+          objektart: string | null
+          objektnummer: string | null
+          ort: string | null
+          plz: string | null
+          provisionsstellung: string | null
+          status: string | null
+          strasse: string | null
+          updated_at: string
+          verkaufsart: string | null
+          zimmer: number | null
+        }
+        Insert: {
+          beschreibung?: string | null
+          created_at?: string
+          flaeche_m2?: number | null
+          hnr?: string | null
+          id?: string
+          immoz_export_datum?: string | null
+          immoz_exportiert?: boolean | null
+          kaufpreis?: number | null
+          ki_text?: string | null
+          kurzinfo?: string | null
+          objektart?: string | null
+          objektnummer?: string | null
+          ort?: string | null
+          plz?: string | null
+          provisionsstellung?: string | null
+          status?: string | null
+          strasse?: string | null
+          updated_at?: string
+          verkaufsart?: string | null
+          zimmer?: number | null
+        }
+        Update: {
+          beschreibung?: string | null
+          created_at?: string
+          flaeche_m2?: number | null
+          hnr?: string | null
+          id?: string
+          immoz_export_datum?: string | null
+          immoz_exportiert?: boolean | null
+          kaufpreis?: number | null
+          ki_text?: string | null
+          kurzinfo?: string | null
+          objektart?: string | null
+          objektnummer?: string | null
+          ort?: string | null
+          plz?: string | null
+          provisionsstellung?: string | null
+          status?: string | null
+          strasse?: string | null
+          updated_at?: string
+          verkaufsart?: string | null
+          zimmer?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
