@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, Upload, Wand2, X, Image } from "lucide-react";
+import { FileText, Upload, Wand2, X, Image, Download } from "lucide-react";
 
 const bundeslaender = [
   "Wien – 1. Bezirk (Innere Stadt)", "Wien – 2. Bezirk (Leopoldstadt)", "Wien – 3. Bezirk (Landstraße)",
@@ -20,6 +20,7 @@ export default function Expose() {
   const [images, setImages] = useState<string[]>([]);
   const [aiText, setAiText] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [form, setForm] = useState({
     titel: "", bezirk: "", objektart: "", kaufpreis: "", miete: "",
     flaeche: "", zimmer: "", beschreibung: "", verkaufsart: "Kauf",
@@ -43,12 +44,80 @@ export default function Expose() {
         `${form.titel || "Exklusive Immobilie"} in ${form.bezirk || "Wien"} – ${form.objektart || "Wohnung"}\n\n` +
         `Diese ${form.flaeche ? form.flaeche + " m² große " : ""}${form.objektart || "Immobilie"} befindet sich in bevorzugter Lage in ${form.bezirk || "Wien"} ` +
         `und überzeugt durch hochwertige Ausstattung sowie eine optimale Raumaufteilung mit ${form.zimmer || "mehreren"} Zimmern.\n\n` +
+        `${form.beschreibung ? form.beschreibung + "\n\n" : ""}` +
         `${form.verkaufsart === "Kauf" ? `Kaufpreis: € ${form.kaufpreis || "auf Anfrage"}` : `Miete: € ${form.miete || "auf Anfrage"}/Monat`}\n\n` +
         `Alle Angaben ohne Gewähr. Irrtümer und Änderungen vorbehalten. Provisionspflichtig gemäß Alleinvermittlungsauftrag (MaklerG). ` +
         `Energieausweis liegt vor bzw. wird bis zur Besichtigung beigebracht.`
       );
       setGenerating(false);
     }, 1500);
+  };
+
+  const handlePdfExport = () => {
+    setExportingPdf(true);
+
+    // Build a printable HTML and trigger browser print as PDF
+    const printContent = `
+      <!DOCTYPE html>
+      <html lang="de">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Exposé – ${form.titel || "Immobilie"}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 40px; color: #1a1a1a; }
+          h1 { font-size: 24px; color: #E8541A; margin-bottom: 4px; }
+          .subtitle { color: #888; font-size: 14px; margin-bottom: 24px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+          .field { background: #f7f7f7; border-radius: 8px; padding: 12px; }
+          .field label { font-size: 11px; text-transform: uppercase; color: #888; display: block; margin-bottom: 4px; }
+          .field span { font-size: 15px; font-weight: 600; }
+          .ai-text { background: #fff8f5; border: 1px solid #E8541A33; border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; }
+          .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 24px; }
+          .photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
+          .disclaimer { margin-top: 32px; border-top: 1px solid #eee; padding-top: 16px; font-size: 11px; color: #888; }
+          .logo { font-size: 18px; font-weight: bold; color: #E8541A; margin-bottom: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="logo">ImmoExpress</div>
+        <h1>${form.titel || "Immobilien-Exposé"}</h1>
+        <div class="subtitle">${form.bezirk || ""} · ${form.objektart || ""}</div>
+
+        ${images.length > 0 ? `<div class="photos">${images.slice(0, 6).map(img => `<img src="${img}" alt="Objektfoto" />`).join("")}</div>` : ""}
+
+        <div class="grid">
+          <div class="field"><label>Objektart</label><span>${form.objektart || "–"}</span></div>
+          <div class="field"><label>Vermarktung</label><span>${form.verkaufsart}</span></div>
+          <div class="field"><label>Lage</label><span>${form.bezirk || "–"}</span></div>
+          <div class="field"><label>${form.verkaufsart === "Kauf" ? "Kaufpreis" : "Miete"}</label><span>€ ${form.verkaufsart === "Kauf" ? (form.kaufpreis || "auf Anfrage") : (form.miete ? form.miete + "/Monat" : "auf Anfrage")}</span></div>
+          <div class="field"><label>Wohnfläche</label><span>${form.flaeche ? form.flaeche + " m²" : "–"}</span></div>
+          <div class="field"><label>Zimmer</label><span>${form.zimmer || "–"}</span></div>
+        </div>
+
+        ${aiText ? `<div class="ai-text">${aiText}</div>` : ""}
+
+        <div class="disclaimer">
+          <strong>Haftungsausschluss:</strong> Alle Angaben ohne Gewähr. Irrtümer und Änderungen vorbehalten.
+          Provisionspflichtig gemäß Alleinvermittlungsauftrag (MaklerG). Energieausweis liegt vor bzw. wird bis zur Besichtigung beigebracht.
+          Die angegebenen Preise sind unverbindlich. Dieses Exposé dient ausschließlich Informationszwecken und stellt kein Angebot im Rechtssinne dar.
+          <br /><br />Erstellt mit ImmoExpress · ${new Date().toLocaleDateString("de-AT")}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(printContent);
+      win.document.close();
+      win.focus();
+      setTimeout(() => {
+        win.print();
+        setExportingPdf(false);
+      }, 500);
+    } else {
+      setExportingPdf(false);
+    }
   };
 
   return (
@@ -200,7 +269,7 @@ export default function Expose() {
         </div>
         <textarea
           className="w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-          rows={6}
+          rows={7}
           placeholder="KI-generierter Exposé-Text erscheint hier (österreichisches Deutsch, inkl. Provisionspflicht-Hinweis)…"
           value={aiText}
           onChange={(e) => setAiText(e.target.value)}
@@ -210,13 +279,23 @@ export default function Expose() {
           disabled={generating}
           className="mt-3 w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold shadow-orange hover:opacity-90 transition-all disabled:opacity-60"
         >
-          {generating ? "Generiere Text…" : "Text generieren"}
+          {generating ? "Generiere Text…" : "✨ Text generieren"}
         </button>
       </div>
 
-      <button className="w-full bg-primary text-primary-foreground rounded-xl py-3 text-sm font-semibold shadow-orange hover:opacity-90 transition-all">
-        Exposé als PDF exportieren
+      {/* PDF Export */}
+      <button
+        onClick={handlePdfExport}
+        disabled={exportingPdf}
+        className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 text-sm font-semibold shadow-orange hover:opacity-90 transition-all disabled:opacity-60"
+      >
+        <Download size={16} />
+        {exportingPdf ? "PDF wird erstellt…" : "Exposé als PDF exportieren"}
       </button>
+
+      <p className="text-xs text-muted-foreground text-center pb-4">
+        ⚖️ Haftungsausschluss wird automatisch ins PDF eingefügt · Maklergesetz (MaklerG) konform
+      </p>
     </div>
   );
 }

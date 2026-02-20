@@ -1,13 +1,43 @@
 import { useState } from "react";
-import { Search, Plus, Phone, Mail, MessageCircle, MapPin, Star, Filter, X } from "lucide-react";
+import { Search, Plus, Phone, Mail, MessageCircle, MapPin, Star, Filter, X, Calendar, Home, Key } from "lucide-react";
 
 const kunden = [
-  { id: 1, name: "Maria Huber", email: "m.huber@email.at", phone: "+43 664 123 4567", typ: "Käufer", ort: "Wien 1010", budget: "€650.000", status: "Aktiv", sterne: 5, notiz: "Sucht 4-Zimmer-Wohnung, Alleinvermittlung bevorzugt" },
-  { id: 2, name: "Thomas Müller", email: "t.mueller@firma.at", phone: "+43 676 987 6543", typ: "Verkäufer", ort: "Wien 1030", budget: "€420.000", status: "Aktiv", sterne: 4, notiz: "Verkauf Eigentumswohnung, flexibel bei Übergabe" },
-  { id: 3, name: "Anna Schmidt", email: "a.schmidt@web.at", phone: "+43 699 555 1234", typ: "Mieter", ort: "Graz", budget: "€1.800/Mon", status: "In Bearbeitung", sterne: 3, notiz: "Sucht Bürofläche 120m², Nähe Graz-Hauptbahnhof" },
-  { id: 4, name: "Karl Bauer", email: "k.bauer@outlook.at", phone: "+43 660 321 7890", typ: "Investor", ort: "Salzburg", budget: "€1.2M", status: "Aktiv", sterne: 5, notiz: "Anlageimmobilien, Rendite min. 4%, Nebenkostenübersicht angefordert" },
-  { id: 5, name: "Sandra Lehner", email: "s.lehner@gmx.at", phone: "+43 650 444 8888", typ: "Käufer", ort: "Linz", budget: "€280.000", status: "Neu", sterne: 4, notiz: "Erstmals Kaufinteressentin, Finanzamt-Gebühren klären" },
-  { id: 6, name: "Peter Wimmer", email: "p.wimmer@aon.at", phone: "+43 664 777 2222", typ: "Verkäufer", ort: "Wien 1180", budget: "€890.000", status: "Aktiv", sterne: 5, notiz: "Einfamilienhaus, Alleinvermittlungsvertrag unterschrieben" },
+  {
+    id: 1, name: "Maria Huber", email: "m.huber@email.at", phone: "+43 664 123 4567",
+    typ: "Käufer", ort: "Wien 1010", budget: "€650.000", status: "Aktiv", sterne: 5,
+    notiz: "Sucht 4-Zimmer-Wohnung, Alleinvermittlung bevorzugt",
+    geburtsdatum: "1982-03-15", kaufdatum: "2024-06-01", einzugsdatum: "2024-07-15",
+  },
+  {
+    id: 2, name: "Thomas Müller", email: "t.mueller@firma.at", phone: "+43 676 987 6543",
+    typ: "Verkäufer", ort: "Wien 1030", budget: "€420.000", status: "Aktiv", sterne: 4,
+    notiz: "Verkauf Eigentumswohnung, flexibel bei Übergabe",
+    geburtsdatum: "1975-11-28", kaufdatum: "2023-09-10", einzugsdatum: "2023-11-01",
+  },
+  {
+    id: 3, name: "Anna Schmidt", email: "a.schmidt@web.at", phone: "+43 699 555 1234",
+    typ: "Mieter", ort: "Graz", budget: "€1.800/Mon", status: "In Bearbeitung", sterne: 3,
+    notiz: "Sucht Bürofläche 120m², Nähe Graz-Hauptbahnhof",
+    geburtsdatum: "1990-07-04", kaufdatum: "2025-01-15", einzugsdatum: "2025-02-01",
+  },
+  {
+    id: 4, name: "Karl Bauer", email: "k.bauer@outlook.at", phone: "+43 660 321 7890",
+    typ: "Investor", ort: "Salzburg", budget: "€1.2M", status: "Aktiv", sterne: 5,
+    notiz: "Anlageimmobilien, Rendite min. 4%, Nebenkostenübersicht angefordert",
+    geburtsdatum: "1968-12-25", kaufdatum: "2022-04-20", einzugsdatum: "2022-06-01",
+  },
+  {
+    id: 5, name: "Sandra Lehner", email: "s.lehner@gmx.at", phone: "+43 650 444 8888",
+    typ: "Käufer", ort: "Linz", budget: "€280.000", status: "Neu", sterne: 4,
+    notiz: "Erstmals Kaufinteressentin, Finanzamt-Gebühren klären",
+    geburtsdatum: "1995-05-20", kaufdatum: "", einzugsdatum: "",
+  },
+  {
+    id: 6, name: "Peter Wimmer", email: "p.wimmer@aon.at", phone: "+43 664 777 2222",
+    typ: "Verkäufer", ort: "Wien 1180", budget: "€890.000", status: "Aktiv", sterne: 5,
+    notiz: "Einfamilienhaus, Alleinvermittlungsvertrag unterschrieben",
+    geburtsdatum: "1970-08-10", kaufdatum: "2021-12-01", einzugsdatum: "2022-02-15",
+  },
 ];
 
 const statusColors: Record<string, string> = {
@@ -23,10 +53,24 @@ const typColors: Record<string, string> = {
   "Investor": "bg-amber-50 text-amber-600",
 };
 
+function formatDate(dateStr: string) {
+  if (!dateStr) return "–";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+type Kunde = typeof kunden[0];
+
 export default function CRM() {
   const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
-  const [selected, setSelected] = useState<typeof kunden[0] | null>(null);
+  const [selected, setSelected] = useState<Kunde | null>(null);
+
+  const [newForm, setNewForm] = useState({
+    vorname: "", nachname: "", phone: "", email: "", typ: "Käufer",
+    notiz: "", zustaendigkeit: "Vertriebsteam Wien",
+    geburtsdatum: "", kaufdatum: "", einzugsdatum: "", dsgvo: false,
+  });
 
   const filtered = kunden.filter(k =>
     k.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -71,11 +115,9 @@ export default function CRM() {
         {filtered.map((k) => (
           <div key={k.id} className="bg-card rounded-2xl p-4 shadow-card border border-border hover:shadow-card-hover transition-all duration-200 cursor-pointer" onClick={() => setSelected(k)}>
             <div className="flex items-start gap-4">
-              {/* Avatar */}
               <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 shadow-orange-sm text-primary-foreground font-bold text-lg">
                 {k.name.charAt(0)}
               </div>
-
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-bold text-foreground">{k.name}</h3>
@@ -90,6 +132,24 @@ export default function CRM() {
                 <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                   <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{k.ort}</span>
                   <span className="text-xs font-semibold text-primary">{k.budget}</span>
+                </div>
+                {/* Datums-Chips */}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {k.geburtsdatum && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
+                      <Calendar size={10} /> GEB {formatDate(k.geburtsdatum)}
+                    </span>
+                  )}
+                  {k.kaufdatum && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
+                      <Key size={10} /> KAUF {formatDate(k.kaufdatum)}
+                    </span>
+                  )}
+                  {k.einzugsdatum && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
+                      <Home size={10} /> EINZUG {formatDate(k.einzugsdatum)}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{k.notiz}</p>
               </div>
@@ -124,7 +184,7 @@ export default function CRM() {
       {/* Detail Modal */}
       {selected && (
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-          <div className="bg-card rounded-2xl shadow-md-custom border border-border w-full max-w-md p-6 animate-fade-in">
+          <div className="bg-card rounded-2xl shadow-md-custom border border-border w-full max-w-md p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-foreground">{selected.name}</h2>
               <button onClick={() => setSelected(null)} className="p-2 rounded-xl hover:bg-accent transition-colors"><X size={18} /></button>
@@ -134,6 +194,23 @@ export default function CRM() {
               <div className="flex justify-between"><span className="text-muted-foreground">Ort</span><span className="font-semibold">{selected.ort}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-bold text-primary">{selected.budget}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="font-semibold">{selected.status}</span></div>
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Wichtige Daten</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Calendar size={13} /> Geburtsdatum</span>
+                    <span className="font-semibold text-sm">{formatDate(selected.geburtsdatum)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Key size={13} /> Kauf-/Mietdatum</span>
+                    <span className="font-semibold text-sm">{formatDate(selected.kaufdatum)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Home size={13} /> Einzugsdatum</span>
+                    <span className="font-semibold text-sm">{formatDate(selected.einzugsdatum)}</span>
+                  </div>
+                </div>
+              </div>
               <div className="pt-2 border-t border-border"><span className="text-muted-foreground block mb-1">Notizen</span><p className="text-foreground">{selected.notiz}</p></div>
             </div>
             <div className="flex gap-2 mt-4">
@@ -160,42 +237,62 @@ export default function CRM() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Vorname</label>
-                  <input placeholder="z.B. Max" className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                  <input value={newForm.vorname} onChange={e => setNewForm({...newForm, vorname: e.target.value})} placeholder="z.B. Max" className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Nachname</label>
-                  <input placeholder="Mustermann" className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                  <input value={newForm.nachname} onChange={e => setNewForm({...newForm, nachname: e.target.value})} placeholder="Mustermann" className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
                 </div>
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Mobiltelefon</label>
-                <input placeholder="+43 664 123 4567" className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                <input value={newForm.phone} onChange={e => setNewForm({...newForm, phone: e.target.value})} placeholder="+43 664 123 4567" className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1.5">E-Mail Adresse</label>
-                <input placeholder="name@beispiel.at" className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                <input value={newForm.email} onChange={e => setNewForm({...newForm, email: e.target.value})} placeholder="name@beispiel.at" className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Typ</label>
-                <select className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground">
+                <select value={newForm.typ} onChange={e => setNewForm({...newForm, typ: e.target.value})} className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground">
                   <option>Käufer</option><option>Verkäufer</option><option>Mieter</option><option>Investor</option>
                 </select>
               </div>
+
+              {/* Neue Datumsfelder */}
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5"><Calendar size={13} /> Wichtige Daten (Newsletter-Trigger)</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Geburtsdatum</label>
+                    <input type="date" value={newForm.geburtsdatum} onChange={e => setNewForm({...newForm, geburtsdatum: e.target.value})} className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Kaufdatum / Mietdatum des Objekts</label>
+                    <input type="date" value={newForm.kaufdatum} onChange={e => setNewForm({...newForm, kaufdatum: e.target.value})} className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Einzugsdatum</label>
+                    <input type="date" value={newForm.einzugsdatum} onChange={e => setNewForm({...newForm, einzugsdatum: e.target.value})} className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Notizen & Details</label>
-                <textarea rows={3} placeholder="Interessen, Budget, Suchprofil..." className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground resize-none" />
+                <textarea rows={3} value={newForm.notiz} onChange={e => setNewForm({...newForm, notiz: e.target.value})} placeholder="Interessen, Budget, Suchprofil..." className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground resize-none" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Zuständigkeit</label>
-                <select className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground">
+                <select value={newForm.zustaendigkeit} onChange={e => setNewForm({...newForm, zustaendigkeit: e.target.value})} className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground">
                   <option>Vertriebsteam Wien</option><option>Vertriebsteam Ost</option><option>Vertriebsteam West</option>
                 </select>
               </div>
               <label className="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" className="mt-0.5 accent-primary" />
+                <input type="checkbox" checked={newForm.dsgvo} onChange={e => setNewForm({...newForm, dsgvo: e.target.checked})} className="mt-0.5 accent-primary" />
                 <span className="text-xs text-muted-foreground">Ich bestätige die Datenschutzerklärung und die Einwilligung zur werblichen Kontaktaufnahme gemäß DSGVO.</span>
               </label>
-              <button className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-bold shadow-orange hover:bg-primary-dark transition-all active:scale-95">
+              <button disabled={!newForm.dsgvo} className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-bold shadow-orange hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50">
                 Kunden anlegen &amp; zuweisen
               </button>
             </div>
