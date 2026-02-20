@@ -65,6 +65,8 @@ export default function CRM() {
   const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [selected, setSelected] = useState<Kunde | null>(null);
+  const [editDates, setEditDates] = useState(false);
+  const [editedDates, setEditedDates] = useState({ geburtsdatum: "", kaufdatum: "", einzugsdatum: "" });
 
   const [newForm, setNewForm] = useState({
     vorname: "", nachname: "", phone: "", email: "", typ: "Käufer",
@@ -187,29 +189,79 @@ export default function CRM() {
           <div className="bg-card rounded-2xl shadow-md-custom border border-border w-full max-w-md p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-foreground">{selected.name}</h2>
-              <button onClick={() => setSelected(null)} className="p-2 rounded-xl hover:bg-accent transition-colors"><X size={18} /></button>
+              <button onClick={() => { setSelected(null); setEditDates(false); }} className="p-2 rounded-xl hover:bg-accent transition-colors"><X size={18} /></button>
             </div>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Typ</span><span className="font-semibold">{selected.typ}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Ort</span><span className="font-semibold">{selected.ort}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-bold text-primary">{selected.budget}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="font-semibold">{selected.status}</span></div>
+
+              {/* Datums-Sektion – editierbar */}
               <div className="pt-2 border-t border-border">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Wichtige Daten</p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Calendar size={13} /> Geburtsdatum</span>
-                    <span className="font-semibold text-sm">{formatDate(selected.geburtsdatum)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Key size={13} /> Kauf-/Mietdatum</span>
-                    <span className="font-semibold text-sm">{formatDate(selected.kaufdatum)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Home size={13} /> Einzugsdatum</span>
-                    <span className="font-semibold text-sm">{formatDate(selected.einzugsdatum)}</span>
-                  </div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Calendar size={13} /> Newsletter-Trigger Daten
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (!editDates) {
+                        setEditedDates({ geburtsdatum: selected.geburtsdatum, kaufdatum: selected.kaufdatum, einzugsdatum: selected.einzugsdatum });
+                      }
+                      setEditDates(!editDates);
+                    }}
+                    className="text-xs text-primary font-semibold hover:underline"
+                  >
+                    {editDates ? "Abbrechen" : "✏️ Bearbeiten"}
+                  </button>
                 </div>
+
+                {editDates ? (
+                  <div className="space-y-3 bg-accent rounded-xl p-3">
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground block mb-1 flex items-center gap-1"><Calendar size={11} /> Geburtsdatum</label>
+                      <input type="date" value={editedDates.geburtsdatum} onChange={e => setEditedDates({...editedDates, geburtsdatum: e.target.value})}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground block mb-1 flex items-center gap-1"><Key size={11} /> Kaufdatum / Mietdatum</label>
+                      <input type="date" value={editedDates.kaufdatum} onChange={e => setEditedDates({...editedDates, kaufdatum: e.target.value})}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground block mb-1 flex items-center gap-1"><Home size={11} /> Einzugsdatum</label>
+                      <input type="date" value={editedDates.einzugsdatum} onChange={e => setEditedDates({...editedDates, einzugsdatum: e.target.value})}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
+                    </div>
+                    <button
+                      onClick={() => setEditDates(false)}
+                      className="w-full bg-primary text-primary-foreground py-2 rounded-xl text-sm font-semibold shadow-orange hover:opacity-90 transition-all active:scale-95"
+                    >
+                      ✓ Daten speichern
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+                      <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Calendar size={13} /> Geburtsdatum</span>
+                      <span className={`font-semibold text-sm ${!selected.geburtsdatum ? "text-muted-foreground" : "text-foreground"}`}>
+                        {formatDate(editedDates.geburtsdatum || selected.geburtsdatum)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+                      <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Key size={13} /> Kauf-/Mietdatum</span>
+                      <span className={`font-semibold text-sm ${!selected.kaufdatum ? "text-muted-foreground" : "text-foreground"}`}>
+                        {formatDate(editedDates.kaufdatum || selected.kaufdatum)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5">
+                      <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Home size={13} /> Einzugsdatum</span>
+                      <span className={`font-semibold text-sm ${!selected.einzugsdatum ? "text-muted-foreground" : "text-foreground"}`}>
+                        {formatDate(editedDates.einzugsdatum || selected.einzugsdatum)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="pt-2 border-t border-border"><span className="text-muted-foreground block mb-1">Notizen</span><p className="text-foreground">{selected.notiz}</p></div>
             </div>
