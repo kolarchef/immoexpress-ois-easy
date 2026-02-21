@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, Check, CheckCheck, Send, Plus, ArrowLeft, Users, User, Briefcase, Mail, Phone } from "lucide-react";
+import { MessageCircle, Check, CheckCheck, Send, Plus, ArrowLeft, Users, User, Briefcase, Mail, Phone, UserPlus, Sparkles, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,16 +26,14 @@ interface Kunde {
   phone: string | null;
 }
 
-type View = "inbox" | "compose" | "detail";
+type View = "inbox" | "compose" | "detail" | "newcustomer";
 type EmpfaengerTyp = "kunde" | "intern" | "chef" | "extern";
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
 function ReadStatus({ typ, gelesen }: { typ: string | null; gelesen: boolean | null }) {
   if (typ === "ausgehend" || typ === "intern" || typ === "chef") {
-    if (gelesen) {
-      return <CheckCheck size={14} className="text-blue-500" />;
-    }
+    if (gelesen) return <CheckCheck size={14} className="text-blue-500" />;
     return <Check size={14} className="text-muted-foreground/50" />;
   }
   return null;
@@ -52,19 +50,14 @@ function TextWithEmailButtons({ text, onReply }: { text: string; onReply: (email
     lastIndex = regex.lastIndex;
   }
   if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-
   return (
     <span>
       {parts.map((p, i) =>
-        typeof p === "string" ? (
-          <span key={i}>{p}</span>
-        ) : (
+        typeof p === "string" ? <span key={i}>{p}</span> : (
           <span key={i} className="inline-flex items-center gap-1">
             <span className="text-primary font-medium">{p.email}</span>
-            <button
-              onClick={(e) => { e.stopPropagation(); onReply(p.email); }}
-              className="inline-flex items-center gap-0.5 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-semibold hover:bg-primary/20 transition-all"
-            >
+            <button onClick={(e) => { e.stopPropagation(); onReply(p.email); }}
+              className="inline-flex items-center gap-0.5 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-semibold hover:bg-primary/20 transition-all">
               <Mail size={10} /> Antworten
             </button>
           </span>
@@ -81,7 +74,6 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
   const [view, setView] = useState<View>("inbox");
   const [selectedMsg, setSelectedMsg] = useState<Nachricht | null>(null);
 
-  // Compose state
   const [empfaengerTyp, setEmpfaengerTyp] = useState<EmpfaengerTyp>("kunde");
   const [kunden, setKunden] = useState<Kunde[]>([]);
   const [selectedKunde, setSelectedKunde] = useState("");
@@ -89,10 +81,18 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
   const [inhalt, setInhalt] = useState("");
   const [replyText, setReplyText] = useState("");
   const [adHocEmail, setAdHocEmail] = useState("");
-
-  // Extern direct contact
   const [externEmail, setExternEmail] = useState("");
   const [externPhone, setExternPhone] = useState("");
+
+  // New customer from message
+  const [ncName, setNcName] = useState("");
+  const [ncEmail, setNcEmail] = useState("");
+  const [ncPhone, setNcPhone] = useState("");
+  const [extracting, setExtracting] = useState(false);
+
+  // AI reply suggestion
+  const [suggestedReply, setSuggestedReply] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
 
   const load = async () => {
     if (!user) return;
@@ -118,6 +118,7 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
   const openDetail = (m: Nachricht) => {
     setSelectedMsg(m);
     setAdHocEmail("");
+    setSuggestedReply("");
     setView("detail");
     if (!m.gelesen) markRead(m.id);
   };
@@ -127,11 +128,75 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
     setReplyText("");
   };
 
+  // KI: Extract contact from message
+  const extractContact = async () => {
+    if (!selectedMsg?.inhalt) return;
+    setExtracting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: { action: "extract-contact", messageText: selectedMsg.inhalt },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const text = data.result || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        setNcName(parsed.name || "");
+        setNcEmail(parsed.email || "");
+        setNcPhone(parsed.phone || "");
+      }
+      setView("newcustomer");
+    } catch (err: unknown) {
+      toast({ title: "KI-Extraktion fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  // Save new customer
+  const saveNewCustomer = async () => {
+    if (!user || !ncName.trim()) return;
+    const { error } = await supabase.from("crm_kunden").insert({
+      user_id: user.id,
+      name: ncName,
+      email: ncEmail || null,
+      phone: ncPhone || null,
+      typ: "Interessent",
+      status: "Aktiv",
+    });
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✅ Neukunde angelegt", description: ncName });
+      setView("detail");
+      loadKunden();
+    }
+  };
+
+  // KI: Suggest reply
+  const suggestReply = async () => {
+    if (!selectedMsg?.inhalt) return;
+    setSuggesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: { action: "suggest-reply", messageText: selectedMsg.inhalt },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const text = data.result || "";
+      setSuggestedReply(text);
+      setReplyText(text);
+    } catch (err: unknown) {
+      toast({ title: "KI-Fehler", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   const sendMessage = async () => {
     if (!user || !titel.trim()) return;
-
     if (empfaengerTyp === "extern") {
-      // Direct external contact
       await supabase.from("nachrichten").insert({ user_id: user.id, titel, inhalt, typ: "ausgehend" });
       if (externPhone.trim()) {
         const phone = externPhone.replace(/[^0-9+]/g, "").replace(/^0/, "+43");
@@ -167,7 +232,7 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
       await supabase.from("nachrichten").insert({ user_id: user.id, titel: `Re: ${selectedMsg.titel}`, inhalt: replyText, typ: "ausgehend" });
       toast({ title: "✅ Antwort gesendet" });
     }
-    setReplyText(""); load();
+    setReplyText(""); setSuggestedReply(""); load();
   };
 
   const unreadCount = messages.filter(m => !m.gelesen).length;
@@ -179,7 +244,7 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             {view !== "inbox" && (
-              <button onClick={() => { setView("inbox"); setAdHocEmail(""); }} className="p-1 rounded hover:bg-accent">
+              <button onClick={() => { setView(view === "newcustomer" ? "detail" : "inbox"); setAdHocEmail(""); }} className="p-1 rounded hover:bg-accent">
                 <ArrowLeft size={16} />
               </button>
             )}
@@ -187,6 +252,7 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
             {view === "inbox" && "Nachrichten"}
             {view === "compose" && "Neue Nachricht"}
             {view === "detail" && "Detail"}
+            {view === "newcustomer" && "Neukunde anlegen"}
             {view === "inbox" && unreadCount > 0 && (
               <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">{unreadCount}</span>
             )}
@@ -303,6 +369,20 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
                 )}
               </div>
 
+              {/* Action Buttons: New Customer + AI Reply */}
+              <div className="flex gap-2">
+                <button onClick={extractContact} disabled={extracting}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold bg-accent border border-border hover:bg-secondary transition-all disabled:opacity-50">
+                  {extracting ? <RefreshCw size={12} className="animate-spin" /> : <UserPlus size={12} className="text-primary" />}
+                  Als Neukunde
+                </button>
+                <button onClick={suggestReply} disabled={suggesting}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold bg-accent border border-border hover:bg-secondary transition-all disabled:opacity-50">
+                  {suggesting ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} className="text-primary" />}
+                  KI-Antwort
+                </button>
+              </div>
+
               {adHocEmail && (
                 <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-xl text-xs">
                   <Mail size={14} className="text-primary" />
@@ -311,15 +391,48 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
                 </div>
               )}
 
+              {suggestedReply && (
+                <div className="p-2 bg-primary/5 rounded-xl border border-primary/20 text-xs">
+                  <span className="font-bold text-primary flex items-center gap-1 mb-1"><Sparkles size={10} /> KI-Vorschlag</span>
+                  <p className="text-foreground whitespace-pre-wrap">{suggestedReply}</p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase">
                   {adHocEmail ? `E-Mail an ${adHocEmail}` : "Antworten"}
                 </label>
-                <Textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder={adHocEmail ? `Nachricht an ${adHocEmail}…` : "Antwort schreiben..."} rows={3} />
+                <Textarea value={replyText} onChange={e => setReplyText(e.target.value)}
+                  placeholder={adHocEmail ? `Nachricht an ${adHocEmail}…` : "Antwort schreiben..."} rows={3} />
                 <Button onClick={sendReply} size="sm" className="w-full" disabled={!replyText.trim()}>
                   <Send size={12} className="mr-1" /> {adHocEmail ? "Via E-Mail senden" : "Antworten"}
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* NEW CUSTOMER FROM MESSAGE */}
+          {view === "newcustomer" && (
+            <div className="space-y-4">
+              <div className="p-3 bg-primary/5 rounded-xl border border-primary/20 text-xs text-foreground">
+                <span className="font-bold text-primary flex items-center gap-1 mb-1"><Sparkles size={10} /> KI-extrahierte Daten</span>
+                <p className="text-muted-foreground">Bitte prüfen und bestätigen:</p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Name *</label>
+                <Input value={ncName} onChange={e => setNcName(e.target.value)} placeholder="Vor- und Nachname" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">E-Mail</label>
+                <Input value={ncEmail} onChange={e => setNcEmail(e.target.value)} placeholder="email@beispiel.at" type="email" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Telefon</label>
+                <Input value={ncPhone} onChange={e => setNcPhone(e.target.value)} placeholder="+43 664 ..." type="tel" />
+              </div>
+              <Button onClick={saveNewCustomer} className="w-full" disabled={!ncName.trim()}>
+                <UserPlus size={14} className="mr-1" /> Im CRM speichern
+              </Button>
             </div>
           )}
         </div>
