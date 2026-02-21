@@ -128,7 +128,7 @@ export default function ImmoConcierge() {
       toast({ title: "Keine Punkte ausgewählt", description: "Bitte wähle mindestens einen Versand-Punkt aus.", variant: "destructive" });
       return;
     }
-    const body = `hier sind die gesammelten Informationen für Ihren Einzug:\n\n${texts.join("\n")}\n\nBitte kümmern Sie sich bei Gelegenheit um die genannten Punkte.`;
+    const body = `hier sind die gesammelten Informationen für Ihren Einzug:\n\n${texts.map(t => `✅ ${t.replace("• ", "")}`).join("\n")}\n\nBitte kümmern Sie sich bei Gelegenheit um die genannten Punkte. Bei Fragen stehe ich Ihnen jederzeit zur Verfügung!`;
     if (via === "whatsapp") sendWhatsApp(body);
     if (via === "email") sendEmail(body);
   };
