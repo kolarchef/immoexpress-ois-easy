@@ -34,6 +34,7 @@ export type Database = {
           sterne: number | null
           typ: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           budget?: string | null
@@ -54,6 +55,7 @@ export type Database = {
           sterne?: number | null
           typ?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           budget?: string | null
@@ -74,6 +76,7 @@ export type Database = {
           sterne?: number | null
           typ?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -107,6 +110,7 @@ export type Database = {
       nachrichten: {
         Row: {
           created_at: string
+          empfaenger_id: string | null
           gelesen: boolean | null
           id: string
           inhalt: string | null
@@ -116,6 +120,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          empfaenger_id?: string | null
           gelesen?: boolean | null
           id?: string
           inhalt?: string | null
@@ -125,6 +130,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          empfaenger_id?: string | null
           gelesen?: boolean | null
           id?: string
           inhalt?: string | null
@@ -190,6 +196,7 @@ export type Database = {
           status: string | null
           strasse: string | null
           updated_at: string
+          user_id: string | null
           verkaufsart: string | null
           zimmer: number | null
         }
@@ -212,6 +219,7 @@ export type Database = {
           status?: string | null
           strasse?: string | null
           updated_at?: string
+          user_id?: string | null
           verkaufsart?: string | null
           zimmer?: number | null
         }
@@ -234,6 +242,7 @@ export type Database = {
           status?: string | null
           strasse?: string | null
           updated_at?: string
+          user_id?: string | null
           verkaufsart?: string | null
           zimmer?: number | null
         }
@@ -292,6 +301,62 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      termine: {
+        Row: {
+          created_at: string
+          datum: string
+          dauer_min: number
+          id: string
+          kunde_id: string | null
+          notiz: string | null
+          ort: string | null
+          titel: string
+          typ: string | null
+          uhrzeit: string
+          updated_at: string
+          user_id: string
+          wichtig: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          datum: string
+          dauer_min?: number
+          id?: string
+          kunde_id?: string | null
+          notiz?: string | null
+          ort?: string | null
+          titel: string
+          typ?: string | null
+          uhrzeit?: string
+          updated_at?: string
+          user_id: string
+          wichtig?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          datum?: string
+          dauer_min?: number
+          id?: string
+          kunde_id?: string | null
+          notiz?: string | null
+          ort?: string | null
+          titel?: string
+          typ?: string | null
+          uhrzeit?: string
+          updated_at?: string
+          user_id?: string
+          wichtig?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "termine_kunde_id_fkey"
+            columns: ["kunde_id"]
+            isOneToOne: false
+            referencedRelation: "crm_kunden"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unterlagen_anfragen: {
         Row: {
