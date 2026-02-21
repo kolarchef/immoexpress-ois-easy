@@ -19,6 +19,9 @@ import Newsletter from "./pages/Newsletter";
 import ImmoZ from "./pages/ImmoZ";
 import Unterlagen from "./pages/Unterlagen";
 import KundenUpload from "./pages/KundenUpload";
+import Grundbuch from "./pages/Grundbuch";
+import Bewertung from "./pages/Bewertung";
+import Netzwerk from "./pages/Netzwerk";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,8 +46,12 @@ const App = () => (
             <Route path="/suche" element={<Suche />} />
             <Route path="/expose" element={<Expose />} />
             <Route path="/newsletter" element={<Newsletter />} />
+            <Route path="/newsletter-modul" element={<Newsletter />} />
             <Route path="/immoz" element={<ImmoZ />} />
             <Route path="/unterlagen" element={<Unterlagen />} />
+            <Route path="/grundbuch" element={<Grundbuch />} />
+            <Route path="/bewertung" element={<Bewertung />} />
+            <Route path="/netzwerk" element={<Netzwerk />} />
           </Route>
           <Route path="/upload" element={<KundenUpload />} />
           <Route path="*" element={<NotFound />} />
