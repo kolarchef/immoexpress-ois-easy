@@ -4,9 +4,11 @@ import {
   MapPin, Clock,
   Users, Building2, ShieldAlert, GraduationCap,
   FileText, ArrowLeftRight,
-  Video, Clipboard, FolderPlus,
+  Video, FolderPlus,
   Search as SearchIcon, ShoppingCart, CheckSquare,
-  FileSearch, Calculator, Handshake
+  FileSearch, Calculator, Handshake, TrendingUp,
+  Clipboard, HeadphonesIcon, Scale, BookOpen,
+  Star
 } from "lucide-react";
 
 const mainModules = [
@@ -22,12 +24,17 @@ const mainModules = [
   { label: "SUCHE", icon: SearchIcon, path: "/suche" },
   { label: "IMMOZ", icon: ArrowLeftRight, path: "/immoz" },
   { label: "BESTELLUNGEN", icon: ShoppingCart, path: "/bestellung" },
-];
-
-const extraTools = [
   { label: "GRUNDBUCH", icon: FileSearch, path: "/grundbuch" },
   { label: "BEWERTUNG", icon: Calculator, path: "/bewertung" },
   { label: "NETZWERK", icon: Handshake, path: "/netzwerk" },
+  { label: "ZINSHAUS", icon: TrendingUp, path: "/zinshaus" },
+];
+
+const expertenTools = [
+  { label: "SERVICE-CENTER", desc: "After-Sales & Checklisten", icon: HeadphonesIcon },
+  { label: "PROVISIONS-RECHNER", desc: "Brutto/Netto-Kalkulation", icon: Calculator },
+  { label: "GESETZBUCH", desc: "Maklergesetz & ÖNORMEN", icon: Scale },
+  { label: "HANDBUCH", desc: "Interne Wissensdatenbank", icon: BookOpen },
 ];
 
 const initialTodos = [
@@ -118,9 +125,9 @@ export default function Index() {
         </div>
       </section>
 
-      {/* 12 Haupt-Module (3×4) */}
+      {/* 16 Haupt-Module (4×4) */}
       <section>
-        <h2 className="text-lg font-bold text-foreground mb-3">Werkzeuge</h2>
+        <h2 className="text-lg font-bold text-foreground mb-3">Module</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {mainModules.map(({ label, icon: Icon, path }) => (
             <button
@@ -137,18 +144,22 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Zusatz-Tools */}
+      {/* Experten-Tools */}
       <section>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Zusatz-Tools</h2>
-        <div className="grid grid-cols-3 gap-2">
-          {extraTools.map(({ label, icon: Icon, path }) => (
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Experten-Tools</h2>
+        <div className="grid grid-cols-2 gap-2">
+          {expertenTools.map(({ label, desc, icon: Icon }) => (
             <button
-              key={path}
-              onClick={() => navigate(path)}
-              className="flex items-center gap-2 p-3 rounded-xl bg-muted border border-border hover:bg-secondary transition-all"
+              key={label}
+              className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border hover:bg-secondary transition-all text-left"
             >
-              <Icon size={16} className="text-primary flex-shrink-0" />
-              <span className="text-xs font-semibold text-foreground truncate">{label}</span>
+              <div className="w-9 h-9 rounded-xl bg-primary-light flex items-center justify-center flex-shrink-0">
+                <Icon size={16} className="text-primary" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-foreground block truncate">{label}</span>
+                <span className="text-[10px] text-muted-foreground block truncate">{desc}</span>
+              </div>
             </button>
           ))}
         </div>
