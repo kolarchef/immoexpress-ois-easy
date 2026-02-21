@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { KeyRound, CheckCircle2, Circle, ExternalLink } from "lucide-react";
+import { KeyRound, CheckCircle2, Circle, ExternalLink, MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const checkliste = [
   { kategorie: "Meldewesen", items: [
@@ -65,6 +66,21 @@ export default function ImmoConcierge() {
           </div>
         </section>
       ))}
+
+      {/* WhatsApp senden */}
+      <Button
+        className="w-full"
+        onClick={() => {
+          const offene = checkliste.flatMap(k => k.items.map(i => `${k.kategorie}: ${i.text}`)).filter((_, i) => {
+            const allKeys = checkliste.flatMap(k => k.items.map(item => `${k.kategorie}-${item.text}`));
+            return !done.has(allKeys[i]);
+          });
+          const text = encodeURIComponent(`📋 Immo-Concierge Checkliste\n\nOffene Punkte:\n${offene.map(o => `• ${o}`).join("\n")}`);
+          window.open(`https://wa.me/?text=${text}`, "_blank");
+        }}
+      >
+        <MessageCircle size={18} className="mr-2" /> Via WhatsApp senden
+      </Button>
     </div>
   );
 }
