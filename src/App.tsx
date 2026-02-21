@@ -2,9 +2,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AppLayout from "./components/AppLayout";
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
 import Launchpad from "./pages/Launchpad";
 import Dashboard from "./pages/Dashboard";
 import CRM from "./pages/CRM";
@@ -24,9 +26,54 @@ import KundenUpload from "./pages/KundenUpload";
 import Grundbuch from "./pages/Grundbuch";
 import Bewertung from "./pages/Bewertung";
 import Netzwerk from "./pages/Netzwerk";
+import Zinshaus from "./pages/Zinshaus";
+import ImmoConcierge from "./pages/ImmoConcierge";
+import Gesetzbuch from "./pages/Gesetzbuch";
+import Profil from "./pages/Profil";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Laden...</div>;
+  if (!user) return <Navigate to="/auth" replace />;
+  return <>{children}</>;
+}
+
+const AppRoutes = () => (
+  <Routes>
+    <Route path="/auth" element={<Auth />} />
+    <Route path="/upload" element={<KundenUpload />} />
+    <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+      <Route path="/" element={<Index />} />
+      <Route path="/launchpad" element={<Launchpad />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/crm" element={<CRM />} />
+      <Route path="/objekte" element={<Objektverwaltung />} />
+      <Route path="/standort" element={<Standort />} />
+      <Route path="/sos-recht" element={<SOSRecht />} />
+      <Route path="/kalender" element={<Kalender />} />
+      <Route path="/academy" element={<Academy />} />
+      <Route path="/bestellung" element={<Bestellung />} />
+      <Route path="/kamera" element={<Kamera />} />
+      <Route path="/suche" element={<Suche />} />
+      <Route path="/expose" element={<Expose />} />
+      <Route path="/newsletter" element={<Newsletter />} />
+      <Route path="/newsletter-modul" element={<Newsletter />} />
+      <Route path="/immoz" element={<ImmoZ />} />
+      <Route path="/unterlagen" element={<Unterlagen />} />
+      <Route path="/grundbuch" element={<Grundbuch />} />
+      <Route path="/bewertung" element={<Bewertung />} />
+      <Route path="/netzwerk" element={<Netzwerk />} />
+      <Route path="/zinshaus" element={<Zinshaus />} />
+      <Route path="/immo-concierge" element={<ImmoConcierge />} />
+      <Route path="/gesetzbuch" element={<Gesetzbuch />} />
+      <Route path="/profil" element={<Profil />} />
+    </Route>
+    <Route path="*" element={<NotFound />} />
+  </Routes>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -34,32 +81,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Index />} />
-            <Route path="/launchpad" element={<Launchpad />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/crm" element={<CRM />} />
-            <Route path="/objekte" element={<Objektverwaltung />} />
-            <Route path="/standort" element={<Standort />} />
-            <Route path="/sos-recht" element={<SOSRecht />} />
-            <Route path="/kalender" element={<Kalender />} />
-            <Route path="/academy" element={<Academy />} />
-            <Route path="/bestellung" element={<Bestellung />} />
-            <Route path="/kamera" element={<Kamera />} />
-            <Route path="/suche" element={<Suche />} />
-            <Route path="/expose" element={<Expose />} />
-            <Route path="/newsletter" element={<Newsletter />} />
-            <Route path="/newsletter-modul" element={<Newsletter />} />
-            <Route path="/immoz" element={<ImmoZ />} />
-            <Route path="/unterlagen" element={<Unterlagen />} />
-            <Route path="/grundbuch" element={<Grundbuch />} />
-            <Route path="/bewertung" element={<Bewertung />} />
-            <Route path="/netzwerk" element={<Netzwerk />} />
-          </Route>
-          <Route path="/upload" element={<KundenUpload />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

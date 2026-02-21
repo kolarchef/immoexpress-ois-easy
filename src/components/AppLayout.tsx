@@ -1,5 +1,7 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import MessengerDrawer from "@/components/MessengerDrawer";
 import logoImg from "@/assets/logo_immoexpress.png";
 
 const bottomNav = [
@@ -11,6 +13,7 @@ const bottomNav = [
 
 export default function AppLayout() {
   const navigate = useNavigate();
+  const { displayName } = useAuth();
 
   return (
     <div className="flex flex-col min-h-screen bg-surface">
@@ -26,21 +29,25 @@ export default function AppLayout() {
 
         <div className="hidden md:flex items-center gap-1 text-sm text-muted-foreground">
           <span>Willkommen,</span>
-          <span className="font-semibold text-foreground">Max Mustermann</span>
+          <span className="font-semibold text-foreground">{displayName || "Makler"}</span>
           <span className="text-xs ml-2 bg-primary-light text-primary px-2 py-0.5 rounded-full font-semibold">Senior Agent · Wien</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="relative p-2 rounded-xl hover:bg-accent transition-colors">
-            <MessageCircle size={20} className="text-muted-foreground" />
-          </button>
+          <MessengerDrawer
+            trigger={
+              <button className="relative p-2 rounded-xl hover:bg-accent transition-colors">
+                <MessageCircle size={20} className="text-muted-foreground" />
+              </button>
+            }
+          />
           <button className="relative p-2 rounded-xl hover:bg-accent transition-colors">
             <Bell size={20} className="text-muted-foreground" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full"></span>
           </button>
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-orange-sm">
+          <button onClick={() => navigate("/profil")} className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-orange-sm">
             <User size={16} className="text-primary-foreground" />
-          </div>
+          </button>
         </div>
       </header>
 
@@ -49,7 +56,7 @@ export default function AppLayout() {
         <Outlet />
       </main>
 
-      {/* Bottom Navigation – 5 items: Home, Suche, Aufgaben, Kamera, Profil */}
+      {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border shadow-md-custom">
         <div className="flex items-center justify-around px-2 py-1.5 max-w-2xl mx-auto">
           {bottomNav.map(({ path, icon: Icon, label }) => (
@@ -74,7 +81,7 @@ export default function AppLayout() {
           ))}
 
           {/* Profil */}
-          <button className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all flex-1 text-muted-foreground hover:text-foreground">
+          <button onClick={() => navigate("/profil")} className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all flex-1 text-muted-foreground hover:text-foreground">
             <div className="p-1.5 rounded-xl">
               <User size={20} className="text-muted-foreground" />
             </div>
