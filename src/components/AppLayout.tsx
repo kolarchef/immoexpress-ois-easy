@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell } from "lucide-react";
+import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle } from "lucide-react";
 import logoImg from "@/assets/logo_immoexpress.png";
 
 const bottomNav = [
@@ -31,6 +31,9 @@ export default function AppLayout() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button className="relative p-2 rounded-xl hover:bg-accent transition-colors">
+            <MessageCircle size={20} className="text-muted-foreground" />
+          </button>
           <button className="relative p-2 rounded-xl hover:bg-accent transition-colors">
             <Bell size={20} className="text-muted-foreground" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full"></span>
