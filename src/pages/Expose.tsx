@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight } from "lucide-react";
+import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus } from "lucide-react";
+import ObjektModal from "@/components/ObjektModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { ArrowLeftRight, Upload, Download, CheckCircle2, AlertCircle, Clock, FileDown, RefreshCw } from "lucide-react";
+import { ArrowLeftRight, Upload, Download, CheckCircle2, AlertCircle, Clock, FileDown, RefreshCw, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import ObjektModal from "@/components/ObjektModal";
 import { toast } from "@/hooks/use-toast";
 
 type ExportRow = {
@@ -15,6 +16,7 @@ export default function ImmoZ() {
   const [exporte, setExporte] = useState<ExportRow[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [objekteCount, setObjekteCount] = useState(0);
+  const [showObjektModal, setShowObjektModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -73,9 +75,14 @@ export default function ImmoZ() {
 
   return (
     <div className="p-4 lg:p-8 space-y-5 animate-fade-in max-w-2xl mx-auto pb-28">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">ImmoZ-Schnittstelle</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">Datenimport & -export zur ImmoZ.at-Plattform</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">ImmoZ-Schnittstelle</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Datenimport & -export zur ImmoZ.at-Plattform</p>
+        </div>
+        <button onClick={() => setShowObjektModal(true)} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl font-semibold text-sm shadow-orange hover:bg-primary-dark transition-all active:scale-95">
+          <Plus size={16} /> Neues Objekt
+        </button>
       </div>
 
       {/* Verbindungsstatus */}
@@ -194,6 +201,8 @@ export default function ImmoZ() {
           </button>
         </div>
       </div>
+
+      <ObjektModal open={showObjektModal} onClose={() => setShowObjektModal(false)} onSaved={loadData} />
     </div>
   );
 }
