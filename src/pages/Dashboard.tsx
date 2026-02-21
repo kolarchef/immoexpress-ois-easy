@@ -59,7 +59,7 @@ export default function Dashboard() {
     setTodoList((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
 
   return (
-    <div className="p-4 lg:p-8 pb-28 space-y-6 animate-fade-in max-w-2xl mx-auto" style={{ overflow: 'visible', height: 'auto' }}>
+    <div className="p-4 lg:p-8 space-y-6 animate-fade-in max-w-2xl mx-auto" style={{ height: 'auto', overflow: 'visible', paddingBottom: '150px' }}>
       {/* To-Do Liste */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
         <div className="flex items-center justify-between mb-3">
@@ -122,20 +122,21 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Module Grid – 4×4 */}
-      <div>
+      {/* Module Grid – 4×4 flex-wrap */}
+      <div style={{ height: 'auto', overflow: 'visible' }}>
         <h2 className="text-lg font-bold text-foreground mb-3">Module</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', height: 'auto', overflow: 'visible' }}>
           {modules.map(({ label, icon: Icon, path }) => (
             <button
               key={path + label}
               onClick={() => navigate(path)}
+              style={{ width: 'calc(25% - 0.5625rem)', minWidth: '140px', flexShrink: 0 }}
               className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-card shadow-card border border-border hover:shadow-card-hover transition-all group"
             >
               <div className="w-12 h-12 rounded-2xl bg-primary-light flex items-center justify-center transition-all group-hover:scale-105 text-primary">
                 <Icon size={22} />
               </div>
-              <span className="text-xs font-bold text-foreground uppercase tracking-wide">{label}</span>
+              <span className="text-xs font-bold text-foreground uppercase tracking-wide text-center">{label}</span>
             </button>
           ))}
         </div>
