@@ -17,6 +17,7 @@ import Suche from "./pages/Suche";
 import Expose from "./pages/Expose";
 import Newsletter from "./pages/Newsletter";
 import ImmoZ from "./pages/ImmoZ";
+import KundenUpload from "./pages/KundenUpload";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/newsletter" element={<Newsletter />} />
             <Route path="/immoz" element={<ImmoZ />} />
           </Route>
+          <Route path="/upload" element={<KundenUpload />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

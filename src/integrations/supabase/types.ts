@@ -209,6 +209,68 @@ export type Database = {
         }
         Relationships: []
       }
+      unterlagen_anfragen: {
+        Row: {
+          abgeschlossen: boolean | null
+          checkliste: Json
+          erstellt_am: string
+          id: string
+          kunde_name: string
+          token: string
+        }
+        Insert: {
+          abgeschlossen?: boolean | null
+          checkliste?: Json
+          erstellt_am?: string
+          id?: string
+          kunde_name: string
+          token?: string
+        }
+        Update: {
+          abgeschlossen?: boolean | null
+          checkliste?: Json
+          erstellt_am?: string
+          id?: string
+          kunde_name?: string
+          token?: string
+        }
+        Relationships: []
+      }
+      unterlagen_uploads: {
+        Row: {
+          anfrage_id: string | null
+          dateiname: string | null
+          dokument_typ: string
+          erstellt_am: string
+          id: string
+          storage_path: string | null
+        }
+        Insert: {
+          anfrage_id?: string | null
+          dateiname?: string | null
+          dokument_typ: string
+          erstellt_am?: string
+          id?: string
+          storage_path?: string | null
+        }
+        Update: {
+          anfrage_id?: string | null
+          dateiname?: string | null
+          dokument_typ?: string
+          erstellt_am?: string
+          id?: string
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unterlagen_uploads_anfrage_id_fkey"
+            columns: ["anfrage_id"]
+            isOneToOne: false
+            referencedRelation: "unterlagen_anfragen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

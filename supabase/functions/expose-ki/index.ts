@@ -9,18 +9,18 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { form, imageDataUrls } = await req.json();
+    const { form, imageDataUrls, laenge } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY nicht konfiguriert");
 
     const hasImages = imageDataUrls && imageDataUrls.length > 0;
+    const isKurz = laenge === "kurz";
 
-    // Systemanweisung auf Österreichisch
     const systemPrompt = `Du bist ein erfahrener Wiener Immobilienmakler und Textspezialist. 
 Erstelle emotionale, verkaufsstarke Exposé-Texte im österreichischen Stil.
 Verwende gehobene Sprache, typisch wienerische Ausdrücke und hebe Lage und Lebensgefühl hervor.
 Beachte immer die österreichischen Rechtsvorgaben (MaklerG, EAVG).
-Schreibe kompakt und überzeugend, maximal 600 Wörter.`;
+${isKurz ? "Schreibe KOMPAKT und KURZ, maximal 200 Wörter. Nur das Wichtigste." : "Schreibe ausführlich und überzeugend, maximal 800 Wörter mit detaillierten Beschreibungen."}`;
 
     // Nachrichten zusammenstellen
     const messages: Array<{ role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [
