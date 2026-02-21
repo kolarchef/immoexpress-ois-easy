@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { KeyRound, CheckCircle2, Circle, ExternalLink, MessageCircle, Mail, Gift, Phone, CalendarPlus } from "lucide-react";
+import { KeyRound, CheckCircle2, Circle, ExternalLink, MessageCircle, Mail, Gift, Phone, CalendarPlus, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,6 +42,7 @@ const checkliste = [
 export default function ImmoConcierge() {
   const { user } = useAuth();
   const [done, setDone] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [kunden, setKunden] = useState<Kunde[]>([]);
   const [selectedKunde, setSelectedKunde] = useState<string>("");
 
@@ -100,9 +102,38 @@ export default function ImmoConcierge() {
     }
   };
 
-  const handleItemAction = (item: typeof checkliste[0]["items"][0], actionType: "whatsapp" | "email" | "click") => {
-    const key = item.text;
+  const toggleSelected = (key: string) => {
+    setSelected(prev => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
+  };
 
+  const getSelectedVersandTexts = () => {
+    const texts: string[] = [];
+    checkliste.forEach(({ items }) => {
+      items.forEach(item => {
+        if (item.typ === "versand" && selected.has(item.text)) {
+          texts.push(`• ${item.text}`);
+        }
+      });
+    });
+    return texts;
+  };
+
+  const sendBatch = (via: "whatsapp" | "email") => {
+    const texts = getSelectedVersandTexts();
+    if (texts.length === 0) {
+      toast({ title: "Keine Punkte ausgewählt", description: "Bitte wähle mindestens einen Versand-Punkt aus.", variant: "destructive" });
+      return;
+    }
+    const body = `hier sind die gesammelten Informationen für Ihren Einzug:\n\n${texts.join("\n")}\n\nBitte kümmern Sie sich bei Gelegenheit um die genannten Punkte.`;
+    if (via === "whatsapp") sendWhatsApp(body);
+    if (via === "email") sendEmail(body);
+  };
+
+  const handleItemAction = (item: typeof checkliste[0]["items"][0], actionType: "whatsapp" | "email" | "click") => {
     if (item.typ === "kalender") {
       createTermin(`🎁 ${item.text}${kunde ? ` – ${kunde.name}` : ""}`, 3);
       return;
@@ -154,18 +185,31 @@ export default function ImmoConcierge() {
               const key = `${kategorie}-${item.text}`;
               const isDone = done.has(key);
               const isKalender = item.typ === "kalender" || item.typ === "followup";
+              const isVersand = item.typ === "versand";
 
               return (
                 <div key={key} className={`rounded-xl transition-all ${isDone ? "bg-muted opacity-60" : "bg-accent"}`}>
-                  <div
-                    onClick={() => {
-                      toggle(key);
-                      if (isKalender && !isDone) handleItemAction(item, "click");
-                    }}
-                    className="flex items-center gap-3 p-3 cursor-pointer"
-                  >
-                    {isDone ? <CheckCircle2 size={18} className="text-primary flex-shrink-0" /> : <Circle size={18} className="text-muted-foreground flex-shrink-0" />}
-                    <span className={`text-sm flex-1 ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}>{item.text}</span>
+                  <div className="flex items-center gap-3 p-3">
+                    {/* Checkbox for batch selection (versand only) */}
+                    {isVersand && !isDone && (
+                      <Checkbox
+                        checked={selected.has(item.text)}
+                        onCheckedChange={() => toggleSelected(item.text)}
+                        className="flex-shrink-0"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    )}
+
+                    <div
+                      onClick={() => {
+                        toggle(key);
+                        if (isKalender && !isDone) handleItemAction(item, "click");
+                      }}
+                      className="flex items-center gap-3 flex-1 cursor-pointer"
+                    >
+                      {isDone ? <CheckCircle2 size={18} className="text-primary flex-shrink-0" /> : <Circle size={18} className="text-muted-foreground flex-shrink-0" />}
+                      <span className={`text-sm flex-1 ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}>{item.text}</span>
+                    </div>
 
                     {isKalender && (
                       <span className="text-[10px] text-primary font-semibold flex items-center gap-1">
@@ -180,8 +224,8 @@ export default function ImmoConcierge() {
                     )}
                   </div>
 
-                  {/* Versand-Buttons nur bei versand-Typ */}
-                  {!isDone && item.typ === "versand" && (
+                  {/* Einzel-Versand-Buttons */}
+                  {!isDone && isVersand && (
                     <div className="flex gap-2 px-3 pb-3">
                       <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => handleItemAction(item, "whatsapp")}>
                         <MessageCircle size={12} className="mr-1" /> WhatsApp
@@ -197,6 +241,24 @@ export default function ImmoConcierge() {
           </div>
         </section>
       ))}
+
+      {/* Sammelversand-Button */}
+      {selected.size > 0 && (
+        <div className="bg-card rounded-2xl p-5 shadow-card border border-primary/30 space-y-3">
+          <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Send size={16} className="text-primary" />
+            {selected.size} Punkt{selected.size > 1 ? "e" : ""} ausgewählt – gesammelt senden
+          </p>
+          <div className="flex gap-3">
+            <Button size="sm" onClick={() => sendBatch("whatsapp")} className="flex-1">
+              <MessageCircle size={14} className="mr-1" /> Via WhatsApp
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => sendBatch("email")} className="flex-1">
+              <Mail size={14} className="mr-1" /> Via E-Mail
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
