@@ -28,6 +28,7 @@ export type Database = {
           name: string
           newsletter_aktiv: boolean | null
           notiz: string | null
+          objekt_id: string | null
           ort: string | null
           phone: string | null
           status: string | null
@@ -49,6 +50,7 @@ export type Database = {
           name: string
           newsletter_aktiv?: boolean | null
           notiz?: string | null
+          objekt_id?: string | null
           ort?: string | null
           phone?: string | null
           status?: string | null
@@ -70,6 +72,7 @@ export type Database = {
           name?: string
           newsletter_aktiv?: boolean | null
           notiz?: string | null
+          objekt_id?: string | null
           ort?: string | null
           phone?: string | null
           status?: string | null
@@ -78,7 +81,15 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "crm_kunden_objekt_id_fkey"
+            columns: ["objekt_id"]
+            isOneToOne: false
+            referencedRelation: "objekte"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       immoz_exporte: {
         Row: {

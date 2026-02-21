@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Plus, Phone, Mail, MessageCircle, MapPin, Star, Filter, X, Calendar, Home, Key } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const kunden = [
   {
@@ -72,7 +74,19 @@ export default function CRM() {
     vorname: "", nachname: "", phone: "", email: "", typ: "Käufer",
     notiz: "", zustaendigkeit: "Vertriebsteam Wien",
     geburtsdatum: "", kaufdatum: "", einzugsdatum: "", dsgvo: false,
+    objekt_id: "",
   });
+
+  const [objekte, setObjekte] = useState<{ id: string; objektnummer: string | null; objektart: string | null; ort: string | null }[]>([]);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      supabase.from("objekte").select("id, objektnummer, objektart, ort").then(({ data }) => {
+        if (data) setObjekte(data);
+      });
+    }
+  }, [user]);
 
   const filtered = kunden.filter(k =>
     k.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -328,6 +342,16 @@ export default function CRM() {
                     <input type="date" value={newForm.einzugsdatum} onChange={e => setNewForm({...newForm, einzugsdatum: e.target.value})} className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground" />
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Objekt zuweisen (optional)</label>
+                <select value={newForm.objekt_id} onChange={e => setNewForm({...newForm, objekt_id: e.target.value})} className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground">
+                  <option value="">Kein Objekt</option>
+                  {objekte.map(o => (
+                    <option key={o.id} value={o.id}>{o.objektnummer || "–"} · {o.objektart} · {o.ort || ""}</option>
+                  ))}
+                </select>
               </div>
 
               <div>

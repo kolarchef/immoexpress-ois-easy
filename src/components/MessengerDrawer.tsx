@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, Check, CheckCheck, Send, Plus, ArrowLeft, Users, User, Briefcase } from "lucide-react";
+import { MessageCircle, Check, CheckCheck, Send, Plus, ArrowLeft, Users, User, Briefcase, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +29,8 @@ interface Kunde {
 type View = "inbox" | "compose" | "detail";
 type EmpfaengerTyp = "kunde" | "intern" | "chef";
 
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
 function ReadStatus({ typ, gelesen }: { typ: string | null; gelesen: boolean | null }) {
   if (typ === "ausgehend" || typ === "intern" || typ === "chef") {
     if (gelesen) {
@@ -37,6 +39,40 @@ function ReadStatus({ typ, gelesen }: { typ: string | null; gelesen: boolean | n
     return <Check size={14} className="text-muted-foreground/50" />;
   }
   return null;
+}
+
+/** Render text with clickable email reply buttons */
+function TextWithEmailButtons({ text, onReply }: { text: string; onReply: (email: string) => void }) {
+  const parts: (string | { email: string })[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const regex = new RegExp(EMAIL_REGEX.source, "g");
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    parts.push({ email: match[0] });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+
+  return (
+    <span>
+      {parts.map((p, i) =>
+        typeof p === "string" ? (
+          <span key={i}>{p}</span>
+        ) : (
+          <span key={i} className="inline-flex items-center gap-1">
+            <span className="text-primary font-medium">{p.email}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onReply(p.email); }}
+              className="inline-flex items-center gap-0.5 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-semibold hover:bg-primary/20 transition-all"
+            >
+              <Mail size={10} /> Antworten
+            </button>
+          </span>
+        )
+      )}
+    </span>
+  );
 }
 
 export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode }) {
@@ -53,6 +89,7 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
   const [titel, setTitel] = useState("");
   const [inhalt, setInhalt] = useState("");
   const [replyText, setReplyText] = useState("");
+  const [adHocEmail, setAdHocEmail] = useState("");
 
   const load = async () => {
     if (!user) return;
@@ -67,10 +104,7 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
   };
 
   useEffect(() => {
-    if (open && user) {
-      load();
-      loadKunden();
-    }
+    if (open && user) { load(); loadKunden(); }
   }, [open, user]);
 
   const markRead = async (id: string) => {
@@ -80,59 +114,49 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
 
   const openDetail = (m: Nachricht) => {
     setSelectedMsg(m);
+    setAdHocEmail("");
     setView("detail");
     if (!m.gelesen) markRead(m.id);
   };
 
+  const startAdHocReply = (email: string) => {
+    setAdHocEmail(email);
+    setReplyText("");
+  };
+
   const sendMessage = async () => {
     if (!user || !titel.trim()) return;
-
     if (empfaengerTyp === "kunde") {
       const kunde = kunden.find(k => k.id === selectedKunde);
       if (!kunde) { toast({ title: "Bitte Kunde wählen", variant: "destructive" }); return; }
-
-      await supabase.from("nachrichten").insert({
-        user_id: user.id,
-        titel,
-        inhalt,
-        typ: "ausgehend",
-      });
-
+      await supabase.from("nachrichten").insert({ user_id: user.id, titel, inhalt, typ: "ausgehend" });
       if (kunde.phone) {
         const phone = kunde.phone.replace(/[^0-9+]/g, "").replace(/^0/, "+43");
-        const msg = encodeURIComponent(`${titel}\n\n${inhalt}`);
-        window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(`${titel}\n\n${inhalt}`)}`, "_blank");
       } else if (kunde.email) {
         window.open(`mailto:${kunde.email}?subject=${encodeURIComponent(titel)}&body=${encodeURIComponent(inhalt)}`, "_blank");
       }
     } else {
-      await supabase.from("nachrichten").insert({
-        user_id: user.id,
-        titel,
-        inhalt,
-        typ: empfaengerTyp === "chef" ? "chef" : "intern",
-      });
+      await supabase.from("nachrichten").insert({ user_id: user.id, titel, inhalt, typ: empfaengerTyp === "chef" ? "chef" : "intern" });
     }
-
     toast({ title: "✅ Nachricht gesendet" });
-    setTitel("");
-    setInhalt("");
-    setSelectedKunde("");
-    setView("inbox");
-    load();
+    setTitel(""); setInhalt(""); setSelectedKunde(""); setView("inbox"); load();
   };
 
   const sendReply = async () => {
     if (!user || !selectedMsg || !replyText.trim()) return;
-    await supabase.from("nachrichten").insert({
-      user_id: user.id,
-      titel: `Re: ${selectedMsg.titel}`,
-      inhalt: replyText,
-      typ: "ausgehend",
-    });
-    toast({ title: "✅ Antwort gesendet" });
-    setReplyText("");
-    load();
+
+    if (adHocEmail) {
+      // Ad-hoc email reply
+      await supabase.from("nachrichten").insert({ user_id: user.id, titel: `Re: ${selectedMsg.titel}`, inhalt: replyText, typ: "ausgehend" });
+      window.open(`mailto:${adHocEmail}?subject=${encodeURIComponent(`Re: ${selectedMsg.titel}`)}&body=${encodeURIComponent(replyText)}`, "_blank");
+      toast({ title: `✅ E-Mail an ${adHocEmail}` });
+      setAdHocEmail("");
+    } else {
+      await supabase.from("nachrichten").insert({ user_id: user.id, titel: `Re: ${selectedMsg.titel}`, inhalt: replyText, typ: "ausgehend" });
+      toast({ title: "✅ Antwort gesendet" });
+    }
+    setReplyText(""); load();
   };
 
   const unreadCount = messages.filter(m => !m.gelesen).length;
@@ -144,7 +168,7 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             {view !== "inbox" && (
-              <button onClick={() => setView("inbox")} className="p-1 rounded hover:bg-accent">
+              <button onClick={() => { setView("inbox"); setAdHocEmail(""); }} className="p-1 rounded hover:bg-accent">
                 <ArrowLeft size={16} />
               </button>
             )}
@@ -165,7 +189,6 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
               <Button onClick={() => setView("compose")} className="w-full mb-3" size="sm">
                 <Plus size={14} className="mr-1" /> Neue Nachricht
               </Button>
-
               {messages.length === 0 ? (
                 <div className="text-center py-12">
                   <MessageCircle size={40} className="text-muted-foreground mx-auto mb-3" />
@@ -173,11 +196,8 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
                 </div>
               ) : (
                 messages.map(m => (
-                  <div
-                    key={m.id}
-                    onClick={() => openDetail(m)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all ${m.gelesen ? "bg-muted border-border opacity-60" : "bg-accent border-primary/20 hover:bg-secondary"}`}
-                  >
+                  <div key={m.id} onClick={() => openDetail(m)}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${m.gelesen ? "bg-muted border-border opacity-60" : "bg-accent border-primary/20 hover:bg-secondary"}`}>
                     <div className="flex items-start justify-between gap-2">
                       <h3 className={`text-sm font-semibold ${m.gelesen ? "text-muted-foreground" : "text-foreground"}`}>{m.titel}</h3>
                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -206,43 +226,32 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
                     { value: "chef" as EmpfaengerTyp, icon: Briefcase, label: "Chef" },
                     { value: "intern" as EmpfaengerTyp, icon: Users, label: "Makler" },
                   ]).map(({ value, icon: Icon, label }) => (
-                    <button
-                      key={value}
-                      onClick={() => setEmpfaengerTyp(value)}
-                      className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                        empfaengerTyp === value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"
-                      }`}
-                    >
+                    <button key={value} onClick={() => setEmpfaengerTyp(value)}
+                      className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all ${empfaengerTyp === value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
                       <Icon size={12} /> {label}
                     </button>
                   ))}
                 </div>
               </div>
-
               {empfaengerTyp === "kunde" && (
                 <div>
                   <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Kunde</label>
                   <Select value={selectedKunde} onValueChange={setSelectedKunde}>
                     <SelectTrigger><SelectValue placeholder="Kunde wählen" /></SelectTrigger>
                     <SelectContent>
-                      {kunden.map(k => (
-                        <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>
-                      ))}
+                      {kunden.map(k => <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               )}
-
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Betreff</label>
                 <Input value={titel} onChange={e => setTitel(e.target.value)} placeholder="Betreff eingeben" />
               </div>
-
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Nachricht</label>
                 <Textarea value={inhalt} onChange={e => setInhalt(e.target.value)} placeholder="Nachricht schreiben..." rows={4} />
               </div>
-
               <Button onClick={sendMessage} className="w-full" disabled={!titel.trim()}>
                 <Send size={14} className="mr-1" /> Senden
               </Button>
@@ -260,14 +269,29 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
                 <span className="text-[10px] text-muted-foreground">
                   {new Date(selectedMsg.created_at).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </span>
-                {selectedMsg.inhalt && <p className="text-sm text-foreground mt-3 whitespace-pre-wrap">{selectedMsg.inhalt}</p>}
+                {selectedMsg.inhalt && (
+                  <p className="text-sm text-foreground mt-3 whitespace-pre-wrap">
+                    <TextWithEmailButtons text={selectedMsg.inhalt} onReply={startAdHocReply} />
+                  </p>
+                )}
               </div>
 
+              {/* Ad-hoc email indicator */}
+              {adHocEmail && (
+                <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-xl text-xs">
+                  <Mail size={14} className="text-primary" />
+                  <span className="text-foreground font-medium">Antwort an: <span className="text-primary">{adHocEmail}</span></span>
+                  <button onClick={() => setAdHocEmail("")} className="ml-auto text-muted-foreground hover:text-foreground text-xs">✕</button>
+                </div>
+              )}
+
               <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase">Antworten</label>
-                <Textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Antwort schreiben..." rows={3} />
+                <label className="text-xs font-bold text-muted-foreground uppercase">
+                  {adHocEmail ? `E-Mail an ${adHocEmail}` : "Antworten"}
+                </label>
+                <Textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder={adHocEmail ? `Nachricht an ${adHocEmail}…` : "Antwort schreiben..."} rows={3} />
                 <Button onClick={sendReply} size="sm" className="w-full" disabled={!replyText.trim()}>
-                  <Send size={12} className="mr-1" /> Antworten
+                  <Send size={12} className="mr-1" /> {adHocEmail ? "Via E-Mail senden" : "Antworten"}
                 </Button>
               </div>
             </div>
