@@ -5,7 +5,8 @@ import {
   Users, Building2, ShieldAlert, GraduationCap,
   FileText, Mail, ArrowLeftRight,
   Video, Clipboard, FolderPlus,
-  Search as SearchIcon, ShoppingCart, CheckSquare
+  Search as SearchIcon, ShoppingCart, CheckSquare,
+  FileSearch, Calculator, Handshake
 } from "lucide-react";
 
 const modules = [
@@ -20,10 +21,15 @@ const modules = [
   { label: "MAIL", icon: Mail, path: "/newsletter" },
   { label: "LEARNING", icon: GraduationCap, path: "/academy" },
   // Reihe 3
-  { label: "NEWSLETTER", icon: Clipboard, path: "/newsletter" },
+  { label: "NEWSLETTER", icon: Clipboard, path: "/newsletter-modul" },
   { label: "SUCHE", icon: SearchIcon, path: "/suche" },
   { label: "IMMOZ", icon: ArrowLeftRight, path: "/immoz" },
   { label: "BESTELLUNGEN", icon: ShoppingCart, path: "/bestellung" },
+  // Reihe 4 – Spezial
+  { label: "UNTERLAGEN", icon: FolderPlus, path: "/unterlagen" },
+  { label: "GRUNDBUCH", icon: FileSearch, path: "/grundbuch" },
+  { label: "BEWERTUNG", icon: Calculator, path: "/bewertung" },
+  { label: "NETZWERK", icon: Handshake, path: "/netzwerk" },
 ];
 
 const todos = [
@@ -116,7 +122,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Module Grid – 3×4 */}
+      {/* Module Grid – 4×4 */}
       <div>
         <h2 className="text-lg font-bold text-foreground mb-3">Module</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
