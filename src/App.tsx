@@ -17,6 +17,7 @@ import Suche from "./pages/Suche";
 import Expose from "./pages/Expose";
 import Newsletter from "./pages/Newsletter";
 import ImmoZ from "./pages/ImmoZ";
+import Unterlagen from "./pages/Unterlagen";
 import KundenUpload from "./pages/KundenUpload";
 import NotFound from "./pages/NotFound";
 
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/expose" element={<Expose />} />
             <Route path="/newsletter" element={<Newsletter />} />
             <Route path="/immoz" element={<ImmoZ />} />
+            <Route path="/unterlagen" element={<Unterlagen />} />
           </Route>
           <Route path="/upload" element={<KundenUpload />} />
           <Route path="*" element={<NotFound />} />
