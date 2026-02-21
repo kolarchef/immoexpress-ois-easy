@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, Check, Send, Plus, ArrowLeft, Users, User, Briefcase } from "lucide-react";
+import { MessageCircle, Check, CheckCheck, Send, Plus, ArrowLeft, Users, User, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +28,16 @@ interface Kunde {
 
 type View = "inbox" | "compose" | "detail";
 type EmpfaengerTyp = "kunde" | "intern" | "chef";
+
+function ReadStatus({ typ, gelesen }: { typ: string | null; gelesen: boolean | null }) {
+  if (typ === "ausgehend" || typ === "intern" || typ === "chef") {
+    if (gelesen) {
+      return <CheckCheck size={14} className="text-blue-500" />;
+    }
+    return <Check size={14} className="text-muted-foreground/50" />;
+  }
+  return null;
+}
 
 export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode }) {
   const { user } = useAuth();
@@ -81,7 +91,6 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
       const kunde = kunden.find(k => k.id === selectedKunde);
       if (!kunde) { toast({ title: "Bitte Kunde wählen", variant: "destructive" }); return; }
 
-      // Save to DB
       await supabase.from("nachrichten").insert({
         user_id: user.id,
         titel,
@@ -89,7 +98,6 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
         typ: "ausgehend",
       });
 
-      // Open WhatsApp or Email
       if (kunde.phone) {
         const phone = kunde.phone.replace(/[^0-9+]/g, "").replace(/^0/, "+43");
         const msg = encodeURIComponent(`${titel}\n\n${inhalt}`);
@@ -98,7 +106,6 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
         window.open(`mailto:${kunde.email}?subject=${encodeURIComponent(titel)}&body=${encodeURIComponent(inhalt)}`, "_blank");
       }
     } else {
-      // Intern or Chef - just save as internal message
       await supabase.from("nachrichten").insert({
         user_id: user.id,
         titel,
@@ -175,7 +182,7 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
                       <h3 className={`text-sm font-semibold ${m.gelesen ? "text-muted-foreground" : "text-foreground"}`}>{m.titel}</h3>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {m.typ && <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">{m.typ}</span>}
-                        {m.gelesen && <Check size={14} className="text-primary" />}
+                        <ReadStatus typ={m.typ} gelesen={m.gelesen} />
                       </div>
                     </div>
                     {m.inhalt && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{m.inhalt}</p>}
@@ -246,7 +253,10 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
           {view === "detail" && selectedMsg && (
             <div className="space-y-4">
               <div className="bg-card rounded-xl p-4 border border-border">
-                <h3 className="font-bold text-foreground mb-1">{selectedMsg.titel}</h3>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-bold text-foreground">{selectedMsg.titel}</h3>
+                  <ReadStatus typ={selectedMsg.typ} gelesen={selectedMsg.gelesen} />
+                </div>
                 <span className="text-[10px] text-muted-foreground">
                   {new Date(selectedMsg.created_at).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </span>
