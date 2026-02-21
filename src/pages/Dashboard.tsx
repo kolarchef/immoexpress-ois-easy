@@ -9,15 +9,18 @@ import {
 } from "lucide-react";
 
 const modules = [
-  { label: "KUNDEN", icon: Users, path: "/crm" },
+  // Reihe 1
+  { label: "CRM KUNDEN", icon: Users, path: "/crm" },
   { label: "OBJEKTE", icon: Building2, path: "/objekte" },
   { label: "EXPOSÉ", icon: FileText, path: "/expose" },
   { label: "STANDORT", icon: MapPin, path: "/standort" },
+  // Reihe 2
   { label: "SOS RECHT", icon: ShieldAlert, path: "/sos-recht" },
   { label: "MEETINGS", icon: Video, path: "/kalender" },
   { label: "MAIL", icon: Mail, path: "/newsletter" },
   { label: "LEARNING", icon: GraduationCap, path: "/academy" },
-  { label: "UNTERLAGEN", icon: FolderPlus, path: "/unterlagen" },
+  // Reihe 3
+  { label: "NEWSLETTER", icon: Clipboard, path: "/newsletter" },
   { label: "SUCHE", icon: SearchIcon, path: "/suche" },
   { label: "IMMOZ", icon: ArrowLeftRight, path: "/immoz" },
   { label: "BESTELLUNGEN", icon: ShoppingCart, path: "/bestellung" },
@@ -116,7 +119,7 @@ export default function Dashboard() {
       {/* Module Grid – 3×4 */}
       <div>
         <h2 className="text-lg font-bold text-foreground mb-3">Module</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {modules.map(({ label, icon: Icon, path }) => (
             <button
               key={path + label}
