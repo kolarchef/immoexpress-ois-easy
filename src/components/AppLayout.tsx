@@ -13,7 +13,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col h-screen bg-surface overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-surface">
       {/* Top Header */}
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0 shadow-card z-10">
         <button onClick={() => navigate("/")} className="flex items-center gap-3 group">
@@ -42,7 +42,7 @@ export default function AppLayout() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 pb-24">
         <Outlet />
       </main>
 
