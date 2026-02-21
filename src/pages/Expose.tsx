@@ -49,6 +49,7 @@ export default function Expose() {
     objektart: "", kaufpreis: "", miete: "",
     flaeche: "", zimmer: "", beschreibung: "", verkaufsart: "Kauf",
     provisionsstellung: "Käufer",
+    kaeufer_provision: "", verkaeufer_provision: "",
   });
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -132,7 +133,12 @@ export default function Expose() {
     }
     setSaving(true);
     try {
+      // Get current user for RLS
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error("Nicht eingeloggt");
+
       const objektData = {
+        user_id: currentUser.id,
         objektnummer: form.objektnummer || `EXP-${Date.now().toString().slice(-6)}`,
         kurzinfo: kurzbeschreibung || form.beschreibung,
         objektart: form.objektart,
@@ -144,6 +150,8 @@ export default function Expose() {
         strasse: form.strasse,
         hnr: form.hnr,
         provisionsstellung: form.provisionsstellung,
+        kaeufer_provision: form.kaeufer_provision ? parseFloat(form.kaeufer_provision) : null,
+        verkaeufer_provision: form.verkaeufer_provision ? parseFloat(form.verkaeufer_provision) : null,
         beschreibung: aiText || form.beschreibung,
         ki_text: aiText,
         verkaufsart: form.verkaufsart,
@@ -267,12 +275,17 @@ export default function Expose() {
           </div>
         </div>
 
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Provisionsstellung</label>
-          <select className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-            value={form.provisionsstellung} onChange={(e) => setForm({ ...form, provisionsstellung: e.target.value })}>
-            {provisionOptionen.map((p) => <option key={p}>{p}</option>)}
-          </select>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Käufer-Provision (%)</label>
+            <input type="number" step="0.1" className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="3.0" value={form.kaeufer_provision} onChange={(e) => setForm({ ...form, kaeufer_provision: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Verkäufer-Provision (%)</label>
+            <input type="number" step="0.1" className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="3.0" value={form.verkaeufer_provision} onChange={(e) => setForm({ ...form, verkaeufer_provision: e.target.value })} />
+          </div>
         </div>
 
         <div>
@@ -314,7 +327,7 @@ export default function Expose() {
             <div className="grid grid-cols-4 gap-2 mb-3">
               {images.map((img, i) => (
                 <div key={i} className="relative rounded-xl overflow-hidden aspect-square group">
-                  <img src={img} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                  <img src={img} alt={`Foto ${i + 1}`} className="w-full h-full object-contain bg-muted" />
                   <button
                     onClick={() => { setImages(prev => prev.filter((_, idx) => idx !== i)); setImageAnalyzed(false); setImageDescriptions([]); }}
                     className="absolute top-1 right-1 bg-foreground/70 text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"

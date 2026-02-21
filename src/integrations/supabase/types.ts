@@ -187,6 +187,44 @@ export type Database = {
         }
         Relationships: []
       }
+      objekt_historie: {
+        Row: {
+          alter_wert: string | null
+          created_at: string
+          feld: string
+          id: string
+          neuer_wert: string | null
+          objekt_id: string
+          user_id: string
+        }
+        Insert: {
+          alter_wert?: string | null
+          created_at?: string
+          feld: string
+          id?: string
+          neuer_wert?: string | null
+          objekt_id: string
+          user_id: string
+        }
+        Update: {
+          alter_wert?: string | null
+          created_at?: string
+          feld?: string
+          id?: string
+          neuer_wert?: string | null
+          objekt_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "objekt_historie_objekt_id_fkey"
+            columns: ["objekt_id"]
+            isOneToOne: false
+            referencedRelation: "objekte"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       objekte: {
         Row: {
           beschreibung: string | null

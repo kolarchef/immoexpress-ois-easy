@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { X, RefreshCw, Plus, Upload, Image, Trash2 } from "lucide-react";
+import { X, RefreshCw, Plus, Upload, Trash2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
 const objektarten = ["Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Doppelhaushälfte", "Reihenhaus", "Grundstück", "Büro/Gewerbefläche", "Zinshaus", "Dachgeschosswohnung", "Penthouse"];
+
+const KURZINFO_LIMIT = 200;
 
 interface ObjektModalProps {
   open: boolean;
@@ -17,6 +19,7 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
   const [saving, setSaving] = useState(false);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [describingImages, setDescribingImages] = useState(false);
   const [form, setForm] = useState({
     objektnummer: "", objektart: "", verkaufsart: "Kauf",
     plz: "", ort: "", strasse: "", hnr: "", top: "", stock: "",
@@ -45,6 +48,35 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
   const removePhoto = (idx: number) => {
     setPhotos(prev => prev.filter((_, i) => i !== idx));
     setPreviews(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleDescribeImages = async () => {
+    if (previews.length === 0) return;
+    setDescribingImages(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: { action: "describe-images", imageDataUrls: previews.slice(0, 10) },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const text = data.result || "";
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as Array<{ label: string; description: string }>;
+        const descText = parsed.map(d => `${d.label}: ${d.description}`).join(". ");
+        // Set kurzinfo with limit
+        const truncated = descText.slice(0, KURZINFO_LIMIT);
+        setForm(prev => ({ ...prev, kurzinfo: prev.kurzinfo || truncated }));
+        // Append full descriptions to beschreibung
+        const fullText = parsed.map(d => `• ${d.label}: ${d.description}`).join("\n");
+        setForm(prev => ({ ...prev, beschreibung: prev.beschreibung ? `${prev.beschreibung}\n\n${fullText}` : fullText }));
+        toast({ title: `✓ ${parsed.length} Bilder analysiert` });
+      }
+    } catch (err: unknown) {
+      toast({ title: "Bilderkennung fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setDescribingImages(false);
+    }
   };
 
   const handleSave = async () => {
@@ -77,7 +109,6 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
       }).select().single();
       if (error) throw error;
 
-      // Upload photos
       if (photos.length > 0 && obj) {
         for (let i = 0; i < photos.length; i++) {
           const file = photos[i];
@@ -126,10 +157,10 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
             </div>
           </div>
 
-          {/* Kurzinfo */}
+          {/* Kurzinfo with limit */}
           <div>
-            <label className={labelCls}>Kurzinfo</label>
-            <input className={inputCls} placeholder="z.B. Traumwohnung mit Balkon" value={form.kurzinfo} onChange={e => setForm({ ...form, kurzinfo: e.target.value })} />
+            <label className={labelCls}>Kurzinfo <span className="text-muted-foreground font-normal">({form.kurzinfo.length}/{KURZINFO_LIMIT})</span></label>
+            <input className={inputCls} placeholder="z.B. Traumwohnung mit Balkon" maxLength={KURZINFO_LIMIT} value={form.kurzinfo} onChange={e => setForm({ ...form, kurzinfo: e.target.value })} />
           </div>
 
           {/* Vermarktung */}
@@ -216,8 +247,8 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
             <label className={labelCls}>Fotos ({previews.length}/20)</label>
             <div className="mt-2 grid grid-cols-4 gap-2">
               {previews.map((src, i) => (
-                <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-border">
-                  <img src={src} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-border bg-muted">
+                  <img src={src} alt={`Foto ${i + 1}`} className="w-full h-full object-contain" />
                   <button onClick={() => removePhoto(i)} className="absolute top-1 right-1 bg-foreground/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Trash2 size={12} />
                   </button>
@@ -231,6 +262,18 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
                 </label>
               )}
             </div>
+
+            {/* KI-Bilderkennung Button */}
+            {previews.length > 0 && (
+              <button onClick={handleDescribeImages} disabled={describingImages}
+                className="w-full mt-3 bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-secondary transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {describingImages ? (
+                  <><RefreshCw size={14} className="animate-spin" /> KI analysiert…</>
+                ) : (
+                  <><Sparkles size={14} className="text-primary" /> KI-Bilderkennung ({Math.min(previews.length, 10)} Fotos)</>
+                )}
+              </button>
+            )}
           </div>
 
           <button onClick={handleSave} disabled={saving || !form.objektart} className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
