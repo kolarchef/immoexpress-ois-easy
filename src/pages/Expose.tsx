@@ -20,7 +20,7 @@ const bundeslaender = [
 const objektarten = ["Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Doppelhaushälfte", "Reihenhaus", "Grundstück", "Büro/Gewerbefläche", "Zinshaus", "Dachgeschosswohnung", "Penthouse"];
 const provisionOptionen = ["Käufer", "Verkäufer", "Geteilt (50/50)", "Provisionsfrei"];
 
-const KURZBESCHREIBUNG_LIMIT = 400;
+const KURZBESCHREIBUNG_LIMIT = 2000;
 
 export default function Expose() {
   const [images, setImages] = useState<string[]>([]);
@@ -32,6 +32,7 @@ export default function Expose() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [imageAnalyzed, setImageAnalyzed] = useState(false);
   const [aiModel, setAiModel] = useState("");
+  const [exposeLaenge, setExposeLaenge] = useState<"kurz" | "lang">("lang");
   const [form, setForm] = useState({
     titel: "", objektnummer: "", bezirk: "", plz: "", ort: "", strasse: "", hnr: "",
     objektart: "", kaufpreis: "", miete: "",
@@ -67,7 +68,7 @@ export default function Expose() {
       };
 
       const { data, error } = await supabase.functions.invoke("expose-ki", {
-        body: { form: formData, imageDataUrls: images.slice(0, 5) },
+        body: { form: formData, imageDataUrls: images.slice(0, 5), laenge: exposeLaenge },
       });
 
       if (error) throw error;
@@ -380,6 +381,22 @@ export default function Expose() {
           {aiModel && <span className="ml-auto text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">{aiModel.split("/")[1]}</span>}
         </div>
 
+        {/* Kurz / Lang Auswahl */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setExposeLaenge("kurz")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "kurz" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}
+          >
+            Kurz
+          </button>
+          <button
+            onClick={() => setExposeLaenge("lang")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "lang" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}
+          >
+            Lang
+          </button>
+        </div>
+
         <button
           onClick={() => handleGenerate(false)}
           disabled={!formValid || generating}
@@ -430,7 +447,7 @@ export default function Expose() {
                 className="w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
                 rows={4}
                 maxLength={KURZBESCHREIBUNG_LIMIT}
-                placeholder="Kurzbeschreibung für Inserat (max. 400 Zeichen)…"
+                placeholder="Kurzbeschreibung für Inserat (max. 2.000 Zeichen)…"
                 value={kurzbeschreibung}
                 onChange={(e) => setKurzbeschreibung(e.target.value)}
               />
@@ -438,7 +455,7 @@ export default function Expose() {
                 onClick={handleKurzbeschreibungUebernehmen}
                 className="w-full flex items-center justify-center gap-2 bg-accent text-foreground border border-border rounded-xl py-2 text-sm font-semibold hover:bg-secondary transition-all active:scale-95"
               >
-                <ArrowRight size={14} /> In Kurzbeschreibung übernehmen (erste 400 Zeichen)
+                <ArrowRight size={14} /> In Kurzbeschreibung übernehmen (erste 2.000 Zeichen)
               </button>
             </div>
           </>
