@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus } from "lucide-react";
+import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus, Eye, Sparkles } from "lucide-react";
 import ObjektModal from "@/components/ObjektModal";
+import ExposePreviewModal from "@/components/ExposePreviewModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -23,6 +24,12 @@ const provisionOptionen = ["Käufer", "Verkäufer", "Geteilt (50/50)", "Provisio
 
 const KURZBESCHREIBUNG_LIMIT = 2000;
 
+interface ImageDesc {
+  index: number;
+  label: string;
+  description: string;
+}
+
 export default function Expose() {
   const [images, setImages] = useState<string[]>([]);
   const [aiText, setAiText] = useState("");
@@ -34,6 +41,9 @@ export default function Expose() {
   const [imageAnalyzed, setImageAnalyzed] = useState(false);
   const [aiModel, setAiModel] = useState("");
   const [exposeLaenge, setExposeLaenge] = useState<"kurz" | "lang">("lang");
+  const [imageDescriptions, setImageDescriptions] = useState<ImageDesc[]>([]);
+  const [describingImages, setDescribingImages] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [form, setForm] = useState({
     titel: "", objektnummer: "", bezirk: "", plz: "", ort: "", strasse: "", hnr: "",
     objektart: "", kaufpreis: "", miete: "",
@@ -43,19 +53,45 @@ export default function Expose() {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const remaining = 5 - images.length;
+    const remaining = 20 - images.length;
     const toAdd = files.slice(0, remaining);
     toAdd.forEach((file) => {
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        setImages((prev) => [...prev, ev.target?.result as string]);
-      };
+      reader.onload = (ev) => setImages((prev) => [...prev, ev.target?.result as string]);
       reader.readAsDataURL(file);
     });
     if (files.length > remaining) {
-      toast({ title: "Max. 5 Bilder für KI-Analyse", description: `Nur ${remaining} weitere Bilder wurden hinzugefügt.`, variant: "destructive" });
+      toast({ title: `Max. 20 Bilder`, variant: "destructive" });
     }
     setImageAnalyzed(false);
+    setImageDescriptions([]);
+  };
+
+  const handleDescribeImages = async () => {
+    if (images.length === 0) return;
+    setDescribingImages(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: { action: "describe-images", imageDataUrls: images.slice(0, 10) },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const text = data.result || "";
+      // Parse JSON from response
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as ImageDesc[];
+        setImageDescriptions(parsed);
+        // Auto-append to beschreibung
+        const descText = parsed.map(d => `• ${d.label}: ${d.description}`).join("\n");
+        setForm(prev => ({ ...prev, beschreibung: prev.beschreibung ? `${prev.beschreibung}\n\nKI-Bilderkennung:\n${descText}` : `KI-Bilderkennung:\n${descText}` }));
+        toast({ title: `✓ ${parsed.length} Bilder analysiert` });
+      }
+    } catch (err: unknown) {
+      toast({ title: "Bilderkennung fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setDescribingImages(false);
+    }
   };
 
   const handleGenerate = async (withKorrektur = false) => {
@@ -67,21 +103,17 @@ export default function Expose() {
           ? `${form.beschreibung}\n\nKorrektur-Hinweis: ${korrekturText}`
           : form.beschreibung,
       };
-
       const { data, error } = await supabase.functions.invoke("expose-ki", {
         body: { form: formData, imageDataUrls: images.slice(0, 5), laenge: exposeLaenge },
       });
-
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-
       setAiText(data.text || "");
       setAiModel(data.model || "");
       if (images.length > 0) setImageAnalyzed(true);
       setKorrekturText("");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unbekannter Fehler";
-      toast({ title: "KI-Fehler", description: msg, variant: "destructive" });
+      toast({ title: "KI-Fehler", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
     } finally {
       setGenerating(false);
     }
@@ -93,10 +125,9 @@ export default function Expose() {
     toast({ title: "✓ Übernommen", description: `Kurzbeschreibung mit ${truncated.length} Zeichen gesetzt.` });
   };
 
-  // Speichern & ImmoZ-Export
   const handleSaveAndExport = async () => {
     if (!form.titel || !form.objektart) {
-      toast({ title: "Fehlende Pflichtfelder", description: "Bitte Objekttitel und Objektart ausfüllen.", variant: "destructive" });
+      toast({ title: "Fehlende Pflichtfelder", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -120,99 +151,22 @@ export default function Expose() {
         immoz_exportiert: true,
         immoz_export_datum: new Date().toISOString(),
       };
-
       const { data: obj, error: objErr } = await supabase.from("objekte").insert(objektData).select().single();
       if (objErr) throw objErr;
-
-      // ImmoZ Export-Log
-      const exportDateiname = `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`;
       await supabase.from("immoz_exporte").insert({
-        objekte_ids: [obj.id],
-        anzahl: 1,
-        status: "Erfolgreich",
-        dateiname: exportDateiname,
+        objekte_ids: [obj.id], anzahl: 1, status: "Erfolgreich",
+        dateiname: `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`,
       });
-
-      toast({
-        title: "✓ Gespeichert & an ImmoZ übertragen!",
-        description: `Objekt "${form.titel}" wurde in der Datenbank gespeichert und für ImmoZ bereitgestellt.`,
-      });
+      toast({ title: "✓ Gespeichert & an ImmoZ übertragen!" });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Datenbankfehler";
-      toast({ title: "Fehler beim Speichern", description: msg, variant: "destructive" });
+      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
     } finally {
       setSaving(false);
     }
   };
 
   const handlePdfExport = () => {
-    setExportingPdf(true);
-    const printContent = `<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="UTF-8" />
-  <title>Exposé – ${form.titel || "Immobilie"}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; padding: 40px; color: #1a1a1a; font-size: 13px; }
-    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #E8541A; padding-bottom: 16px; margin-bottom: 24px; }
-    .logo { font-size: 22px; font-weight: bold; color: #E8541A; }
-    .logo-sub { font-size: 11px; color: #888; margin-top: 2px; }
-    h1 { font-size: 20px; color: #1a1a1a; margin-bottom: 4px; }
-    .subtitle { color: #E8541A; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-    .field { background: #f7f7f7; border-radius: 6px; padding: 10px 12px; }
-    .field label { font-size: 10px; text-transform: uppercase; color: #888; display: block; margin-bottom: 3px; }
-    .field span { font-size: 14px; font-weight: 700; }
-    .preis span { color: #E8541A; }
-    .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
-    .photos img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 6px; }
-    .ai-box { background: #fff8f5; border-left: 4px solid #E8541A; border-radius: 6px; padding: 16px; white-space: pre-wrap; font-size: 12px; line-height: 1.7; margin-bottom: 20px; }
-    .disclaimer { border-top: 1px solid #eee; padding-top: 14px; font-size: 10px; color: #999; line-height: 1.5; }
-    .page-footer { position: fixed; bottom: 20px; left: 40px; right: 40px; font-size: 10px; color: #bbb; border-top: 1px solid #eee; padding-top: 8px; display: flex; justify-content: space-between; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div><div class="logo">ImmoExpress</div><div class="logo-sub">Ihr Makler in Wien & Österreich</div></div>
-    <div style="text-align:right; font-size:11px; color:#888">
-      Erstellt: ${new Date().toLocaleDateString("de-AT", { day: "2-digit", month: "long", year: "numeric" })}<br/>
-      Ref-Nr.: ${form.objektnummer || `EXP-${Date.now().toString().slice(-6)}`}
-    </div>
-  </div>
-  <h1>${form.titel || "Immobilien-Exposé"}</h1>
-  <div class="subtitle">${form.bezirk || ""} ${form.objektart ? "· " + form.objektart : ""} · ${form.verkaufsart}</div>
-  ${images.length > 0 ? `<div class="photos">${images.slice(0, 6).map(img => `<img src="${img}" alt="Objektfoto" />`).join("")}</div>` : ""}
-  <div class="grid">
-    <div class="field"><label>Objektart</label><span>${form.objektart || "–"}</span></div>
-    <div class="field"><label>Wohnfläche</label><span>${form.flaeche ? form.flaeche + " m²" : "–"}</span></div>
-    <div class="field"><label>Zimmer</label><span>${form.zimmer || "–"}</span></div>
-    <div class="field"><label>Lage</label><span>${form.bezirk || "–"}</span></div>
-    <div class="field"><label>Provision</label><span>${form.provisionsstellung}</span></div>
-    <div class="field preis"><label>${form.verkaufsart === "Kauf" ? "Kaufpreis" : "Miete/Monat"}</label><span>€ ${form.verkaufsart === "Kauf" ? (form.kaufpreis ? Number(form.kaufpreis).toLocaleString("de-AT") : "auf Anfrage") : (form.miete ? Number(form.miete).toLocaleString("de-AT") : "auf Anfrage")}</span></div>
-  </div>
-  ${kurzbeschreibung ? `<div class="ai-box"><strong>KURZBESCHREIBUNG:</strong><br/>${kurzbeschreibung}</div>` : ""}
-  ${aiText ? `<div class="ai-box">${aiText.replace(/\n/g, "<br/>")}</div>` : ""}
-  <div class="disclaimer">
-    <strong>Haftungsausschluss:</strong> Alle Angaben ohne Gewähr. Provisionspflichtig gemäß Alleinvermittlungsauftrag (§ 14 MaklerG). Ein gültiger Energieausweis liegt vor (§ 6a EAVG). Dieses Exposé stellt kein rechtlich bindendes Angebot dar (§ 5 MaklerG).<br/><br/>
-    ImmoExpress Immobilienvermittlung GmbH · ÖVI-Mitglied · www.immoexpress.at
-  </div>
-  <div class="page-footer">
-    <span>ImmoExpress · Vertraulich</span>
-    <span>⚖️ MaklerG konform · DSGVO-gemäß</span>
-    <span>${new Date().toLocaleDateString("de-AT")}</span>
-  </div>
-</body>
-</html>`;
-    const win = window.open("", "_blank");
-    if (win) {
-      win.document.write(printContent);
-      win.document.close();
-      win.focus();
-      setTimeout(() => { win.print(); setExportingPdf(false); }, 600);
-    } else {
-      setExportingPdf(false);
-    }
+    setShowPreview(true);
   };
 
   const formValid = form.titel && form.objektart;
@@ -274,7 +228,6 @@ export default function Expose() {
           </select>
         </div>
 
-        {/* Lage-Detail */}
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">PLZ</label>
@@ -330,47 +283,78 @@ export default function Expose() {
         </div>
       </div>
 
-      {/* Foto-Upload */}
+      {/* Foto-Upload mit KI-Bilderkennung */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
         <div className="flex items-center gap-2 mb-3">
           <Image size={18} className="text-primary" />
           <h2 className="font-bold text-foreground">Fotos hochladen</h2>
-          <span className="ml-auto text-xs font-semibold text-primary">{images.length}/5 für KI-Analyse</span>
+          <span className="ml-auto text-xs font-semibold text-primary">{images.length}/20</span>
         </div>
 
         {images.length > 0 && (
-          <div className={`flex items-center gap-2 p-3 rounded-xl mb-3 text-xs font-medium ${imageAnalyzed ? "bg-green-50 text-green-700 border border-green-200" : "bg-primary-light text-primary border border-primary/20"}`}>
+          <div className={`flex items-center gap-2 p-3 rounded-xl mb-3 text-xs font-medium ${imageAnalyzed ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800" : "bg-primary/5 text-primary border border-primary/20"}`}>
             {imageAnalyzed
-              ? <><CheckCircle size={14} /> {images.length} Bild(er) von KI analysiert – echte Vision-KI aktiv</>
-              : <><Wand2 size={14} /> {images.length} Bild(er) bereit · KI analysiert Fotos beim Generieren (max. 5)</>
+              ? <><CheckCircle size={14} /> {images.length} Bild(er) von KI analysiert</>
+              : <><Wand2 size={14} /> {images.length} Bild(er) bereit für KI-Analyse</>
             }
           </div>
         )}
 
-        {images.length < 5 && (
+        {images.length < 20 && (
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-primary/30 rounded-xl py-6 cursor-pointer hover:bg-accent transition-all bg-surface mb-4">
             <Upload size={22} className="text-primary mb-2" />
             <span className="text-sm font-semibold text-foreground">Fotos auswählen</span>
-            <span className="text-xs text-muted-foreground mt-1">JPG, PNG – Max. 5 Bilder für KI-Analyse</span>
+            <span className="text-xs text-muted-foreground mt-1">JPG, PNG – Max. 20 Bilder</span>
             <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
           </label>
         )}
 
         {images.length > 0 && (
-          <div className="grid grid-cols-3 gap-2">
-            {images.map((img, i) => (
-              <div key={i} className="relative rounded-xl overflow-hidden aspect-square">
-                <img src={img} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
-                <button
-                  onClick={() => { setImages(prev => prev.filter((_, idx) => idx !== i)); setImageAnalyzed(false); }}
-                  className="absolute top-1 right-1 bg-foreground/70 text-background rounded-full p-1 hover:bg-destructive transition-colors"
-                >
-                  <X size={12} />
-                </button>
-                {i === 0 && <span className="absolute bottom-1 left-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-semibold">Titelbild</span>}
+          <>
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {images.map((img, i) => (
+                <div key={i} className="relative rounded-xl overflow-hidden aspect-square group">
+                  <img src={img} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => { setImages(prev => prev.filter((_, idx) => idx !== i)); setImageAnalyzed(false); setImageDescriptions([]); }}
+                    className="absolute top-1 right-1 bg-foreground/70 text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={12} />
+                  </button>
+                  {i === 0 && <span className="absolute bottom-1 left-1 text-[9px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-semibold">Titelbild</span>}
+                  {imageDescriptions[i] && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-foreground/70 text-background text-[9px] px-1.5 py-1 leading-tight">
+                      {imageDescriptions[i].label}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* KI-Bilderkennung Button */}
+            <button
+              onClick={handleDescribeImages}
+              disabled={describingImages}
+              className="w-full bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-secondary transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {describingImages ? (
+                <><RefreshCw size={14} className="animate-spin" /> KI analysiert Bilder…</>
+              ) : (
+                <><Sparkles size={14} className="text-primary" /> KI-Bilderkennung starten ({Math.min(images.length, 10)} Fotos)</>
+              )}
+            </button>
+
+            {imageDescriptions.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {imageDescriptions.map((d, i) => (
+                  <div key={i} className="flex items-start gap-2 p-2 bg-accent rounded-lg text-xs">
+                    <span className="font-bold text-primary shrink-0">📷 {d.label}</span>
+                    <span className="text-muted-foreground">{d.description}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
 
@@ -382,32 +366,20 @@ export default function Expose() {
           {aiModel && <span className="ml-auto text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">{aiModel.split("/")[1]}</span>}
         </div>
 
-        {/* Kurz / Lang Auswahl */}
         <div className="flex gap-2">
-          <button
-            onClick={() => setExposeLaenge("kurz")}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "kurz" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}
-          >
+          <button onClick={() => setExposeLaenge("kurz")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "kurz" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}>
             Kurz
           </button>
-          <button
-            onClick={() => setExposeLaenge("lang")}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "lang" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}
-          >
+          <button onClick={() => setExposeLaenge("lang")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "lang" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}>
             Lang
           </button>
         </div>
 
-        <button
-          onClick={() => handleGenerate(false)}
-          disabled={!formValid || generating}
-          className="w-full bg-primary text-primary-foreground rounded-xl py-3 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {generating ? (
-            <><RefreshCw size={16} className="animate-spin" /> KI analysiert{images.length > 0 ? " Bilder & " : " "}Daten…</>
-          ) : (
-            <><Wand2 size={16} /> Exposé-Text via KI generieren{images.length > 0 ? ` (${images.length} Foto${images.length > 1 ? "s" : ""})` : ""}</>
-          )}
+        <button onClick={() => handleGenerate(false)} disabled={!formValid || generating}
+          className="w-full bg-primary text-primary-foreground rounded-xl py-3 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+          {generating ? <><RefreshCw size={16} className="animate-spin" /> KI analysiert…</> : <><Wand2 size={16} /> Exposé-Text generieren{images.length > 0 ? ` (${images.length} Fotos)` : ""}</>}
         </button>
 
         {aiText && (
@@ -416,47 +388,31 @@ export default function Expose() {
               <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-y-auto">{aiText}</pre>
             </div>
 
-            {/* Korrektur-Feld */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Korrektur-Hinweis (optional)</label>
               <div className="flex gap-2 mt-1">
-                <input
-                  className="flex-1 bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
-                  placeholder="z.B. Mehr Betonung auf Terrassenblick & Parkett…"
-                  value={korrekturText}
-                  onChange={(e) => setKorrekturText(e.target.value)}
-                />
-                <button
-                  onClick={() => handleGenerate(true)}
-                  disabled={generating || !korrekturText.trim()}
-                  className="px-4 py-2.5 bg-accent text-foreground border border-border rounded-xl text-sm font-semibold hover:bg-secondary transition-all disabled:opacity-50 flex items-center gap-1.5 flex-shrink-0"
-                >
-                  <RefreshCw size={14} /> Neu generieren
+                <input className="flex-1 bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
+                  placeholder="z.B. Mehr Betonung auf Terrassenblick…" value={korrekturText} onChange={(e) => setKorrekturText(e.target.value)} />
+                <button onClick={() => handleGenerate(true)} disabled={generating || !korrekturText.trim()}
+                  className="px-4 py-2.5 bg-accent text-foreground border border-border rounded-xl text-sm font-semibold hover:bg-secondary transition-all disabled:opacity-50 flex items-center gap-1.5 flex-shrink-0">
+                  <RefreshCw size={14} /> Neu
                 </button>
               </div>
             </div>
 
-            {/* Kurzbeschreibung übernehmen */}
             <div className="border border-border rounded-xl p-4 bg-surface space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Kurzbeschreibung</label>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${kurzbeschreibungLen > KURZBESCHREIBUNG_LIMIT ? "bg-destructive/10 text-destructive" : kurzbeschreibungLen > KURZBESCHREIBUNG_LIMIT * 0.8 ? "bg-primary-light text-primary" : "text-muted-foreground"}`}>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${kurzbeschreibungLen > KURZBESCHREIBUNG_LIMIT ? "bg-destructive/10 text-destructive" : "text-muted-foreground"}`}>
                   {kurzbeschreibungLen}/{KURZBESCHREIBUNG_LIMIT}
                 </span>
               </div>
-              <textarea
-                className="w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                rows={4}
-                maxLength={KURZBESCHREIBUNG_LIMIT}
-                placeholder="Kurzbeschreibung für Inserat (max. 2.000 Zeichen)…"
-                value={kurzbeschreibung}
-                onChange={(e) => setKurzbeschreibung(e.target.value)}
-              />
-              <button
-                onClick={handleKurzbeschreibungUebernehmen}
-                className="w-full flex items-center justify-center gap-2 bg-accent text-foreground border border-border rounded-xl py-2 text-sm font-semibold hover:bg-secondary transition-all active:scale-95"
-              >
-                <ArrowRight size={14} /> In Kurzbeschreibung übernehmen (erste 2.000 Zeichen)
+              <textarea className="w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                rows={4} maxLength={KURZBESCHREIBUNG_LIMIT} placeholder="Kurzbeschreibung (max. 2.000 Zeichen)…"
+                value={kurzbeschreibung} onChange={(e) => setKurzbeschreibung(e.target.value)} />
+              <button onClick={handleKurzbeschreibungUebernehmen}
+                className="w-full flex items-center justify-center gap-2 bg-accent text-foreground border border-border rounded-xl py-2 text-sm font-semibold hover:bg-secondary transition-all active:scale-95">
+                <ArrowRight size={14} /> In Kurzbeschreibung übernehmen
               </button>
             </div>
           </>
@@ -465,35 +421,28 @@ export default function Expose() {
 
       {/* Aktions-Buttons */}
       <div className="space-y-3">
-        {/* Haupt-Button: Speichern & ImmoZ */}
-        <button
-          onClick={handleSaveAndExport}
-          disabled={!formValid || saving}
-          className="w-full bg-primary text-primary-foreground rounded-2xl py-4 text-base font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
-        >
-          {saving ? (
-            <><RefreshCw size={18} className="animate-spin" /> Wird gespeichert…</>
-          ) : (
-            <><Copy size={18} /> Objekt speichern & an ImmoZ übertragen</>
-          )}
+        <button onClick={handleSaveAndExport} disabled={!formValid || saving}
+          className="w-full bg-primary text-primary-foreground rounded-2xl py-4 text-base font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3">
+          {saving ? <><RefreshCw size={18} className="animate-spin" /> Wird gespeichert…</> : <><Copy size={18} /> Objekt speichern & an ImmoZ übertragen</>}
         </button>
 
-        {/* PDF Export */}
-        <button
-          onClick={handlePdfExport}
-          disabled={!formValid || exportingPdf}
-          className="w-full border border-border bg-card text-foreground rounded-2xl py-3.5 text-sm font-bold hover:bg-accent transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          <Download size={16} /> PDF-Exposé exportieren
+        <button onClick={handlePdfExport} disabled={!formValid}
+          className="w-full border border-border bg-card text-foreground rounded-2xl py-3.5 text-sm font-bold hover:bg-accent transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+          <Eye size={16} className="text-primary" /> PDF-Vorschau & Versenden
         </button>
       </div>
 
-      {/* Rechtlicher Hinweis */}
       <div className="bg-accent rounded-xl p-4 border border-border">
         <p className="text-xs text-muted-foreground leading-relaxed">
-          ⚖️ <strong className="text-foreground">Rechtskonformität:</strong> Alle Exposés entsprechen dem österreichischen Maklergesetz (MaklerG) und dem Energieausweis-Vorlage-Gesetz (EAVG). Provisionspflicht gemäß § 14 MaklerG. Energieausweis gem. § 6a EAVG verpflichtend.
+          ⚖️ <strong className="text-foreground">Rechtskonformität:</strong> Alle Exposés entsprechen dem MaklerG und EAVG. Provisionspflicht gemäß § 14 MaklerG. Energieausweis gem. § 6a EAVG.
         </p>
       </div>
+
+      <ExposePreviewModal
+        open={showPreview}
+        onClose={() => setShowPreview(false)}
+        data={{ ...form, aiText, kurzbeschreibung, images }}
+      />
     </div>
   );
 }
