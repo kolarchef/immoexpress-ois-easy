@@ -3,7 +3,7 @@ import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell } from "lucide
 import logoImg from "@/assets/logo_immoexpress.png";
 
 const bottomNav = [
-  { path: "/launchpad", icon: LayoutDashboard, label: "Home" },
+  { path: "/", icon: LayoutDashboard, label: "Home" },
   { path: "/suche", icon: Search, label: "Suche" },
   { path: "/kalender", icon: CheckSquare, label: "Aufgaben" },
   { path: "/kamera", icon: Camera, label: "Kamera" },
