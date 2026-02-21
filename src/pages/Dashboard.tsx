@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  CheckSquare, Calendar, MapPin, Clock,
+  Calendar, MapPin, Clock,
   Users, Building2, ShieldAlert, GraduationCap,
-  ShoppingCart, FileText, Mail, ArrowLeftRight,
-  Video, Clipboard, Link as LinkIcon, Copy, CheckCircle
+  FileText, Mail, ArrowLeftRight,
+  Video, Clipboard, Link as LinkIcon, Copy, CheckCircle,
+  Search as SearchIcon
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -18,6 +19,9 @@ const modules = [
   { label: "MEETINGS", icon: Video, path: "/kalender", color: "bg-primary-light text-primary" },
   { label: "MAIL", icon: Mail, path: "/newsletter", color: "bg-primary-light text-primary" },
   { label: "LEARNING", icon: GraduationCap, path: "/academy", color: "bg-primary-light text-primary" },
+  { label: "UNTERLAGEN", icon: Clipboard, path: "/unterlagen", color: "bg-primary-light text-primary" },
+  { label: "SUCHE", icon: SearchIcon, path: "/suche", color: "bg-primary-light text-primary" },
+  { label: "IMMOZ", icon: ArrowLeftRight, path: "/immoz", color: "bg-primary-light text-primary" },
   { label: "MANUAL", icon: Clipboard, path: "/bestellung", color: "bg-primary-light text-primary" },
 ];
 
@@ -34,50 +38,8 @@ const appointments = [
   { time: "14:00", duration: "30 MIN", title: "Notartermin: Müller & Partner", location: "Beurkundung CRM", type: "notar" },
 ];
 
-const unterlagenItems = [
-  { key: "strom", label: "Strom-Foto (Zählerstand)" },
-  { key: "wasser", label: "Wasserzähler" },
-  { key: "reisepass", label: "Reisepass / Ausweis" },
-  { key: "mietvertrag", label: "Mietvertrag" },
-  { key: "grundbuch", label: "Grundbuchauszug" },
-];
-
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
-  const [kundeName, setKundeName] = useState("");
-  const [generatingLink, setGeneratingLink] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState("");
-
-  const toggleCheck = (key: string) => setCheckedItems((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  const handleCreateLink = async () => {
-    const selected = Object.entries(checkedItems).filter(([, v]) => v).map(([k]) => k);
-    if (selected.length === 0) {
-      toast({ title: "Bitte mindestens ein Dokument auswählen", variant: "destructive" });
-      return;
-    }
-    setGeneratingLink(true);
-    try {
-      const { data, error } = await supabase.from("unterlagen_anfragen").insert({
-        kunde_name: kundeName || "Kunde",
-        checkliste: selected,
-      }).select().single();
-      if (error) throw error;
-      const link = `${window.location.origin}/upload?token=${data.token}`;
-      setGeneratedLink(link);
-      toast({ title: "✓ Link erstellt", description: "Der Anforderungs-Link wurde generiert." });
-    } catch (err: any) {
-      toast({ title: "Fehler", description: err.message, variant: "destructive" });
-    } finally {
-      setGeneratingLink(false);
-    }
-  };
-
-  const copyLink = () => {
-    navigator.clipboard.writeText(generatedLink);
-    toast({ title: "✓ In Zwischenablage kopiert" });
-  };
 
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-fade-in max-w-2xl mx-auto">
@@ -122,13 +84,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Module Grid – Stitch Style 3x3 */}
+      {/* Module Grid – 3×4 with colored icons */}
       <div>
         <h2 className="text-lg font-bold text-foreground mb-3">Module</h2>
         <div className="grid grid-cols-3 gap-3">
           {modules.map(({ label, icon: Icon, path, color }) => (
             <button
-              key={path}
+              key={path + label}
               onClick={() => navigate(path)}
               className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-card shadow-card border border-border hover:shadow-card-hover transition-all group"
             >
@@ -139,52 +101,6 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Meetings & Unterlagen */}
-      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
-        <div className="flex items-center gap-2">
-          <Clipboard size={18} className="text-primary" />
-          <h2 className="font-bold text-foreground">Meetings & Unterlagen</h2>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Kundenname</label>
-          <input
-            className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="z.B. Maria Huber"
-            value={kundeName}
-            onChange={(e) => setKundeName(e.target.value)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          {unterlagenItems.map((item) => (
-            <label key={item.key} className="flex items-center gap-3 p-3 rounded-xl bg-accent border border-border cursor-pointer hover:bg-secondary transition-all">
-              <div className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border-2 transition-all ${checkedItems[item.key] ? "bg-primary border-primary" : "border-muted-foreground"}`}>
-                {checkedItems[item.key] && <CheckCircle size={12} className="text-primary-foreground" />}
-              </div>
-              <span className="text-sm font-medium text-foreground">{item.label}</span>
-            </label>
-          ))}
-        </div>
-
-        <button
-          onClick={handleCreateLink}
-          disabled={generatingLink}
-          className="w-full bg-primary text-primary-foreground rounded-xl py-3 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          <LinkIcon size={16} /> Anforderungs-Link erstellen
-        </button>
-
-        {generatedLink && (
-          <div className="bg-accent rounded-xl p-3 border border-border flex items-center gap-2">
-            <input className="flex-1 bg-transparent text-xs text-foreground truncate" readOnly value={generatedLink} />
-            <button onClick={copyLink} className="flex-shrink-0 p-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-all">
-              <Copy size={14} />
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
