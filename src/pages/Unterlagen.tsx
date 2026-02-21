@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Clipboard, Link as LinkIcon, Copy, CheckCircle
+  FolderPlus, Link as LinkIcon, Copy, CheckCircle, MessageCircle, Mail
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,23 +35,51 @@ const categories: Record<string, { label: string; items: { key: string; label: s
       { key: "lohnzettel_miete", label: "Lohnzettel (letzte 3 Monate)" },
       { key: "mietvertrag", label: "Mietvertrag (unterschrieben)" },
       { key: "kaution_nachweis", label: "Kautionsnachweis" },
-      { key: "strom_foto", label: "Strom-Foto (Zählerstand)" },
-      { key: "wasser", label: "Wasserzähler-Foto" },
+      { key: "strom_foto_miete", label: "Strom-Foto (Zählerstand)" },
+      { key: "wasser_miete", label: "Wasserzähler-Foto" },
     ],
   },
-  verkaeufer: {
-    label: "Verkäufer",
+  vk_etw: {
+    label: "VK Eigentum",
     items: [
-      { key: "grundbuch_vk", label: "Grundbuchauszug" },
-      { key: "energieausweis", label: "Energieausweis" },
-      { key: "flächenwidmung", label: "Flächenwidmungsplan" },
-      { key: "bauplan", label: "Bauplan / Grundriss" },
-      { key: "betriebskosten", label: "Betriebskostenabrechnung" },
-      { key: "reisepass_vk", label: "Reisepass / Ausweis" },
+      { key: "grundbuch_vk_etw", label: "Grundbuchauszug" },
+      { key: "bk_vorschreibung", label: "Monatl. Betriebskosten-Vorschreibung" },
+      { key: "jahresabrechnung", label: "Jahresabrechnung" },
+      { key: "plan_etw", label: "Plan" },
+      { key: "we_vertrag", label: "Wohnungseigentumsvertrag" },
+      { key: "hauseigentümerprotokoll", label: "Letztes Hauseigentümerprotokoll" },
+      { key: "energieausweis_etw", label: "Energieausweis" },
+      { key: "reparaturruecklage", label: "Reparaturrücklagen-Stand" },
+      { key: "wohnbaufoerderung_etw", label: "Wohnbauförderung" },
+      { key: "wasser_etw", label: "Wasserstand Foto" },
+      { key: "strom_etw", label: "Stromzähler Foto" },
+      { key: "gas_etw", label: "Gasstand Foto" },
+      { key: "vollmacht_etw", label: "Vollmacht (Amt)" },
+      { key: "parifizierung_etw", label: "Parifizierung" },
+    ],
+  },
+  vk_haus: {
+    label: "VK Haus",
+    items: [
+      { key: "grundbuch_vk_haus", label: "Grundbuchauszug" },
+      { key: "benuetzungsbewilligung", label: "Benützungsbewilligung / Fertigstellungsanzeige" },
+      { key: "befunde", label: "Befunde (Kanal, Strom, Kamin, Gas)" },
+      { key: "baubeschreibung", label: "Bau-/Ausstattungsbeschreibung" },
+      { key: "einreichplan", label: "Einreichplan" },
+      { key: "energieausweis_haus", label: "Energieausweis" },
+      { key: "betriebskosten_haus", label: "Betriebskosten (Abgaben, Wasser, Müll)" },
+      { key: "wohnbaufoerderung_haus", label: "Wohnbauförderung (Annuitätenplan)" },
+      { key: "vollmacht_haus", label: "Vollmacht (Amt)" },
+      { key: "immoest", label: "Immobilienertragssteuer (ImmoESt)" },
+      { key: "parifizierung_haus", label: "Parifizierung" },
+      { key: "plan_haus", label: "Plan" },
+      { key: "wasser_haus", label: "Wasserstand Foto" },
+      { key: "strom_haus", label: "Stromstand Foto" },
+      { key: "gas_haus", label: "Gasstand Foto" },
     ],
   },
   finanzierungen: {
-    label: "Finanzierungen",
+    label: "Finanzierung",
     items: [
       { key: "lohnzettel_fin", label: "Lohnzettel (letzte 3 Monate)" },
       { key: "kontoauszuege", label: "Kontoauszüge (letzte 3 Monate)" },
@@ -104,17 +132,26 @@ export default function Unterlagen() {
     toast({ title: "✓ In Zwischenablage kopiert" });
   };
 
-  const currentItems = categories[activeTab].items;
+  const shareWhatsApp = () => {
+    const text = `Hallo ${kundeName || ""},\n\nbitte laden Sie die benötigten Unterlagen über folgenden Link hoch:\n${generatedLink}\n\nVielen Dank!`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
+  const shareEmail = () => {
+    const subject = `Unterlagen-Anforderung – ${kundeName || "Immobilientransaktion"}`;
+    const body = `Sehr geehrte/r ${kundeName || "Kunde/Kundin"},\n\nbitte laden Sie die benötigten Unterlagen über folgenden Link hoch:\n${generatedLink}\n\nMit freundlichen Grüßen`;
+    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank");
+  };
 
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-fade-in max-w-2xl mx-auto">
       <div className="flex items-center gap-2 mb-2">
-        <Clipboard size={20} className="text-primary" />
+        <FolderPlus size={20} className="text-primary" />
         <h1 className="text-xl font-bold text-foreground">Unterlagen-Anforderung</h1>
       </div>
 
-      {/* Kundenname */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
+        {/* Kundenname */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Kundenname
@@ -134,7 +171,7 @@ export default function Unterlagen() {
               <TabsTrigger
                 key={key}
                 value={key}
-                className="text-xs px-2.5 py-1.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                className="text-[11px] px-2 py-1.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
               >
                 {cat.label}
               </TabsTrigger>
@@ -177,18 +214,35 @@ export default function Unterlagen() {
         </button>
 
         {generatedLink && (
-          <div className="bg-accent rounded-xl p-3 border border-border flex items-center gap-2">
-            <input
-              className="flex-1 bg-transparent text-xs text-foreground truncate"
-              readOnly
-              value={generatedLink}
-            />
-            <button
-              onClick={copyLink}
-              className="flex-shrink-0 p-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-all"
-            >
-              <Copy size={14} />
-            </button>
+          <div className="space-y-3">
+            <div className="bg-accent rounded-xl p-3 border border-border flex items-center gap-2">
+              <input
+                className="flex-1 bg-transparent text-xs text-foreground truncate"
+                readOnly
+                value={generatedLink}
+              />
+              <button
+                onClick={copyLink}
+                className="flex-shrink-0 p-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-all"
+              >
+                <Copy size={14} />
+              </button>
+            </div>
+            {/* Quick-Send Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={shareWhatsApp}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[hsl(142,70%,40%)] text-white text-sm font-semibold hover:opacity-90 transition-all active:scale-95"
+              >
+                <MessageCircle size={16} /> WhatsApp
+              </button>
+              <button
+                onClick={shareEmail}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-muted text-foreground border border-border text-sm font-semibold hover:bg-secondary transition-all active:scale-95"
+              >
+                <Mail size={16} /> E-Mail
+              </button>
+            </div>
           </div>
         )}
       </div>
