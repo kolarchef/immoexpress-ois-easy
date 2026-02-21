@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles } from "lucide-react";
+import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ObjektModal from "@/components/ObjektModal";
 import ExposePreviewModal from "@/components/ExposePreviewModal";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
 
 type Objekt = {
@@ -29,10 +30,19 @@ type Objekt = {
   kurzinfo: string | null;
   ki_text: string | null;
   created_at: string;
+  immoz_exportiert: boolean | null;
 };
 
 type Interessent = { id: string; name: string; typ: string | null; email: string | null; phone: string | null };
 type HistorieEntry = { id: string; feld: string; alter_wert: string | null; neuer_wert: string | null; created_at: string };
+
+const statusOptions = [
+  { value: "aktiv", label: "Aktiv", emoji: "🟢" },
+  { value: "reserviert", label: "Reserviert", emoji: "🟡" },
+  { value: "verkauft", label: "Verkauft", emoji: "🔴" },
+  { value: "vermietet", label: "Vermietet", emoji: "🔵" },
+  { value: "deaktiviert", label: "Deaktiviert", emoji: "⚫" },
+];
 
 const statusStyle: Record<string, string> = {
   aktiv: "bg-green-500 text-white",
@@ -40,11 +50,13 @@ const statusStyle: Record<string, string> = {
   verkauft: "bg-muted-foreground text-white",
   vermietet: "bg-blue-500 text-white",
   deaktiviert: "bg-muted text-muted-foreground",
+  entwurf: "bg-orange-400 text-white",
 };
 
 const statusTabs = [
   { value: "alle", label: "Alle" },
   { value: "aktiv", label: "🟢 Aktiv" },
+  { value: "entwurf", label: "📝 Entwurf" },
   { value: "reserviert", label: "🟡 Reserviert" },
   { value: "verkauft", label: "🔴 Verkauft" },
   { value: "vermietet", label: "🔵 Vermietet" },
@@ -138,6 +150,7 @@ export default function Objektverwaltung() {
     const obj = objekte.find(o => o.id === objId);
     if (!obj) return;
     const oldStatus = obj.status || "aktiv";
+    if (oldStatus === newStatus) return;
     await supabase.from("objekte").update({ status: newStatus }).eq("id", objId);
     await supabase.from("objekt_historie").insert({
       objekt_id: objId, user_id: user.id, feld: "status", alter_wert: oldStatus, neuer_wert: newStatus,
@@ -203,7 +216,8 @@ export default function Objektverwaltung() {
 
   const filtered = objekte.filter(o => {
     const matchType = filter === "Alle" || o.objektart === filter;
-    const matchStatus = statusFilter === "alle" || (o.status || "aktiv") === statusFilter;
+    const s = o.status || "aktiv";
+    const matchStatus = statusFilter === "alle" || s === statusFilter;
     const matchSearch = (o.strasse || "").toLowerCase().includes(search.toLowerCase()) ||
       (o.ort || "").toLowerCase().includes(search.toLowerCase()) ||
       (o.objektnummer || "").toLowerCase().includes(search.toLowerCase());
@@ -211,6 +225,7 @@ export default function Objektverwaltung() {
   });
 
   const detailObj = objekte.find(o => o.id === detailId);
+  const isEntwurf = (obj: Objekt) => (obj.status === "entwurf") || (!obj.immoz_exportiert && obj.status !== "aktiv" && obj.status !== "reserviert" && obj.status !== "verkauft" && obj.status !== "vermietet");
 
   return (
     <div className="p-4 lg:p-8 animate-fade-in max-w-3xl mx-auto">
@@ -258,55 +273,84 @@ export default function Objektverwaltung() {
             <button onClick={() => setShowModal(true)} className="mt-3 text-primary font-semibold text-sm hover:underline">+ Erstes Objekt anlegen</button>
           </div>
         )}
-        {filtered.map(obj => (
-          <div key={obj.id} onClick={() => openDetail(obj.id)}
-            className="bg-card rounded-2xl shadow-card border border-border overflow-hidden hover:shadow-card-hover transition-all cursor-pointer">
-            {objPhotos[obj.id] ? (
-              <div className="relative h-40 w-full bg-muted">
-                <img src={objPhotos[obj.id]} alt="" className="w-full h-full object-contain bg-muted" />
-                <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 via-transparent to-transparent" />
-                <div className="absolute bottom-2 left-3 right-3">
-                  <h3 className="font-bold text-white text-sm drop-shadow">{obj.strasse ? `${obj.strasse} ${obj.hnr || ""}` : obj.objektart}{obj.ort ? `, ${obj.plz || ""} ${obj.ort}` : ""}</h3>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-white/80 font-mono">{obj.objektnummer}</span>
-                    <button
-                      onClick={e => { e.stopPropagation(); const statuses = ["aktiv","reserviert","verkauft","vermietet","deaktiviert"]; const idx = statuses.indexOf(obj.status || "aktiv"); changeStatus(obj.id, statuses[(idx + 1) % statuses.length]); }}
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80 ${statusStyle[obj.status || "aktiv"] || "bg-muted text-muted-foreground"}`}
-                    >
-                      {(obj.status || "aktiv").toUpperCase()}
-                    </button>
-                    <span className="text-[10px] text-white/70 flex items-center gap-0.5"><Clock size={9} /> {daysSince(obj.created_at)}d</span>
+        {filtered.map(obj => {
+          const objStatus = obj.status || "aktiv";
+          const entwurf = isEntwurf(obj);
+          return (
+            <div key={obj.id} onClick={() => openDetail(obj.id)}
+              className="bg-card rounded-2xl shadow-card border border-border overflow-hidden hover:shadow-card-hover transition-all cursor-pointer">
+              {objPhotos[obj.id] ? (
+                <div className="relative h-44 w-full">
+                  <img src={objPhotos[obj.id]} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 via-foreground/10 to-transparent" />
+                  {entwurf && (
+                    <span className="absolute top-2 left-2 bg-orange-400 text-white text-[10px] font-bold px-2 py-0.5 rounded-lg uppercase tracking-wide">Entwurf</span>
+                  )}
+                  <div className="absolute bottom-2 left-3 right-3">
+                    <h3 className="font-bold text-white text-sm drop-shadow">{obj.strasse ? `${obj.strasse} ${obj.hnr || ""}` : obj.objektart}{obj.ort ? `, ${obj.plz || ""} ${obj.ort}` : ""}</h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-white/80 font-mono">{obj.objektnummer}</span>
+                      {/* Status Dropdown */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button onClick={e => e.stopPropagation()}
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 cursor-pointer hover:opacity-80 ${statusStyle[objStatus] || "bg-muted text-muted-foreground"}`}>
+                            {objStatus.toUpperCase()} <ChevronDown size={9} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="min-w-[140px]">
+                          {statusOptions.map(s => (
+                            <DropdownMenuItem key={s.value} onClick={(e) => { e.stopPropagation(); changeStatus(obj.id, s.value); }}>
+                              {s.emoji} {s.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <span className="text-[10px] text-white/70 flex items-center gap-0.5"><Clock size={9} /> {daysSince(obj.created_at)}d</span>
+                    </div>
+                  </div>
+                  {obj.kaufpreis && <span className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-lg shadow">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
+                </div>
+              ) : (
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-foreground text-sm">{obj.strasse ? `${obj.strasse} ${obj.hnr || ""}` : obj.objektart}{obj.ort ? `, ${obj.plz || ""} ${obj.ort}` : ""}</h3>
+                        {entwurf && <span className="bg-orange-400 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Entwurf</span>}
+                      </div>
+                      <span className="text-xs text-muted-foreground font-mono">{obj.objektnummer}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Clock size={9} /> {daysSince(obj.created_at)}d</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button onClick={e => e.stopPropagation()}
+                            className={`text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer hover:opacity-80 flex items-center gap-1 ${statusStyle[objStatus] || "bg-muted text-muted-foreground"}`}>
+                            {objStatus.toUpperCase()} <ChevronDown size={10} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[140px]">
+                          {statusOptions.map(s => (
+                            <DropdownMenuItem key={s.value} onClick={(e) => { e.stopPropagation(); changeStatus(obj.id, s.value); }}>
+                              {s.emoji} {s.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </div>
-                {obj.kaufpreis && <span className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-lg shadow">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
+              )}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground px-4 py-2.5 border-t border-border">
+                {obj.objektart && <span><MapPin size={11} className="inline mr-0.5" />{obj.objektart}</span>}
+                {obj.zimmer && <span><BedDouble size={11} className="inline mr-0.5" />{obj.zimmer} Zi.</span>}
+                {obj.flaeche_m2 && <span><Maximize2 size={11} className="inline mr-0.5" />{obj.flaeche_m2}m²</span>}
+                {!objPhotos[obj.id] && obj.kaufpreis && <span className="font-bold text-primary">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
               </div>
-            ) : (
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
-                    <h3 className="font-bold text-foreground text-sm">{obj.strasse ? `${obj.strasse} ${obj.hnr || ""}` : obj.objektart}{obj.ort ? `, ${obj.plz || ""} ${obj.ort}` : ""}</h3>
-                    <span className="text-xs text-muted-foreground font-mono">{obj.objektnummer}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Clock size={9} /> {daysSince(obj.created_at)}d</span>
-                    <button
-                      onClick={e => { e.stopPropagation(); const statuses = ["aktiv","reserviert","verkauft","vermietet","deaktiviert"]; const idx = statuses.indexOf(obj.status || "aktiv"); changeStatus(obj.id, statuses[(idx + 1) % statuses.length]); }}
-                      className={`text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer hover:opacity-80 ${statusStyle[obj.status || "aktiv"] || "bg-muted text-muted-foreground"}`}
-                    >
-                      {(obj.status || "aktiv").toUpperCase()}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="flex items-center gap-3 text-xs text-muted-foreground px-4 py-2.5 border-t border-border">
-              {obj.objektart && <span><MapPin size={11} className="inline mr-0.5" />{obj.objektart}</span>}
-              {obj.zimmer && <span><BedDouble size={11} className="inline mr-0.5" />{obj.zimmer} Zi.</span>}
-              {obj.flaeche_m2 && <span><Maximize2 size={11} className="inline mr-0.5" />{obj.flaeche_m2}m²</span>}
-              {!objPhotos[obj.id] && obj.kaufpreis && <span className="font-bold text-primary">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Detail Modal */}
@@ -314,7 +358,10 @@ export default function Objektverwaltung() {
         <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setDetailId(null)}>
           <div className="bg-card rounded-2xl shadow-md-custom border border-border w-full max-w-md p-6 animate-fade-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-foreground">{detailObj.strasse ? `${detailObj.strasse} ${detailObj.hnr || ""}` : detailObj.objektart}</h2>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">{detailObj.strasse ? `${detailObj.strasse} ${detailObj.hnr || ""}` : detailObj.objektart}</h2>
+                {isEntwurf(detailObj) && <span className="bg-orange-400 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Entwurf / Offline</span>}
+              </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => startEdit(detailObj)} className="p-2 rounded-xl hover:bg-accent"><Edit3 size={16} className="text-primary" /></button>
                 <button onClick={() => setDetailId(null)} className="p-2 rounded-xl hover:bg-accent"><X size={16} className="text-muted-foreground" /></button>
@@ -330,10 +377,11 @@ export default function Objektverwaltung() {
               )}
             </div>
 
+            {/* Photos – object-cover, no grey bars */}
             {photos.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-3 mb-3">
                 {photos.map((url, i) => (
-                  <img key={i} src={url} alt={`Foto ${i+1}`} className="w-24 h-18 rounded-xl object-contain bg-muted flex-shrink-0 border border-border" />
+                  <img key={i} src={url} alt={`Foto ${i+1}`} className="w-28 h-20 rounded-xl object-cover flex-shrink-0 border border-border" />
                 ))}
               </div>
             )}
@@ -355,7 +403,8 @@ export default function Objektverwaltung() {
                     <div>
                       <label className="text-xs font-semibold text-muted-foreground uppercase">Status</label>
                       <select className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm" value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })}>
-                        {statusTabs.filter(s => s.value !== "alle").map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        {statusOptions.map(s => <option key={s.value} value={s.value}>{s.emoji} {s.label}</option>)}
+                        <option value="entwurf">📝 Entwurf</option>
                       </select>
                     </div>
                     <div>
@@ -368,7 +417,7 @@ export default function Objektverwaltung() {
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-muted-foreground uppercase">Beschreibung</label>
-                      <textarea className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm resize-none" rows={3} value={editForm.beschreibung} onChange={e => setEditForm({ ...editForm, beschreibung: e.target.value })} />
+                      <textarea className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm resize-none" rows={6} value={editForm.beschreibung} onChange={e => setEditForm({ ...editForm, beschreibung: e.target.value })} />
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-muted-foreground uppercase">🔒 Interne Notizen</label>
@@ -392,7 +441,11 @@ export default function Objektverwaltung() {
                     {detailObj.kaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Käufer-Provision</span><span className="font-semibold">{detailObj.kaeufer_provision}%</span></div>}
                     {detailObj.verkaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Verkäufer-Provision</span><span className="font-semibold">{detailObj.verkaeufer_provision}%</span></div>}
                     {detailObj.kurzinfo && <p className="text-muted-foreground text-xs pt-2 border-t border-border">{detailObj.kurzinfo}</p>}
-                    {detailObj.beschreibung && <p className="text-muted-foreground text-xs pt-2 border-t border-border">{detailObj.beschreibung}</p>}
+                    {detailObj.beschreibung && (
+                      <div className="pt-2 border-t border-border">
+                        <p className="text-muted-foreground text-xs whitespace-pre-wrap leading-relaxed">{detailObj.beschreibung}</p>
+                      </div>
+                    )}
                     {detailObj.interne_notizen && (
                       <div className="pt-2 border-t border-border">
                         <span className="text-xs font-bold text-amber-600">🔒 Interne Notizen</span>

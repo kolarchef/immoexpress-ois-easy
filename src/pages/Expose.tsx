@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus, Eye, Sparkles } from "lucide-react";
+import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus, Eye, Sparkles, Save } from "lucide-react";
 import ObjektModal from "@/components/ObjektModal";
 import ExposePreviewModal from "@/components/ExposePreviewModal";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +20,6 @@ const bundeslaender = [
 ];
 
 const objektarten = ["Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Doppelhaushälfte", "Reihenhaus", "Grundstück", "Büro/Gewerbefläche", "Zinshaus", "Dachgeschosswohnung", "Penthouse"];
-const provisionOptionen = ["Käufer", "Verkäufer", "Geteilt (50/50)", "Provisionsfrei"];
 
 const KURZBESCHREIBUNG_LIMIT = 2000;
 
@@ -32,12 +31,12 @@ interface ImageDesc {
 
 export default function Expose() {
   const [images, setImages] = useState<string[]>([]);
+  const [titleImageIndex, setTitleImageIndex] = useState(0);
   const [aiText, setAiText] = useState("");
   const [kurzbeschreibung, setKurzbeschreibung] = useState("");
   const [korrekturText, setKorrekturText] = useState("");
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [exportingPdf, setExportingPdf] = useState(false);
   const [imageAnalyzed, setImageAnalyzed] = useState(false);
   const [aiModel, setAiModel] = useState("");
   const [exposeLaenge, setExposeLaenge] = useState<"kurz" | "lang">("lang");
@@ -78,14 +77,13 @@ export default function Expose() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       const text = data.result || "";
-      // Parse JSON from response
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]) as ImageDesc[];
         setImageDescriptions(parsed);
-        // Auto-append to beschreibung
         const descText = parsed.map(d => `• ${d.label}: ${d.description}`).join("\n");
         setForm(prev => ({ ...prev, beschreibung: prev.beschreibung ? `${prev.beschreibung}\n\nKI-Bilderkennung:\n${descText}` : `KI-Bilderkennung:\n${descText}` }));
+        setImageAnalyzed(true);
         toast({ title: `✓ ${parsed.length} Bilder analysiert` });
       }
     } catch (err: unknown) {
@@ -126,14 +124,13 @@ export default function Expose() {
     toast({ title: "✓ Übernommen", description: `Kurzbeschreibung mit ${truncated.length} Zeichen gesetzt.` });
   };
 
-  const handleSaveAndExport = async () => {
+  const handleSave = async (exportToImmoZ: boolean) => {
     if (!form.titel || !form.objektart) {
       toast({ title: "Fehlende Pflichtfelder", variant: "destructive" });
       return;
     }
     setSaving(true);
     try {
-      // Get current user for RLS
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error("Nicht eingeloggt");
 
@@ -155,17 +152,22 @@ export default function Expose() {
         beschreibung: aiText || form.beschreibung,
         ki_text: aiText,
         verkaufsart: form.verkaufsart,
-        status: "aktiv",
-        immoz_exportiert: true,
-        immoz_export_datum: new Date().toISOString(),
+        status: exportToImmoZ ? "aktiv" : "entwurf",
+        immoz_exportiert: exportToImmoZ,
+        immoz_export_datum: exportToImmoZ ? new Date().toISOString() : null,
       };
       const { data: obj, error: objErr } = await supabase.from("objekte").insert(objektData).select().single();
       if (objErr) throw objErr;
-      await supabase.from("immoz_exporte").insert({
-        objekte_ids: [obj.id], anzahl: 1, status: "Erfolgreich",
-        dateiname: `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`,
-      });
-      toast({ title: "✓ Gespeichert & an ImmoZ übertragen!" });
+
+      if (exportToImmoZ) {
+        await supabase.from("immoz_exporte").insert({
+          objekte_ids: [obj.id], anzahl: 1, status: "Erfolgreich",
+          dateiname: `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`,
+        });
+        toast({ title: "✓ Gespeichert & an ImmoZ übertragen!" });
+      } else {
+        toast({ title: "✓ Als Entwurf gespeichert", description: "Objekt ist nur intern sichtbar." });
+      }
     } catch (err: unknown) {
       toast({ title: "Fehler", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
     } finally {
@@ -287,37 +289,21 @@ export default function Expose() {
               placeholder="3.0" value={form.verkaeufer_provision} onChange={(e) => setForm({ ...form, verkaeufer_provision: e.target.value })} />
           </div>
         </div>
-
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Beschreibung / Notizen</label>
-          <textarea className="mt-1 w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-            rows={3} placeholder="Besonderheiten, Dachterrasse, Tiefgaragenplatz…" value={form.beschreibung}
-            onChange={(e) => setForm({ ...form, beschreibung: e.target.value })} />
-        </div>
       </div>
 
-      {/* Foto-Upload mit KI-Bilderkennung */}
+      {/* Foto-Upload – kompakt */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
         <div className="flex items-center gap-2 mb-3">
           <Image size={18} className="text-primary" />
-          <h2 className="font-bold text-foreground">Fotos hochladen</h2>
+          <h2 className="font-bold text-foreground">Fotos</h2>
           <span className="ml-auto text-xs font-semibold text-primary">{images.length}/20</span>
         </div>
 
-        {images.length > 0 && (
-          <div className={`flex items-center gap-2 p-3 rounded-xl mb-3 text-xs font-medium ${imageAnalyzed ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800" : "bg-primary/5 text-primary border border-primary/20"}`}>
-            {imageAnalyzed
-              ? <><CheckCircle size={14} /> {images.length} Bild(er) von KI analysiert</>
-              : <><Wand2 size={14} /> {images.length} Bild(er) bereit für KI-Analyse</>
-            }
-          </div>
-        )}
-
         {images.length < 20 && (
-          <label className="flex flex-col items-center justify-center border-2 border-dashed border-primary/30 rounded-xl py-6 cursor-pointer hover:bg-accent transition-all bg-surface mb-4">
-            <Upload size={22} className="text-primary mb-2" />
+          <label className="flex flex-col items-center justify-center border-2 border-dashed border-primary/30 rounded-xl py-5 cursor-pointer hover:bg-accent transition-all bg-surface mb-3">
+            <Upload size={20} className="text-primary mb-1" />
             <span className="text-sm font-semibold text-foreground">Fotos auswählen</span>
-            <span className="text-xs text-muted-foreground mt-1">JPG, PNG – Max. 20 Bilder</span>
+            <span className="text-xs text-muted-foreground">JPG, PNG – Max. 20</span>
             <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
           </label>
         )}
@@ -326,15 +312,16 @@ export default function Expose() {
           <>
             <div className="grid grid-cols-4 gap-2 mb-3">
               {images.map((img, i) => (
-                <div key={i} className="relative rounded-xl overflow-hidden aspect-square group">
-                  <img src={img} alt={`Foto ${i + 1}`} className="w-full h-full object-contain bg-muted" />
+                <div key={i} className="relative rounded-xl overflow-hidden aspect-square group cursor-pointer"
+                  onClick={() => setTitleImageIndex(i)}>
+                  <img src={img} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
                   <button
-                    onClick={() => { setImages(prev => prev.filter((_, idx) => idx !== i)); setImageAnalyzed(false); setImageDescriptions([]); }}
+                    onClick={(e) => { e.stopPropagation(); setImages(prev => prev.filter((_, idx) => idx !== i)); setImageAnalyzed(false); setImageDescriptions([]); if (titleImageIndex >= images.length - 1) setTitleImageIndex(0); }}
                     className="absolute top-1 right-1 bg-foreground/70 text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <X size={12} />
                   </button>
-                  {i === 0 && <span className="absolute bottom-1 left-1 text-[9px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-semibold">Titelbild</span>}
+                  {i === titleImageIndex && <span className="absolute bottom-1 left-1 text-[9px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-semibold">Titelbild</span>}
                   {imageDescriptions[i] && (
                     <div className="absolute bottom-0 left-0 right-0 bg-foreground/70 text-background text-[9px] px-1.5 py-1 leading-tight">
                       {imageDescriptions[i].label}
@@ -344,21 +331,28 @@ export default function Expose() {
               ))}
             </div>
 
-            {/* KI-Bilderkennung Button */}
-            <button
-              onClick={handleDescribeImages}
-              disabled={describingImages}
-              className="w-full bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-secondary transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {describingImages ? (
-                <><RefreshCw size={14} className="animate-spin" /> KI analysiert Bilder…</>
-              ) : (
-                <><Sparkles size={14} className="text-primary" /> KI-Bilderkennung starten ({Math.min(images.length, 10)} Fotos)</>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDescribeImages}
+                disabled={describingImages}
+                className="flex-1 bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-secondary transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {describingImages ? (
+                  <><RefreshCw size={14} className="animate-spin" /> Analysiert…</>
+                ) : (
+                  <><Sparkles size={14} className="text-primary" /> KI-Bilderkennung ({Math.min(images.length, 10)})</>
+                )}
+              </button>
+              {imageAnalyzed && (
+                <button onClick={handleDescribeImages} disabled={describingImages}
+                  className="bg-accent text-foreground border border-border rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-secondary transition-all disabled:opacity-50 flex items-center gap-1.5">
+                  <RefreshCw size={14} /> Neu
+                </button>
               )}
-            </button>
+            </div>
 
             {imageDescriptions.length > 0 && (
-              <div className="mt-3 space-y-1.5">
+              <div className="mt-3 space-y-1">
                 {imageDescriptions.map((d, i) => (
                   <div key={i} className="flex items-start gap-2 p-2 bg-accent rounded-lg text-xs">
                     <span className="font-bold text-primary shrink-0">📷 {d.label}</span>
@@ -369,6 +363,14 @@ export default function Expose() {
             )}
           </>
         )}
+      </div>
+
+      {/* Beschreibung – groß, unter Bildern */}
+      <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Beschreibung / Notizen</label>
+        <textarea className="mt-2 w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          rows={6} placeholder="Besonderheiten, Dachterrasse, Tiefgaragenplatz…" value={form.beschreibung}
+          onChange={(e) => setForm({ ...form, beschreibung: e.target.value })} />
       </div>
 
       {/* KI-Textgenerator */}
@@ -432,11 +434,16 @@ export default function Expose() {
         )}
       </div>
 
-      {/* Aktions-Buttons */}
+      {/* Aktions-Buttons – Selektive Speicher-Logik */}
       <div className="space-y-3">
-        <button onClick={handleSaveAndExport} disabled={!formValid || saving}
+        <button onClick={() => handleSave(true)} disabled={!formValid || saving}
           className="w-full bg-primary text-primary-foreground rounded-2xl py-4 text-base font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3">
-          {saving ? <><RefreshCw size={18} className="animate-spin" /> Wird gespeichert…</> : <><Copy size={18} /> Objekt speichern & an ImmoZ übertragen</>}
+          {saving ? <><RefreshCw size={18} className="animate-spin" /> Wird gespeichert…</> : <><Copy size={18} /> An ImmoZ übertragen & online stellen</>}
+        </button>
+
+        <button onClick={() => handleSave(false)} disabled={!formValid || saving}
+          className="w-full border-2 border-dashed border-border bg-card text-foreground rounded-2xl py-3.5 text-sm font-bold hover:bg-accent transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+          <Save size={16} className="text-muted-foreground" /> Nur intern speichern (Entwurf)
         </button>
 
         <button onClick={handlePdfExport} disabled={!formValid}

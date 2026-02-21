@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, RefreshCw, Plus, Upload, Trash2, Sparkles } from "lucide-react";
+import { X, RefreshCw, Plus, Upload, Trash2, Sparkles, Save, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -19,6 +19,7 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
   const [saving, setSaving] = useState(false);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [titleIndex, setTitleIndex] = useState(0);
   const [describingImages, setDescribingImages] = useState(false);
   const [form, setForm] = useState({
     objektnummer: "", objektart: "", verkaufsart: "Kauf",
@@ -48,6 +49,7 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
   const removePhoto = (idx: number) => {
     setPhotos(prev => prev.filter((_, i) => i !== idx));
     setPreviews(prev => prev.filter((_, i) => i !== idx));
+    if (titleIndex >= previews.length - 1) setTitleIndex(0);
   };
 
   const handleDescribeImages = async () => {
@@ -64,10 +66,8 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]) as Array<{ label: string; description: string }>;
         const descText = parsed.map(d => `${d.label}: ${d.description}`).join(". ");
-        // Set kurzinfo with limit
         const truncated = descText.slice(0, KURZINFO_LIMIT);
         setForm(prev => ({ ...prev, kurzinfo: prev.kurzinfo || truncated }));
-        // Append full descriptions to beschreibung
         const fullText = parsed.map(d => `• ${d.label}: ${d.description}`).join("\n");
         setForm(prev => ({ ...prev, beschreibung: prev.beschreibung ? `${prev.beschreibung}\n\n${fullText}` : fullText }));
         toast({ title: `✓ ${parsed.length} Bilder analysiert` });
@@ -79,7 +79,7 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (exportToImmoZ: boolean) => {
     if (!user || !form.objektart) {
       toast({ title: "Objektart ist Pflicht", variant: "destructive" });
       return;
@@ -105,22 +105,39 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
         verkaeufer_provision: form.verkaeufer_provision ? parseFloat(form.verkaeufer_provision) : null,
         interne_notizen: form.interne_notizen || null,
         beschreibung: form.beschreibung || null,
-        status: "aktiv",
+        status: exportToImmoZ ? "aktiv" : "entwurf",
+        immoz_exportiert: exportToImmoZ,
+        immoz_export_datum: exportToImmoZ ? new Date().toISOString() : null,
       }).select().single();
       if (error) throw error;
 
       if (photos.length > 0 && obj) {
-        for (let i = 0; i < photos.length; i++) {
-          const file = photos[i];
+        // Upload title image first (index 0 in storage)
+        const orderedPhotos = [...photos];
+        if (titleIndex > 0) {
+          const [title] = orderedPhotos.splice(titleIndex, 1);
+          orderedPhotos.unshift(title);
+        }
+        for (let i = 0; i < orderedPhotos.length; i++) {
+          const file = orderedPhotos[i];
           const ext = file.name.split(".").pop();
-          const path = `${obj.id}/${i}_${Date.now()}.${ext}`;
+          const path = `${obj.id}/${String(i).padStart(3, "0")}_${Date.now()}.${ext}`;
           await supabase.storage.from("objekt-fotos").upload(path, file);
         }
       }
 
-      toast({ title: "✓ Objekt angelegt & synchronisiert" });
+      if (exportToImmoZ && obj) {
+        await supabase.from("immoz_exporte").insert({
+          objekte_ids: [obj.id], anzahl: 1, status: "Erfolgreich",
+          dateiname: `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`,
+        });
+        toast({ title: "✓ Objekt angelegt & an ImmoZ übertragen" });
+      } else {
+        toast({ title: "✓ Als Entwurf gespeichert", description: "Nur intern sichtbar." });
+      }
+
       setForm({ objektnummer: "", objektart: "", verkaufsart: "Kauf", plz: "", ort: "", strasse: "", hnr: "", top: "", stock: "", kurzinfo: "", flaeche: "", zimmer: "", kaufpreis: "", kaeufer_provision: "", verkaeufer_provision: "", interne_notizen: "", beschreibung: "" });
-      setPhotos([]); setPreviews([]);
+      setPhotos([]); setPreviews([]); setTitleIndex(0);
       onSaved?.();
       onClose();
     } catch (err: unknown) {
@@ -230,26 +247,16 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
             </div>
           </div>
 
-          {/* Beschreibung */}
-          <div>
-            <label className={labelCls}>Beschreibung</label>
-            <textarea className={`${inputCls} resize-none`} rows={3} placeholder="Besonderheiten…" value={form.beschreibung} onChange={e => setForm({ ...form, beschreibung: e.target.value })} />
-          </div>
-
-          {/* Interne Notizen */}
-          <div>
-            <label className={labelCls}>🔒 Interne Notizen (nur für Makler)</label>
-            <textarea className={`${inputCls} resize-none bg-amber-50/50 dark:bg-amber-900/10`} rows={2} placeholder="Interne Anmerkungen…" value={form.interne_notizen} onChange={e => setForm({ ...form, interne_notizen: e.target.value })} />
-          </div>
-
           {/* Foto-Upload */}
           <div>
             <label className={labelCls}>Fotos ({previews.length}/20)</label>
             <div className="mt-2 grid grid-cols-4 gap-2">
               {previews.map((src, i) => (
-                <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-border bg-muted">
-                  <img src={src} alt={`Foto ${i + 1}`} className="w-full h-full object-contain" />
-                  <button onClick={() => removePhoto(i)} className="absolute top-1 right-1 bg-foreground/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-border cursor-pointer"
+                  onClick={() => setTitleIndex(i)}>
+                  <img src={src} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                  {i === titleIndex && <span className="absolute bottom-1 left-1 text-[8px] bg-primary text-primary-foreground px-1 py-0.5 rounded-full font-semibold">Titelbild</span>}
+                  <button onClick={(e) => { e.stopPropagation(); removePhoto(i); }} className="absolute top-1 right-1 bg-foreground/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Trash2 size={12} />
                   </button>
                 </div>
@@ -263,7 +270,7 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
               )}
             </div>
 
-            {/* KI-Bilderkennung Button */}
+            {/* KI-Bilderkennung */}
             {previews.length > 0 && (
               <button onClick={handleDescribeImages} disabled={describingImages}
                 className="w-full mt-3 bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-secondary transition-all flex items-center justify-center gap-2 disabled:opacity-50">
@@ -276,8 +283,25 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
             )}
           </div>
 
-          <button onClick={handleSave} disabled={saving || !form.objektart} className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving ? <><RefreshCw size={16} className="animate-spin" /> Speichert…</> : <><Plus size={16} /> Objekt anlegen & synchronisieren</>}
+          {/* Beschreibung – groß */}
+          <div>
+            <label className={labelCls}>Beschreibung</label>
+            <textarea className={`${inputCls} resize-none`} rows={6} placeholder="Besonderheiten…" value={form.beschreibung} onChange={e => setForm({ ...form, beschreibung: e.target.value })} />
+          </div>
+
+          {/* Interne Notizen */}
+          <div>
+            <label className={labelCls}>🔒 Interne Notizen (nur für Makler)</label>
+            <textarea className={`${inputCls} resize-none bg-amber-50/50 dark:bg-amber-900/10`} rows={2} placeholder="Interne Anmerkungen…" value={form.interne_notizen} onChange={e => setForm({ ...form, interne_notizen: e.target.value })} />
+          </div>
+
+          {/* Speicher-Buttons */}
+          <button onClick={() => handleSave(true)} disabled={saving || !form.objektart} className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+            {saving ? <><RefreshCw size={16} className="animate-spin" /> Speichert…</> : <><Copy size={16} /> Anlegen & an ImmoZ übertragen</>}
+          </button>
+
+          <button onClick={() => handleSave(false)} disabled={saving || !form.objektart} className="w-full border-2 border-dashed border-border bg-card text-foreground rounded-xl py-2.5 font-semibold text-sm hover:bg-accent transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+            <Save size={14} className="text-muted-foreground" /> Nur intern speichern (Entwurf)
           </button>
         </div>
       </div>
