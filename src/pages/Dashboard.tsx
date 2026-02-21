@@ -26,7 +26,7 @@ const modules = [
   { label: "IMMOZ", icon: ArrowLeftRight, path: "/immoz" },
   { label: "BESTELLUNGEN", icon: ShoppingCart, path: "/bestellung" },
   // Reihe 4 – Spezial
-  { label: "UNTERLAGEN", icon: FolderPlus, path: "/unterlagen" },
+  { label: "UNTERLAGEN+", icon: FolderPlus, path: "/unterlagen" },
   { label: "GRUNDBUCH", icon: FileSearch, path: "/grundbuch" },
   { label: "BEWERTUNG", icon: Calculator, path: "/bewertung" },
   { label: "NETZWERK", icon: Handshake, path: "/netzwerk" },
@@ -59,7 +59,7 @@ export default function Dashboard() {
     setTodoList((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 animate-fade-in max-w-2xl mx-auto">
+    <div className="p-4 lg:p-8 pb-24 space-y-6 animate-fade-in max-w-2xl mx-auto">
       {/* To-Do Liste */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
         <div className="flex items-center justify-between mb-3">
