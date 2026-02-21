@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import ProvisionsRechner from "@/components/ProvisionsRechner";
 import {
   MapPin, Clock,
   Users, Building2, ShieldAlert, GraduationCap,
@@ -7,7 +9,7 @@ import {
   Video, FolderPlus,
   Search as SearchIcon, ShoppingCart, CheckSquare,
   FileSearch, Calculator, Handshake, TrendingUp,
-  Clipboard, HeadphonesIcon, Scale, BookOpen,
+  Clipboard, KeyRound, Scale, BookOpen,
   Star
 } from "lucide-react";
 
@@ -30,13 +32,6 @@ const mainModules = [
   { label: "ZINSHAUS", icon: TrendingUp, path: "/zinshaus" },
 ];
 
-const expertenTools = [
-  { label: "SERVICE-CENTER", desc: "After-Sales & Checklisten", icon: HeadphonesIcon },
-  { label: "PROVISIONS-RECHNER", desc: "Brutto/Netto-Kalkulation", icon: Calculator },
-  { label: "GESETZBUCH", desc: "Maklergesetz & ÖNORMEN", icon: Scale },
-  { label: "HANDBUCH", desc: "Interne Wissensdatenbank", icon: BookOpen },
-];
-
 const initialTodos = [
   { id: 1, text: "Alleinvermittlungsvertrag Mayer unterzeichnen lassen", done: false, prio: "hoch" as const },
   { id: 2, text: "Exposé für Penthouse 1010 Wien finalisieren", done: false, prio: "mittel" as const },
@@ -54,16 +49,17 @@ const prioColor = { hoch: "text-destructive", mittel: "text-primary", niedrig: "
 
 export default function Index() {
   const navigate = useNavigate();
+  const { displayName } = useAuth();
   const [todos, setTodos] = useState(initialTodos);
 
   const toggle = (id: number) =>
     setTodos((p) => p.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 max-w-2xl mx-auto animate-fade-in" style={{ paddingBottom: 200 }}>
+    <div className="p-4 lg:p-8 space-y-6 max-w-2xl mx-auto animate-fade-in" style={{ overflowY: "auto", height: "auto", paddingBottom: 200 }}>
       {/* Begrüßung */}
       <div>
-        <h1 className="text-xl font-bold text-foreground">Willkommen, Max 👋</h1>
+        <h1 className="text-xl font-bold text-foreground">Willkommen, {displayName || "Makler"} 👋</h1>
         <p className="text-sm text-muted-foreground">Dein Überblick für heute</p>
       </div>
 
@@ -148,20 +144,59 @@ export default function Index() {
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Experten-Tools</h2>
         <div className="grid grid-cols-2 gap-2">
-          {expertenTools.map(({ label, desc, icon: Icon }) => (
-            <button
-              key={label}
-              className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border hover:bg-secondary transition-all text-left"
-            >
-              <div className="w-9 h-9 rounded-xl bg-primary-light flex items-center justify-center flex-shrink-0">
-                <Icon size={16} className="text-primary" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-xs font-bold text-foreground block truncate">{label}</span>
-                <span className="text-[10px] text-muted-foreground block truncate">{desc}</span>
-              </div>
-            </button>
-          ))}
+          {/* Immo-Concierge */}
+          <button
+            onClick={() => navigate("/immo-concierge")}
+            className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border hover:bg-secondary transition-all text-left"
+          >
+            <div className="w-9 h-9 rounded-xl bg-primary-light flex items-center justify-center flex-shrink-0">
+              <KeyRound size={16} className="text-primary" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-foreground block truncate">IMMO-CONCIERGE</span>
+              <span className="text-[10px] text-muted-foreground block truncate">After-Sales & Checklisten</span>
+            </div>
+          </button>
+
+          {/* Provisions-Rechner */}
+          <ProvisionsRechner
+            trigger={
+              <button className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border hover:bg-secondary transition-all text-left w-full">
+                <div className="w-9 h-9 rounded-xl bg-primary-light flex items-center justify-center flex-shrink-0">
+                  <Calculator size={16} className="text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-foreground block truncate">PROVISIONS-RECHNER</span>
+                  <span className="text-[10px] text-muted-foreground block truncate">Brutto/Netto-Kalkulation</span>
+                </div>
+              </button>
+            }
+          />
+
+          {/* Gesetzbuch */}
+          <button
+            onClick={() => navigate("/gesetzbuch")}
+            className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border hover:bg-secondary transition-all text-left"
+          >
+            <div className="w-9 h-9 rounded-xl bg-primary-light flex items-center justify-center flex-shrink-0">
+              <Scale size={16} className="text-primary" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-foreground block truncate">GESETZBUCH</span>
+              <span className="text-[10px] text-muted-foreground block truncate">Maklergesetz & ÖNORMEN</span>
+            </div>
+          </button>
+
+          {/* Handbuch */}
+          <button className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border hover:bg-secondary transition-all text-left">
+            <div className="w-9 h-9 rounded-xl bg-primary-light flex items-center justify-center flex-shrink-0">
+              <BookOpen size={16} className="text-primary" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-foreground block truncate">HANDBUCH</span>
+              <span className="text-[10px] text-muted-foreground block truncate">Interne Wissensdatenbank</span>
+            </div>
+          </button>
         </div>
       </section>
     </div>

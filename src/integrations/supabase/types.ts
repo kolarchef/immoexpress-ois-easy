@@ -104,6 +104,36 @@ export type Database = {
         }
         Relationships: []
       }
+      nachrichten: {
+        Row: {
+          created_at: string
+          gelesen: boolean | null
+          id: string
+          inhalt: string | null
+          titel: string
+          typ: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gelesen?: boolean | null
+          id?: string
+          inhalt?: string | null
+          titel: string
+          typ?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gelesen?: boolean | null
+          id?: string
+          inhalt?: string | null
+          titel?: string
+          typ?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       newsletter_kampagnen: {
         Row: {
           betreff: string
@@ -209,6 +239,60 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          imap_host: string | null
+          imap_password: string | null
+          imap_port: number | null
+          imap_user: string | null
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: number | null
+          smtp_user: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          imap_host?: string | null
+          imap_password?: string | null
+          imap_port?: number | null
+          imap_user?: string | null
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_user?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          imap_host?: string | null
+          imap_password?: string | null
+          imap_port?: number | null
+          imap_user?: string | null
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_user?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       unterlagen_anfragen: {
         Row: {
           abgeschlossen: boolean | null
@@ -270,6 +354,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      zinshaeuser: {
+        Row: {
+          adresse: string
+          baujahr: number | null
+          bezirk: string | null
+          created_at: string
+          id: string
+          kaufpreis: number | null
+          m2_preis: number | null
+          notiz: string | null
+          rendite_prozent: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          adresse: string
+          baujahr?: number | null
+          bezirk?: string | null
+          created_at?: string
+          id?: string
+          kaufpreis?: number | null
+          m2_preis?: number | null
+          notiz?: string | null
+          rendite_prozent?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          adresse?: string
+          baujahr?: number | null
+          bezirk?: string | null
+          created_at?: string
+          id?: string
+          kaufpreis?: number | null
+          m2_preis?: number | null
+          notiz?: string | null
+          rendite_prozent?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
