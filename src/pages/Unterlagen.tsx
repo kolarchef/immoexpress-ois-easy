@@ -132,14 +132,34 @@ export default function Unterlagen() {
     toast({ title: "✓ In Zwischenablage kopiert" });
   };
 
+  const getWhatsAppText = () => {
+    const name = kundeName || "";
+    const selected = Object.entries(checkedItems).filter(([, v]) => v).map(([k]) => k);
+    const hasZaehler = selected.some((k) => ["wasser_etw", "strom_etw", "gas_etw", "wasser_haus", "strom_haus", "gas_haus", "strom_foto_miete", "wasser_miete"].includes(k));
+    const isFinanz = activeTab === "finanzierungen";
+
+    if (isFinanz) {
+      return `Hallo${name ? ` ${name}` : ""}! Für die Bank-Vorbereitung fehlen uns noch die letzten 3 Lohnzettel und der Kontonachweis. Bitte hier sicher hochladen: ${generatedLink}`;
+    }
+    if (hasZaehler && selected.length <= 4) {
+      return `Guten Tag${name ? ` ${name}` : ""}! Damit wir die Betriebskosten exakt erfassen können, bräuchte ich noch Fotos vom Wasser-, Strom- und Gaszähler. Einfach hier klicken und Foto machen: ${generatedLink}`;
+    }
+    return `Hallo${name ? ` ${name}` : ""}! Für die professionelle Aufbereitung Ihrer Immobilie benötige ich noch ein paar Unterlagen (z.B. Plan, Energieausweis). Sie können diese ganz einfach hier hochladen oder direkt ein Foto mit dem Handy machen: ${generatedLink}`;
+  };
+
   const shareWhatsApp = () => {
-    const text = `Hallo ${kundeName || ""},\n\nbitte laden Sie die benötigten Unterlagen über folgenden Link hoch:\n${generatedLink}\n\nVielen Dank!`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/?text=${encodeURIComponent(getWhatsAppText())}`, "_blank");
   };
 
   const shareEmail = () => {
-    const subject = `Unterlagen-Anforderung – ${kundeName || "Immobilientransaktion"}`;
-    const body = `Sehr geehrte/r ${kundeName || "Kunde/Kundin"},\n\nbitte laden Sie die benötigten Unterlagen über folgenden Link hoch:\n${generatedLink}\n\nMit freundlichen Grüßen`;
+    const name = kundeName || "Kunde/Kundin";
+    const isFinanz = activeTab === "finanzierungen";
+    const subject = isFinanz
+      ? `Finanzierungsunterlagen – ${kundeName || "Anforderung"}`
+      : `Unterlagen-Anforderung – ${kundeName || "Immobilientransaktion"}`;
+    const body = isFinanz
+      ? `Sehr geehrte/r ${name},\n\nfür die Bank-Vorbereitung benötigen wir noch einige Unterlagen. Bitte laden Sie diese über folgenden Link hoch:\n${generatedLink}\n\nMit freundlichen Grüßen`
+      : `Sehr geehrte/r ${name},\n\nfür die professionelle Aufbereitung Ihrer Immobilie benötigen wir noch einige Unterlagen. Bitte laden Sie diese über folgenden Link hoch:\n${generatedLink}\n\nMit freundlichen Grüßen`;
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank");
   };
 
