@@ -196,6 +196,8 @@ export type Database = {
           id: string
           immoz_export_datum: string | null
           immoz_exportiert: boolean | null
+          interne_notizen: string | null
+          kaeufer_provision: number | null
           kaufpreis: number | null
           ki_text: string | null
           kurzinfo: string | null
@@ -205,9 +207,12 @@ export type Database = {
           plz: string | null
           provisionsstellung: string | null
           status: string | null
+          stock: string | null
           strasse: string | null
+          top: string | null
           updated_at: string
           user_id: string | null
+          verkaeufer_provision: number | null
           verkaufsart: string | null
           zimmer: number | null
         }
@@ -219,6 +224,8 @@ export type Database = {
           id?: string
           immoz_export_datum?: string | null
           immoz_exportiert?: boolean | null
+          interne_notizen?: string | null
+          kaeufer_provision?: number | null
           kaufpreis?: number | null
           ki_text?: string | null
           kurzinfo?: string | null
@@ -228,9 +235,12 @@ export type Database = {
           plz?: string | null
           provisionsstellung?: string | null
           status?: string | null
+          stock?: string | null
           strasse?: string | null
+          top?: string | null
           updated_at?: string
           user_id?: string | null
+          verkaeufer_provision?: number | null
           verkaufsart?: string | null
           zimmer?: number | null
         }
@@ -242,6 +252,8 @@ export type Database = {
           id?: string
           immoz_export_datum?: string | null
           immoz_exportiert?: boolean | null
+          interne_notizen?: string | null
+          kaeufer_provision?: number | null
           kaufpreis?: number | null
           ki_text?: string | null
           kurzinfo?: string | null
@@ -251,9 +263,12 @@ export type Database = {
           plz?: string | null
           provisionsstellung?: string | null
           status?: string | null
+          stock?: string | null
           strasse?: string | null
+          top?: string | null
           updated_at?: string
           user_id?: string | null
+          verkaeufer_provision?: number | null
           verkaufsart?: string | null
           zimmer?: number | null
         }

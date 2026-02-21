@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, Check, CheckCheck, Send, Plus, ArrowLeft, Users, User, Briefcase, Mail } from "lucide-react";
+import { MessageCircle, Check, CheckCheck, Send, Plus, ArrowLeft, Users, User, Briefcase, Mail, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,7 +27,7 @@ interface Kunde {
 }
 
 type View = "inbox" | "compose" | "detail";
-type EmpfaengerTyp = "kunde" | "intern" | "chef";
+type EmpfaengerTyp = "kunde" | "intern" | "chef" | "extern";
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
@@ -41,7 +41,6 @@ function ReadStatus({ typ, gelesen }: { typ: string | null; gelesen: boolean | n
   return null;
 }
 
-/** Render text with clickable email reply buttons */
 function TextWithEmailButtons({ text, onReply }: { text: string; onReply: (email: string) => void }) {
   const parts: (string | { email: string })[] = [];
   let lastIndex = 0;
@@ -91,6 +90,10 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
   const [replyText, setReplyText] = useState("");
   const [adHocEmail, setAdHocEmail] = useState("");
 
+  // Extern direct contact
+  const [externEmail, setExternEmail] = useState("");
+  const [externPhone, setExternPhone] = useState("");
+
   const load = async () => {
     if (!user) return;
     const { data } = await supabase.from("nachrichten").select("*").order("created_at", { ascending: false }).limit(50);
@@ -126,7 +129,17 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
 
   const sendMessage = async () => {
     if (!user || !titel.trim()) return;
-    if (empfaengerTyp === "kunde") {
+
+    if (empfaengerTyp === "extern") {
+      // Direct external contact
+      await supabase.from("nachrichten").insert({ user_id: user.id, titel, inhalt, typ: "ausgehend" });
+      if (externPhone.trim()) {
+        const phone = externPhone.replace(/[^0-9+]/g, "").replace(/^0/, "+43");
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(`${titel}\n\n${inhalt}`)}`, "_blank");
+      } else if (externEmail.trim()) {
+        window.open(`mailto:${externEmail}?subject=${encodeURIComponent(titel)}&body=${encodeURIComponent(inhalt)}`, "_blank");
+      }
+    } else if (empfaengerTyp === "kunde") {
       const kunde = kunden.find(k => k.id === selectedKunde);
       if (!kunde) { toast({ title: "Bitte Kunde wählen", variant: "destructive" }); return; }
       await supabase.from("nachrichten").insert({ user_id: user.id, titel, inhalt, typ: "ausgehend" });
@@ -140,14 +153,12 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
       await supabase.from("nachrichten").insert({ user_id: user.id, titel, inhalt, typ: empfaengerTyp === "chef" ? "chef" : "intern" });
     }
     toast({ title: "✅ Nachricht gesendet" });
-    setTitel(""); setInhalt(""); setSelectedKunde(""); setView("inbox"); load();
+    setTitel(""); setInhalt(""); setSelectedKunde(""); setExternEmail(""); setExternPhone(""); setView("inbox"); load();
   };
 
   const sendReply = async () => {
     if (!user || !selectedMsg || !replyText.trim()) return;
-
     if (adHocEmail) {
-      // Ad-hoc email reply
       await supabase.from("nachrichten").insert({ user_id: user.id, titel: `Re: ${selectedMsg.titel}`, inhalt: replyText, typ: "ausgehend" });
       window.open(`mailto:${adHocEmail}?subject=${encodeURIComponent(`Re: ${selectedMsg.titel}`)}&body=${encodeURIComponent(replyText)}`, "_blank");
       toast({ title: `✅ E-Mail an ${adHocEmail}` });
@@ -220,19 +231,21 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
             <div className="space-y-4">
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Empfänger-Typ</label>
-                <div className="flex gap-1">
+                <div className="grid grid-cols-2 gap-1">
                   {([
                     { value: "kunde" as EmpfaengerTyp, icon: User, label: "Kunde" },
+                    { value: "extern" as EmpfaengerTyp, icon: Mail, label: "Extern" },
                     { value: "chef" as EmpfaengerTyp, icon: Briefcase, label: "Chef" },
                     { value: "intern" as EmpfaengerTyp, icon: Users, label: "Makler" },
                   ]).map(({ value, icon: Icon, label }) => (
                     <button key={value} onClick={() => setEmpfaengerTyp(value)}
-                      className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all ${empfaengerTyp === value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
+                      className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all ${empfaengerTyp === value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
                       <Icon size={12} /> {label}
                     </button>
                   ))}
                 </div>
               </div>
+
               {empfaengerTyp === "kunde" && (
                 <div>
                   <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Kunde</label>
@@ -244,6 +257,20 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
                   </Select>
                 </div>
               )}
+
+              {empfaengerTyp === "extern" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">E-Mail Adresse</label>
+                    <Input value={externEmail} onChange={e => setExternEmail(e.target.value)} placeholder="name@beispiel.at" type="email" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Oder Telefonnummer (WhatsApp)</label>
+                    <Input value={externPhone} onChange={e => setExternPhone(e.target.value)} placeholder="+43 664 123 4567" type="tel" />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Betreff</label>
                 <Input value={titel} onChange={e => setTitel(e.target.value)} placeholder="Betreff eingeben" />
@@ -276,7 +303,6 @@ export default function MessengerDrawer({ trigger }: { trigger: React.ReactNode 
                 )}
               </div>
 
-              {/* Ad-hoc email indicator */}
               {adHocEmail && (
                 <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-xl text-xs">
                   <Mail size={14} className="text-primary" />
