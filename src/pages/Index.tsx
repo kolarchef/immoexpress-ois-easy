@@ -153,8 +153,8 @@ export default function Index() {
               <KeyRound size={16} className="text-primary" />
             </div>
             <div className="min-w-0">
-              <span className="text-xs font-bold text-foreground block truncate">IMMO-CONCIERGE</span>
-              <span className="text-[10px] text-muted-foreground block truncate">After-Sales & Checklisten</span>
+           <span className="text-xs font-bold text-foreground block truncate">IMMOEXPRESS-CONCIERGE</span>
+               <span className="text-[10px] text-muted-foreground block truncate">After-Sales & Checklisten</span>
             </div>
           </button>
 
