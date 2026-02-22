@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle, Cloud, CloudOff, Bug, GripVertical } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle, Cloud, CloudOff, Bug, GripVertical, Plus, Trash2, Pencil, Save, Palette } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -7,7 +7,7 @@ import { toast } from "@/hooks/use-toast";
 type ScanMode = "none" | "bauplan" | "objekt" | "dokument";
 
 interface WallPoint { x: number; y: number; }
-interface Wall { p1: WallPoint; p2: WallPoint; }
+interface Wall { p1: WallPoint; p2: WallPoint; color: string; thickness: number; }
 
 interface AnalyzedRoom {
   name: string;
@@ -17,6 +17,10 @@ interface AnalyzedRoom {
   x?: number;
   y?: number;
 }
+
+const WALL_COLORS = ["#E67E22", "#1a1a2e", "#E74C3C", "#2ECC71", "#3498DB", "#9B59B6"];
+const DEFAULT_WALL_COLOR = "#E67E22"; // Orange – Firmafarbe
+const DEFAULT_WALL_THICKNESS = 3;
 
 export default function Kamera() {
   const { user } = useAuth();
@@ -36,9 +40,17 @@ export default function Kamera() {
   const [draggingWallPoint, setDraggingWallPoint] = useState<{ wallIdx: number; point: "p1" | "p2" } | null>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
+  // Edit mode state
+  const [editMode, setEditMode] = useState(false);
+  const [selectedWall, setSelectedWall] = useState<number | null>(null);
+  const [addingWall, setAddingWall] = useState(false);
+  const [newWallStart, setNewWallStart] = useState<WallPoint | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [annotationId, setAnnotationId] = useState<string | null>(null);
+
   const effectiveOnline = isOnline && !simulateOffline;
 
-  useState(() => {
+  useEffect(() => {
     const handleOnline = () => { setIsOnline(true); syncOfflineQueue(); };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener("online", handleOnline);
@@ -47,7 +59,7 @@ export default function Kamera() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  });
+  }, []);
 
   const syncOfflineQueue = async () => {
     if (offlineQueue.length === 0) return;
@@ -62,6 +74,10 @@ export default function Kamera() {
     setAnalyzedRooms([]);
     setWalls([]);
     setPlanSummary("");
+    setEditMode(false);
+    setSelectedWall(null);
+    setAddingWall(false);
+    setAnnotationId(null);
     fileRef.current?.click();
   };
 
@@ -106,20 +122,29 @@ export default function Kamera() {
         setAnalyzedRooms(rooms);
         setPlanSummary(parsed.zusammenfassung || "");
 
-        // Generate wall lines based on room grid
-        const generatedWalls: Wall[] = [];
-        // Outer walls
-        generatedWalls.push({ p1: { x: 5, y: 5 }, p2: { x: 95, y: 5 } });
-        generatedWalls.push({ p1: { x: 95, y: 5 }, p2: { x: 95, y: 95 } });
-        generatedWalls.push({ p1: { x: 95, y: 95 }, p2: { x: 5, y: 95 } });
-        generatedWalls.push({ p1: { x: 5, y: 95 }, p2: { x: 5, y: 5 } });
-        // Inner walls based on room count
-        if (rooms.length >= 2) generatedWalls.push({ p1: { x: 50, y: 5 }, p2: { x: 50, y: 95 } });
-        if (rooms.length >= 3) generatedWalls.push({ p1: { x: 5, y: 50 }, p2: { x: 50, y: 50 } });
-        if (rooms.length >= 4) generatedWalls.push({ p1: { x: 50, y: 50 }, p2: { x: 95, y: 50 } });
-        if (rooms.length >= 5) generatedWalls.push({ p1: { x: 5, y: 75 }, p2: { x: 50, y: 75 } });
+        // Use KI-detected walls if available, otherwise generate from room count
+        let generatedWalls: Wall[] = [];
+        if (parsed.waende && parsed.waende.length > 0) {
+          generatedWalls = parsed.waende.map((w: { p1: WallPoint; p2: WallPoint }) => ({
+            p1: w.p1,
+            p2: w.p2,
+            color: DEFAULT_WALL_COLOR,
+            thickness: DEFAULT_WALL_THICKNESS,
+          }));
+        } else {
+          // Fallback: generate basic walls
+          const base: { p1: WallPoint; p2: WallPoint }[] = [
+            { p1: { x: 5, y: 5 }, p2: { x: 95, y: 5 } },
+            { p1: { x: 95, y: 5 }, p2: { x: 95, y: 95 } },
+            { p1: { x: 95, y: 95 }, p2: { x: 5, y: 95 } },
+            { p1: { x: 5, y: 95 }, p2: { x: 5, y: 5 } },
+          ];
+          if (rooms.length >= 2) base.push({ p1: { x: 50, y: 5 }, p2: { x: 50, y: 95 } });
+          if (rooms.length >= 3) base.push({ p1: { x: 5, y: 50 }, p2: { x: 50, y: 50 } });
+          if (rooms.length >= 4) base.push({ p1: { x: 50, y: 50 }, p2: { x: 95, y: 50 } });
+          generatedWalls = base.map(w => ({ ...w, color: DEFAULT_WALL_COLOR, thickness: DEFAULT_WALL_THICKNESS }));
+        }
         setWalls(generatedWalls);
-
         toast({ title: `✓ ${rooms.length} Räume & ${generatedWalls.length} Wände erkannt` });
       }
     } catch (err) {
@@ -150,6 +175,68 @@ export default function Kamera() {
       if (i !== wallIdx) return w;
       return { ...w, [point]: { x, y } };
     }));
+  };
+
+  // --- Edit mode functions ---
+  const addWallAtClick = (clientX: number, clientY: number) => {
+    const container = imageContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+
+    if (!newWallStart) {
+      setNewWallStart({ x, y });
+      toast({ title: "Startpunkt gesetzt", description: "Klicke auf den Endpunkt der neuen Linie." });
+    } else {
+      setWalls(prev => [...prev, { p1: newWallStart, p2: { x, y }, color: DEFAULT_WALL_COLOR, thickness: DEFAULT_WALL_THICKNESS }]);
+      setNewWallStart(null);
+      setAddingWall(false);
+      toast({ title: "✓ Linie hinzugefügt" });
+    }
+  };
+
+  const deleteWall = (idx: number) => {
+    setWalls(prev => prev.filter((_, i) => i !== idx));
+    setSelectedWall(null);
+    toast({ title: "✓ Linie gelöscht" });
+  };
+
+  const updateWallColor = (idx: number, color: string) => {
+    setWalls(prev => prev.map((w, i) => i === idx ? { ...w, color } : w));
+  };
+
+  const updateWallThickness = (idx: number, thickness: number) => {
+    setWalls(prev => prev.map((w, i) => i === idx ? { ...w, thickness } : w));
+  };
+
+  // --- Save/Load annotations ---
+  const saveAnnotations = async () => {
+    if (!user) { toast({ title: "Bitte einloggen", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        user_id: user.id,
+        image_url: capturedImage,
+        walls: JSON.parse(JSON.stringify(walls)),
+        rooms: JSON.parse(JSON.stringify(analyzedRooms)),
+        summary: planSummary,
+      };
+
+      if (annotationId) {
+        const { error } = await supabase.from("bauplan_annotationen").update(payload).eq("id", annotationId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from("bauplan_annotationen").insert(payload).select("id").single();
+        if (error) throw error;
+        if (data) setAnnotationId(data.id);
+      }
+      toast({ title: "✅ Bauplan gespeichert", description: "Alle Anpassungen wurden in der Datenbank gesichert." });
+    } catch (err) {
+      toast({ title: "Speichern fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -183,7 +270,15 @@ export default function Kamera() {
       <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelected} />
 
       {capturedImage ? (
-        <div ref={imageContainerRef} className="relative w-full rounded-2xl overflow-hidden mb-5 shadow-md-custom">
+        <div
+          ref={imageContainerRef}
+          className="relative w-full rounded-2xl overflow-hidden mb-3 shadow-md-custom"
+          onClick={(e) => {
+            if (addingWall && editMode) {
+              addWallAtClick(e.clientX, e.clientY);
+            }
+          }}
+        >
           <img src={capturedImage} alt="Aufnahme" className="w-full object-contain max-h-[60vh]" />
           
           {/* SVG Wall overlay */}
@@ -194,27 +289,41 @@ export default function Kamera() {
                   key={`wall-${wi}`}
                   x1={`${wall.p1.x}%`} y1={`${wall.p1.y}%`}
                   x2={`${wall.p2.x}%`} y2={`${wall.p2.y}%`}
-                  stroke="#1a1a2e" strokeWidth="3" strokeLinecap="round"
+                  stroke={wall.color}
+                  strokeWidth={wall.thickness}
+                  strokeLinecap="round"
+                  opacity={selectedWall === wi ? 1 : 0.85}
+                  className={selectedWall === wi ? "drop-shadow-lg" : ""}
                 />
               ))}
+              {/* New wall preview line */}
+              {addingWall && newWallStart && (
+                <circle cx={`${newWallStart.x}%`} cy={`${newWallStart.y}%`} r="6" fill={DEFAULT_WALL_COLOR} opacity="0.7" />
+              )}
             </svg>
           )}
 
           {/* Wall endpoint handles */}
           {scanMode === "bauplan" && walls.map((wall, wi) => (
-            <>
+            <div key={`wg-${wi}`}>
               {(["p1", "p2"] as const).map(pt => (
                 <div
                   key={`wp-${wi}-${pt}`}
-                  className="absolute w-4 h-4 bg-foreground border-2 border-background rounded-full cursor-grab active:cursor-grabbing"
+                  className="absolute w-4 h-4 rounded-full cursor-grab active:cursor-grabbing border-2 border-background"
                   style={{
                     left: `calc(${wall[pt].x}% - 8px)`,
                     top: `calc(${wall[pt].y}% - 8px)`,
                     zIndex: 20,
                     touchAction: "none",
+                    backgroundColor: wall.color,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (editMode) setSelectedWall(wi);
                   }}
                   onMouseDown={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     setDraggingWallPoint({ wallIdx: wi, point: pt });
                     const handleMove = (ev: MouseEvent) => handleWallPointDrag(wi, pt, ev.clientX, ev.clientY);
                     const handleUp = () => {
@@ -226,6 +335,7 @@ export default function Kamera() {
                     document.addEventListener("mouseup", handleUp);
                   }}
                   onTouchStart={(e) => {
+                    e.stopPropagation();
                     setDraggingWallPoint({ wallIdx: wi, point: pt });
                     const handleMove = (ev: TouchEvent) => {
                       ev.preventDefault();
@@ -241,7 +351,7 @@ export default function Kamera() {
                   }}
                 />
               ))}
-            </>
+            </div>
           ))}
 
           {/* Room overlays */}
@@ -257,6 +367,7 @@ export default function Kamera() {
               }}
               onMouseDown={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 setDraggingRoom(i);
                 const container = imageContainerRef.current;
                 if (!container) return;
@@ -275,6 +386,7 @@ export default function Kamera() {
                 document.addEventListener("mouseup", handleUp);
               }}
               onTouchStart={(e) => {
+                e.stopPropagation();
                 setDraggingRoom(i);
                 const container = imageContainerRef.current;
                 if (!container) return;
@@ -314,7 +426,7 @@ export default function Kamera() {
               </div>
             </div>
           )}
-          <button onClick={() => { setCapturedImage(null); setAnalyzedRooms([]); setWalls([]); setScanMode("none"); }}
+          <button onClick={() => { setCapturedImage(null); setAnalyzedRooms([]); setWalls([]); setScanMode("none"); setEditMode(false); }}
             className="absolute top-3 right-3 bg-foreground/60 text-white rounded-full p-1.5" style={{ zIndex: 30 }}>
             <X size={16} />
           </button>
@@ -335,6 +447,91 @@ export default function Kamera() {
             </div>
           </div>
           <div className="absolute left-8 right-8 top-1/2 h-0.5 bg-primary/60 shadow-orange opacity-75"></div>
+        </div>
+      )}
+
+      {/* Edit Mode Toolbar */}
+      {scanMode === "bauplan" && walls.length > 0 && (
+        <div className="mb-3 bg-card border border-border rounded-2xl p-3 shadow-card">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <Pencil size={12} className="text-primary" /> Bearbeitungs-Modus
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setEditMode(!editMode); setSelectedWall(null); setAddingWall(false); setNewWallStart(null); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${editMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
+              >
+                {editMode ? "Bearbeiten: AN" : "Bearbeiten: AUS"}
+              </button>
+              <button
+                onClick={saveAnnotations}
+                disabled={saving}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 transition-all disabled:opacity-50"
+              >
+                <Save size={12} /> {saving ? "…" : "Speichern"}
+              </button>
+            </div>
+          </div>
+
+          {editMode && (
+            <div className="space-y-2">
+              {/* Add / Delete wall buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setAddingWall(!addingWall); setNewWallStart(null); }}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${addingWall ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
+                >
+                  <Plus size={12} /> {addingWall ? "Klicke auf Plan…" : "Linie hinzufügen"}
+                </button>
+                {selectedWall !== null && (
+                  <button
+                    onClick={() => deleteWall(selectedWall)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
+                  >
+                    <Trash2 size={12} /> Löschen
+                  </button>
+                )}
+              </div>
+
+              {/* Selected wall properties */}
+              {selectedWall !== null && walls[selectedWall] && (
+                <div className="bg-accent rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-bold text-foreground">Linie #{selectedWall + 1}</p>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-1 flex items-center gap-1"><Palette size={10} /> Farbe</p>
+                    <div className="flex items-center gap-1.5">
+                      {WALL_COLORS.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => updateWallColor(selectedWall, c)}
+                          className={`w-6 h-6 rounded-full border-2 transition-all ${walls[selectedWall].color === c ? "border-foreground scale-110" : "border-transparent"}`}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-1">Dicke: {walls[selectedWall].thickness}px</p>
+                    <div className="flex items-center gap-2">
+                      {[1, 2, 3, 4, 6, 8].map(t => (
+                        <button
+                          key={t}
+                          onClick={() => updateWallThickness(selectedWall, t)}
+                          className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${walls[selectedWall].thickness === t ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {selectedWall === null && !addingWall && (
+                <p className="text-[10px] text-muted-foreground">Klicke auf einen Wand-Endpunkt, um Farbe und Dicke zu ändern.</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -431,7 +628,7 @@ export default function Kamera() {
         <Sparkles size={24} />
         <div>
           <p className="font-bold text-sm">KI Bauplan- & Visitenkarten-Erkennung</p>
-          <p className="text-xs text-primary-foreground/80">Räume & Wände werden erkannt. Endpunkte der Wände und Beschriftungen sind per Drag & Drop korrigierbar.</p>
+          <p className="text-xs text-primary-foreground/80">Räume & Wände werden erkannt. Nutze den Bearbeitungs-Modus für Farbe, Dicke & neue Linien.</p>
         </div>
       </div>
     </div>

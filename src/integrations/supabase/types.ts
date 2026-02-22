@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      bauplan_annotationen: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string | null
+          objekt_id: string | null
+          rooms: Json
+          summary: string | null
+          updated_at: string
+          user_id: string
+          walls: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          objekt_id?: string | null
+          rooms?: Json
+          summary?: string | null
+          updated_at?: string
+          user_id: string
+          walls?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          objekt_id?: string | null
+          rooms?: Json
+          summary?: string | null
+          updated_at?: string
+          user_id?: string
+          walls?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bauplan_annotationen_objekt_id_fkey"
+            columns: ["objekt_id"]
+            isOneToOne: false
+            referencedRelation: "objekte"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_kunden: {
         Row: {
           budget: string | null
