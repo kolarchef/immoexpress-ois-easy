@@ -6,21 +6,27 @@ export function useApiKeys() {
   const { user } = useAuth();
   const [hasReplicateKey, setHasReplicateKey] = useState(false);
   const [hasElevenlabsKey, setHasElevenlabsKey] = useState(false);
+  const [hasFalKey, setHasFalKey] = useState(false);
+  const [hasMakeWebhook, setHasMakeWebhook] = useState(false);
+  const [hasWhatsappKey, setHasWhatsappKey] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
     supabase
       .from("profiles")
-      .select("replicate_api_key, elevenlabs_api_key")
+      .select("replicate_api_key, elevenlabs_api_key, fal_api_key, make_webhook_url, whatsapp_api_key")
       .eq("user_id", user.id)
       .single()
       .then(({ data }) => {
         setHasReplicateKey(!!(data as any)?.replicate_api_key);
         setHasElevenlabsKey(!!(data as any)?.elevenlabs_api_key);
+        setHasFalKey(!!(data as any)?.fal_api_key);
+        setHasMakeWebhook(!!(data as any)?.make_webhook_url);
+        setHasWhatsappKey(!!(data as any)?.whatsapp_api_key);
         setLoading(false);
       });
   }, [user]);
 
-  return { hasReplicateKey, hasElevenlabsKey, loading };
+  return { hasReplicateKey, hasElevenlabsKey, hasFalKey, hasMakeWebhook, hasWhatsappKey, loading };
 }
