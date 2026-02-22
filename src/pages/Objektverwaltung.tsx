@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download } from "lucide-react";
+import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ObjektModal from "@/components/ObjektModal";
@@ -569,6 +569,19 @@ export default function Objektverwaltung() {
                     <div className="flex justify-between"><span className="text-muted-foreground">Preis</span><span className="font-bold text-primary">{detailObj.kaufpreis ? `\u20AC${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "auf Anfrage"}</span></div>
                     {detailObj.kaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">K\u00e4ufer-Provision</span><span className="font-semibold">{detailObj.kaeufer_provision}%</span></div>}
                     {detailObj.verkaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Verk\u00e4ufer-Provision</span><span className="font-semibold">{detailObj.verkaeufer_provision}%</span></div>}
+                    {/* Homepage Link */}
+                    <div className="flex justify-between items-center pt-2 border-t border-border">
+                      <span className="text-muted-foreground text-xs">Homepage</span>
+                      <a
+                        href={`https://immoexpress.at/objekt/${detailObj.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-semibold text-primary flex items-center gap-1 hover:underline"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <ExternalLink size={11} /> Auf Homepage anzeigen
+                      </a>
+                    </div>
                     {detailObj.kurzinfo && <p className="text-muted-foreground text-xs pt-2 border-t border-border">{detailObj.kurzinfo}</p>}
                     {detailObj.beschreibung && (
                       <div className="pt-2 border-t border-border">

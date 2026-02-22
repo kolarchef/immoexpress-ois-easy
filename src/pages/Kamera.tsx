@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle } from "lucide-react";
+import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle, Cloud, CloudOff, Bug } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -10,6 +10,9 @@ interface AnalyzedRoom {
   name: string;
   flaeche_ca?: number;
   merkmale?: string;
+  color?: string;
+  x?: number;
+  y?: number;
 }
 
 export default function Kamera() {
@@ -24,6 +27,11 @@ export default function Kamera() {
   const [editRoomName, setEditRoomName] = useState("");
   const [offlineQueue, setOfflineQueue] = useState<string[]>([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [simulateOffline, setSimulateOffline] = useState(false);
+  const [draggingRoom, setDraggingRoom] = useState<number | null>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+
+  const effectiveOnline = isOnline && !simulateOffline;
 
   // Listen for online/offline
   useState(() => {
@@ -62,7 +70,7 @@ export default function Kamera() {
       const dataUrl = ev.target?.result as string;
       setCapturedImage(dataUrl);
 
-      if (!navigator.onLine) {
+      if (!effectiveOnline) {
         setOfflineQueue(prev => [...prev, dataUrl]);
         toast({ title: "📴 Offline gespeichert", description: "Wird automatisch hochgeladen, sobald Verbindung besteht." });
         return;
@@ -90,9 +98,16 @@ export default function Kamera() {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        setAnalyzedRooms(parsed.raeume || []);
+        const roomColors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F", "#BB8FCE", "#85C1E9"];
+        const rooms: AnalyzedRoom[] = (parsed.raeume || []).map((r: AnalyzedRoom, i: number) => ({
+          ...r,
+          color: roomColors[i % roomColors.length],
+          x: 15 + (i % 3) * 30,
+          y: 20 + Math.floor(i / 3) * 25,
+        }));
+        setAnalyzedRooms(rooms);
         setPlanSummary(parsed.zusammenfassung || "");
-        toast({ title: `✓ ${parsed.raeume?.length || 0} Räume erkannt` });
+        toast({ title: `✓ ${rooms.length} Räume erkannt` });
       }
     } catch (err) {
       toast({ title: "Plan-Analyse fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
@@ -119,12 +134,25 @@ export default function Kamera() {
           <h1 className="text-2xl font-bold text-foreground">Kamera & Scanner</h1>
           <p className="text-muted-foreground text-sm">Visitenkarte, Dokumente & Fotos scannen</p>
         </div>
-        {!isOnline && (
-          <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-bold">
-            <AlertTriangle size={12} /> Offline
-            {offlineQueue.length > 0 && <span>({offlineQueue.length})</span>}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {effectiveOnline ? (
+            <div className="flex items-center gap-1.5 bg-green-500/10 text-green-600 px-3 py-1.5 rounded-xl text-xs font-bold">
+              <Cloud size={12} /> Online
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 bg-destructive/10 text-destructive px-3 py-1.5 rounded-xl text-xs font-bold animate-pulse">
+              <CloudOff size={12} /> Offline
+              {offlineQueue.length > 0 && <span>({offlineQueue.length})</span>}
+            </div>
+          )}
+          <button
+            onClick={() => setSimulateOffline(prev => !prev)}
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-[10px] font-bold border transition-all ${simulateOffline ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-muted text-muted-foreground border-border hover:bg-accent"}`}
+            title="Offline-Modus simulieren"
+          >
+            <Bug size={10} /> {simulateOffline ? "Sim: AN" : "Sim: AUS"}
+          </button>
+        </div>
       </div>
 
       {/* Hidden file input */}
@@ -132,8 +160,67 @@ export default function Kamera() {
 
       {/* Captured Image or Viewfinder */}
       {capturedImage ? (
-        <div className="relative w-full rounded-2xl overflow-hidden mb-5 shadow-md-custom">
+        <div ref={imageContainerRef} className="relative w-full rounded-2xl overflow-hidden mb-5 shadow-md-custom">
           <img src={capturedImage} alt="Aufnahme" className="w-full object-contain max-h-[60vh]" />
+          {/* Room overlays on the image */}
+          {scanMode === "bauplan" && analyzedRooms.map((room, i) => (
+            <div
+              key={i}
+              className="absolute cursor-grab active:cursor-grabbing select-none"
+              style={{
+                left: `${room.x || 10}%`,
+                top: `${room.y || 10}%`,
+                touchAction: "none",
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setDraggingRoom(i);
+                const container = imageContainerRef.current;
+                if (!container) return;
+                const handleMove = (ev: MouseEvent) => {
+                  const rect = container.getBoundingClientRect();
+                  const x = Math.max(0, Math.min(90, ((ev.clientX - rect.left) / rect.width) * 100));
+                  const y = Math.max(0, Math.min(90, ((ev.clientY - rect.top) / rect.height) * 100));
+                  setAnalyzedRooms(prev => prev.map((r, idx) => idx === i ? { ...r, x, y } : r));
+                };
+                const handleUp = () => {
+                  setDraggingRoom(null);
+                  document.removeEventListener("mousemove", handleMove);
+                  document.removeEventListener("mouseup", handleUp);
+                };
+                document.addEventListener("mousemove", handleMove);
+                document.addEventListener("mouseup", handleUp);
+              }}
+              onTouchStart={(e) => {
+                setDraggingRoom(i);
+                const container = imageContainerRef.current;
+                if (!container) return;
+                const handleMove = (ev: TouchEvent) => {
+                  ev.preventDefault();
+                  const touch = ev.touches[0];
+                  const rect = container.getBoundingClientRect();
+                  const x = Math.max(0, Math.min(90, ((touch.clientX - rect.left) / rect.width) * 100));
+                  const y = Math.max(0, Math.min(90, ((touch.clientY - rect.top) / rect.height) * 100));
+                  setAnalyzedRooms(prev => prev.map((r, idx) => idx === i ? { ...r, x, y } : r));
+                };
+                const handleEnd = () => {
+                  setDraggingRoom(null);
+                  document.removeEventListener("touchmove", handleMove);
+                  document.removeEventListener("touchend", handleEnd);
+                };
+                document.addEventListener("touchmove", handleMove, { passive: false });
+                document.addEventListener("touchend", handleEnd);
+              }}
+            >
+              <div
+                className="px-2 py-1 rounded-lg text-[10px] font-bold text-white shadow-lg border border-white/30 whitespace-nowrap"
+                style={{ backgroundColor: room.color || "hsl(var(--primary))" }}
+              >
+                {room.name}
+                {room.flaeche_ca ? <span className="ml-1 opacity-75">~{room.flaeche_ca}m²</span> : null}
+              </div>
+            </div>
+          ))}
           {analyzing && (
             <div className="absolute inset-0 bg-foreground/50 flex items-center justify-center">
               <div className="bg-card rounded-2xl p-6 text-center shadow-md-custom">
@@ -177,7 +264,7 @@ export default function Kamera() {
           <div className="space-y-2">
             {analyzedRooms.map((room, i) => (
               <div key={i} className="flex items-center gap-2 p-2.5 bg-accent rounded-xl">
-                <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: room.color || "hsl(var(--primary))" }}>
                   {i + 1}
                 </div>
                 {editingRoom === i ? (
@@ -207,7 +294,7 @@ export default function Kamera() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2 text-center">Tippe auf einen Raum, um die Beschriftung zu ändern</p>
+          <p className="text-[10px] text-muted-foreground mt-2 text-center">Tippe zum Bearbeiten · Beschriftungen im Bild per Drag & Drop verschieben</p>
         </div>
       )}
 
