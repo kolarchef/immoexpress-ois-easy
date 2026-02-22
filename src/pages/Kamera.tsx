@@ -18,9 +18,11 @@ interface AnalyzedRoom {
   y?: number;
 }
 
-const WALL_COLORS = ["#E67E22", "#1a1a2e", "#E74C3C", "#2ECC71", "#3498DB", "#9B59B6"];
-const DEFAULT_WALL_COLOR = "#E67E22"; // Orange – Firmafarbe
+const WALL_COLORS = ["#E67E22", "#1a1a2e", "#E74C3C", "#2ECC71", "#3498DB", "#9B59B6", "#F39C12", "#1ABC9C"];
+const ROOM_COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F", "#BB8FCE", "#85C1E9"];
+const DEFAULT_WALL_COLOR = "#E67E22";
 const DEFAULT_WALL_THICKNESS = 3;
+const SNAP_THRESHOLD = 3; // percent – snaps to horizontal/vertical when within this angle
 
 export default function Kamera() {
   const { user } = useAuth();
@@ -112,10 +114,9 @@ export default function Kamera() {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        const roomColors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F", "#BB8FCE", "#85C1E9"];
         const rooms: AnalyzedRoom[] = (parsed.raeume || []).map((r: AnalyzedRoom, i: number) => ({
           ...r,
-          color: roomColors[i % roomColors.length],
+          color: ROOM_COLORS[i % ROOM_COLORS.length],
           x: 15 + (i % 3) * 30,
           y: 20 + Math.floor(i / 3) * 25,
         }));
@@ -165,6 +166,15 @@ export default function Kamera() {
     toast({ title: "✓ Beschriftung aktualisiert" });
   };
 
+  // Smart snap: if near horizontal or vertical, snap to exact
+  const smartSnap = (p1: WallPoint, p2: WallPoint): WallPoint => {
+    const dx = Math.abs(p2.x - p1.x);
+    const dy = Math.abs(p2.y - p1.y);
+    if (dy < SNAP_THRESHOLD && dx > SNAP_THRESHOLD) return { x: p2.x, y: p1.y }; // snap horizontal
+    if (dx < SNAP_THRESHOLD && dy > SNAP_THRESHOLD) return { x: p1.x, y: p2.y }; // snap vertical
+    return p2;
+  };
+
   const handleWallPointDrag = (wallIdx: number, point: "p1" | "p2", clientX: number, clientY: number) => {
     const container = imageContainerRef.current;
     if (!container) return;
@@ -173,7 +183,9 @@ export default function Kamera() {
     const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
     setWalls(prev => prev.map((w, i) => {
       if (i !== wallIdx) return w;
-      return { ...w, [point]: { x, y } };
+      const otherPt = point === "p1" ? w.p2 : w.p1;
+      const snapped = editMode ? smartSnap(otherPt, { x, y }) : { x, y };
+      return { ...w, [point]: snapped };
     }));
   };
 
@@ -189,10 +201,11 @@ export default function Kamera() {
       setNewWallStart({ x, y });
       toast({ title: "Startpunkt gesetzt", description: "Klicke auf den Endpunkt der neuen Linie." });
     } else {
-      setWalls(prev => [...prev, { p1: newWallStart, p2: { x, y }, color: DEFAULT_WALL_COLOR, thickness: DEFAULT_WALL_THICKNESS }]);
+      const snapped = smartSnap(newWallStart, { x, y });
+      setWalls(prev => [...prev, { p1: newWallStart, p2: snapped, color: DEFAULT_WALL_COLOR, thickness: DEFAULT_WALL_THICKNESS }]);
       setNewWallStart(null);
       setAddingWall(false);
-      toast({ title: "✓ Linie hinzugefügt" });
+      toast({ title: "✓ Linie hinzugefügt (Smart-Snap aktiv)" });
     }
   };
 

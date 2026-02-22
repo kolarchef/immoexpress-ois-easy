@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import VideoSlideshow from "@/components/VideoSlideshow";
 import ObjektStatistiken from "@/components/ObjektStatistiken";
+import AudioRecorder from "@/components/AudioRecorder";
 
 type Objekt = {
   id: string;
@@ -543,7 +544,15 @@ export default function Objektverwaltung() {
                       <textarea className={`${inputCls} resize-none`} rows={6} value={editForm.beschreibung} onChange={e => setEditForm({ ...editForm, beschreibung: e.target.value })} />
                     </div>
                     <div>
-                      <label className={labelCls}>{"\u{1F512}"} Interne Notizen</label>
+                      <div className="flex items-center justify-between">
+                        <label className={labelCls}>{"\u{1F512}"} Interne Notizen</label>
+                        <AudioRecorder
+                          onTranscript={(text) => setEditForm(prev => ({
+                            ...prev,
+                            interne_notizen: prev.interne_notizen ? prev.interne_notizen + "\n" + text : text
+                          }))}
+                        />
+                      </div>
                       <textarea className={`${inputCls} resize-none bg-amber-50/50 dark:bg-amber-900/10`} rows={2} value={editForm.interne_notizen} onChange={e => setEditForm({ ...editForm, interne_notizen: e.target.value })} />
                     </div>
                     <div className="flex gap-2">

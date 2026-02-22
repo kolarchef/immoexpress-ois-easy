@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
-import { X, Send, MessageCircle, Mail, Search, Eye } from "lucide-react";
+import { X, Send, MessageCircle, Mail, Search, Eye, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
+import jsPDF from "jspdf";
 
 interface ExposeData {
   titel: string;
@@ -92,6 +93,77 @@ ${data.aiText ? `<div class="ai-box">${data.aiText.replace(/\n/g, "<br/>")}</div
     loadKunden();
   };
 
+  const downloadPdf = () => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const w = doc.internal.pageSize.getWidth();
+    const orange = [232, 84, 26] as [number, number, number];
+
+    // Header line
+    doc.setDrawColor(...orange);
+    doc.setLineWidth(1);
+    doc.line(15, 22, w - 15, 22);
+
+    // Logo text
+    doc.setFontSize(18);
+    doc.setTextColor(...orange);
+    doc.text("ImmoExpress", 15, 18);
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text("Ihr Makler in Wien & Österreich", 15, 28);
+    doc.text(`Erstellt: ${new Date().toLocaleDateString("de-AT")}  |  Ref: ${data.objektnummer || "–"}`, w - 15, 18, { align: "right" });
+
+    // Title
+    doc.setFontSize(16);
+    doc.setTextColor(30, 30, 30);
+    doc.text(data.titel || "Immobilien-Exposé", 15, 38);
+
+    doc.setFontSize(10);
+    doc.setTextColor(...orange);
+    doc.text(`${data.bezirk || ""} ${data.objektart ? "· " + data.objektart : ""} · ${data.verkaufsart}`, 15, 45);
+
+    // Data grid
+    let y = 55;
+    doc.setFontSize(9);
+    const fields = [
+      ["Objektart", data.objektart || "–"],
+      ["Wohnfläche", data.flaeche ? data.flaeche + " m²" : "–"],
+      ["Zimmer", data.zimmer || "–"],
+      ["Lage", data.bezirk || "–"],
+      ["Adresse", [data.strasse, data.hnr, data.plz].filter(Boolean).join(" ") || "–"],
+      [data.verkaufsart === "Kauf" ? "Kaufpreis" : "Miete", `€ ${data.kaufpreis ? Number(data.kaufpreis).toLocaleString("de-AT") : "auf Anfrage"}`],
+      ["Provision", data.provisionsstellung || "–"],
+    ];
+    fields.forEach(([label, value]) => {
+      doc.setTextColor(130, 130, 130);
+      doc.text(label, 15, y);
+      doc.setTextColor(30, 30, 30);
+      doc.text(String(value), 70, y);
+      y += 6;
+    });
+
+    // AI text / description
+    y += 4;
+    if (data.aiText) {
+      doc.setDrawColor(...orange);
+      doc.setLineWidth(0.5);
+      doc.line(15, y, 15, y + 4);
+      doc.setFontSize(8);
+      doc.setTextColor(50, 50, 50);
+      const lines = doc.splitTextToSize(data.aiText, w - 35);
+      doc.text(lines.slice(0, 40), 18, y + 4);
+      y += lines.slice(0, 40).length * 3.5 + 8;
+    }
+
+    // Disclaimer
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFontSize(7);
+    doc.setTextColor(160, 160, 160);
+    doc.text("Haftungsausschluss: Alle Angaben ohne Gewähr. Provisionspflichtig gem. § 14 MaklerG. Energieausweis gem. § 6a EAVG.", 15, 280);
+    doc.text("ImmoExpress GmbH · ÖVI-Mitglied", 15, 284);
+
+    doc.save(`Expose_${data.objektnummer || data.titel || "Immobilie"}.pdf`);
+  };
+
   const sendTo = (kunde: Kunde, via: "wa" | "email") => {
     const text = `📋 Exposé: ${data.titel}\n📍 ${data.strasse || ""} ${data.hnr || ""}, ${data.plz || ""} ${data.bezirk}\n🏠 ${data.objektart} · ${data.flaeche || "–"} m² · ${data.zimmer || "–"} Zi.\n💰 €${data.kaufpreis ? Number(data.kaufpreis).toLocaleString("de-AT") : "auf Anfrage"}\n\nBei Interesse bitte melden!\nImmoExpress`;
     if (via === "wa" && kunde.phone) {
@@ -129,11 +201,14 @@ ${data.aiText ? `<div class="ai-box">${data.aiText.replace(/\n/g, "<br/>")}</div
               />
             </div>
             <div className="p-4 border-t border-border flex gap-3">
-              <button onClick={onClose} className="flex-1 border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-accent transition-all">
+              <button onClick={onClose} className="border border-border rounded-xl py-2.5 px-4 text-sm font-semibold hover:bg-accent transition-all">
                 Zurück
               </button>
+              <button onClick={downloadPdf} className="flex-1 bg-foreground text-background rounded-xl py-2.5 text-sm font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2">
+                <Download size={14} /> PDF herunterladen
+              </button>
               <button onClick={confirmAndSend} className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all flex items-center justify-center gap-2">
-                <Send size={14} /> Bestätigen & Versenden
+                <Send size={14} /> Versenden
               </button>
             </div>
           </>
