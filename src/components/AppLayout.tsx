@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import MessengerDrawer from "@/components/MessengerDrawer";
-import logoImg from "@/assets/logo_immoexpress.png";
+import logoImg from "@/assets/logo_immoexpress_zug.jpeg";
 
 const bottomNav = [
   { path: "/", icon: LayoutDashboard, label: "Home" },
@@ -20,10 +20,10 @@ export default function AppLayout() {
       {/* Top Header */}
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0 shadow-card z-10">
         <button onClick={() => navigate("/")} className="flex items-center gap-3 group">
-          <img src={logoImg} alt="ImmoExpress brainy" className="h-10 w-10 rounded-xl object-cover shadow-orange-sm" />
-          <div className="text-left hidden sm:block">
+          <img src={logoImg} alt="ImmoExpress brainy" className="h-12 w-auto object-contain" />
+          <div className="text-left">
             <div className="font-bold text-foreground text-sm leading-tight">ImmoExpress</div>
-            <div className="text-primary text-xs font-bold tracking-widest uppercase">brainy</div>
+            <div className="text-primary text-xs font-bold tracking-widest uppercase">Brainy</div>
           </div>
         </button>
 

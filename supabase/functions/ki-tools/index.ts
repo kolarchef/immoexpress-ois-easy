@@ -17,7 +17,6 @@ serve(async (req) => {
     let model = "google/gemini-3-flash-preview";
 
     if (action === "describe-images") {
-      // Bilderkennung für Exposé-Fotos
       model = "google/gemini-2.5-pro";
       const imageContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
         {
@@ -38,14 +37,46 @@ Erkenne automatisch: Raumtyp (Bad, Küche, Wohnzimmer, Schlafzimmer, Balkon etc.
         { role: "system", content: "Du bist ein erfahrener Wiener Immobilienmakler. Antworte NUR mit validem JSON." },
         { role: "user", content: imageContent }
       ];
+    } else if (action === "analyze-floorplan") {
+      // KI-Plan-Analyse: Bauplan lesen, Räume erkennen und beschriften
+      model = "google/gemini-2.5-pro";
+      const planContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+        {
+          type: "text",
+          text: `Du bist ein Experte für die Analyse von Bauplänen und Grundrissen.
+
+Analysiere diesen Bauplan/Grundriss und identifiziere alle Räume.
+
+Für JEDEN erkannten Raum gib an:
+- name: Der Raumtyp (z.B. Wohnzimmer, Schlafzimmer, Küche, Bad, WC, Vorraum, Abstellraum, Balkon, Terrasse, Loggia)
+- flaeche_ca: Geschätzte Fläche in m² (wenn erkennbar)
+- merkmale: Besonderheiten (z.B. "mit Fenster", "Durchgangsraum", "offene Küche")
+
+Antworte als JSON-Objekt:
+{
+  "raeume": [{"name": "Wohnzimmer", "flaeche_ca": 28, "merkmale": "großes Panoramafenster, Parkettboden"}],
+  "gesamtflaeche_ca": 85,
+  "zimmeranzahl": 3,
+  "zusammenfassung": "Helle 3-Zimmer-Wohnung mit offener Wohnküche und großzügigem Balkon. Durchdachter Grundriss mit separatem WC und geräumigem Bad.",
+  "raumtrennung_text": "Vorraum → links Bad/WC → geradeaus offene Wohnküche → rechts 2 Schlafzimmer → Balkon vom Wohnzimmer aus"
+}`
+        }
+      ];
+
+      const planImages = (imageDataUrls || []).slice(0, 3);
+      for (const imgUrl of planImages) {
+        planContent.push({ type: "image_url", image_url: { url: imgUrl } });
+      }
+      messages = [
+        { role: "system", content: "Du bist ein Experte für Immobilien-Grundrisse und Baupläne. Antworte NUR mit validem JSON." },
+        { role: "user", content: planContent }
+      ];
     } else if (action === "extract-contact") {
-      // KI-Extraktion von Kontaktdaten aus Nachricht
       messages = [
         { role: "system", content: "Du extrahierst Kontaktdaten aus Texten. Antworte NUR mit validem JSON: {\"name\": \"...\", \"email\": \"...\", \"phone\": \"...\", \"notes\": \"...\"}. Wenn ein Feld nicht gefunden wird, setze es auf null." },
         { role: "user", content: `Extrahiere Name, E-Mail und Telefonnummer aus folgendem Text:\n\n${messageText}` }
       ];
     } else if (action === "suggest-reply") {
-      // KI-Antwortvorschlag
       messages = [
         { role: "system", content: "Du bist ein professioneller Wiener Immobilienmakler. Formuliere eine höfliche, professionelle Antwort auf die Kundenanfrage. Halte dich kurz (max. 3-4 Sätze). Verwende gehobenes Österreichisches Deutsch." },
         { role: "user", content: `Kundenanfrage:\n"${messageText}"\n\n${context ? `Kontext: ${context}` : ""}Erstelle einen Antwortvorschlag.` }
