@@ -127,13 +127,21 @@ export default function VideoSlideshow({ images, titel, preis, flaeche, zimmer, 
         ...dest.stream.getTracks()
       ]);
 
-      const recorder = new MediaRecorder(combinedStream, { mimeType: "video/webm;codecs=vp9" });
+      // Try codecs in order of compatibility
+      const codecs = [
+        "video/webm;codecs=vp8,opus",
+        "video/webm;codecs=vp8",
+        "video/webm",
+      ];
+      const mimeType = codecs.find(c => MediaRecorder.isTypeSupported(c)) || "";
+      const recorder = new MediaRecorder(combinedStream, mimeType ? { mimeType } : undefined);
       const chunks: Blob[] = [];
       recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      const actualType = recorder.mimeType || "video/webm";
 
       const recordingDone = new Promise<Blob>(resolve => {
         recorder.onstop = () => {
-          resolve(new Blob(chunks, { type: "video/webm" }));
+          resolve(new Blob(chunks, { type: actualType }));
         };
       });
 
@@ -205,7 +213,8 @@ export default function VideoSlideshow({ images, titel, preis, flaeche, zimmer, 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${titel.replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_")}_Rundgang.webm`;
+      const ext = actualType.includes("mp4") ? "mp4" : "webm";
+      a.download = `${titel.replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_")}_Rundgang.${ext}`;
       a.click();
       URL.revokeObjectURL(url);
 
