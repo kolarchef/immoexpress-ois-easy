@@ -85,6 +85,40 @@ Antworte als JSON-Objekt:
         { role: "system", content: "Du bist ein professioneller Wiener Immobilienmakler. Formuliere eine höfliche, professionelle Antwort auf die Kundenanfrage. Halte dich kurz (max. 3-4 Sätze). Verwende gehobenes Österreichisches Deutsch." },
         { role: "user", content: `Kundenanfrage:\n"${messageText}"\n\n${context ? `Kontext: ${context}` : ""}Erstelle einen Antwortvorschlag.` }
       ];
+    } else if (action === "test-webhook") {
+      // Send a test ping to Make.com webhook
+      const webhookUrl = context; // webhook URL passed via context field
+      if (!webhookUrl) throw new Error("Keine Webhook-URL angegeben");
+      
+      const testPayload = {
+        test: true,
+        source: "immoexpress",
+        timestamp: new Date().toISOString(),
+        actions: ["magic-eraser", "outpainting", "video-rundgang", "image-enhance"],
+        sample_data: {
+          action: "magic-eraser",
+          image_url: "https://example.com/sample.jpg",
+          objekt_id: "test-123",
+          user_id: "test-user"
+        }
+      };
+
+      const webhookRes = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(testPayload),
+      });
+
+      const webhookStatus = webhookRes.status;
+      const webhookBody = await webhookRes.text();
+
+      return new Response(JSON.stringify({ 
+        result: `Webhook-Test gesendet. Status: ${webhookStatus}`, 
+        status: webhookStatus,
+        accepted: webhookStatus === 200 
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     } else {
       throw new Error("Unbekannte Aktion: " + action);
     }
