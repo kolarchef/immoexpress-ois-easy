@@ -605,8 +605,9 @@ export default function Objektverwaltung() {
                 {/* One-Click Sharing */}
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   <button onClick={() => {
-                    const text = `\u{1F3E0} ${detailObj.kurzinfo || detailObj.objektart} \u2013 ${detailObj.kaufpreis ? `\u20AC${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "Preis auf Anfrage"}`;
-                    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+                  const addr = [detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ");
+                    const kiText = `🏠 *${detailObj.kurzinfo || detailObj.objektart}*\n📍 ${addr}\n💰 ${detailObj.kaufpreis ? `€${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "Preis auf Anfrage"}\n📐 ${detailObj.flaeche_m2 || "–"} m² · ${detailObj.zimmer || "–"} Zimmer\n\n${(detailObj.beschreibung || "").slice(0, 200)}${(detailObj.beschreibung || "").length > 200 ? "…" : ""}\n\n👉 Mehr Infos: https://immoexpress.at/objekt/${detailObj.id}`;
+                    window.open(`https://wa.me/?text=${encodeURIComponent(kiText)}`, "_blank");
                     if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "expose", kanal: "whatsapp" });
                   }} className="bg-green-600 text-white rounded-xl py-2 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-700 transition-all active:scale-95">
                     <MessageCircle size={13} /> WhatsApp
@@ -656,9 +657,10 @@ export default function Objektverwaltung() {
                     zimmer={detailObj.zimmer?.toString() || ""}
                     beschreibung={detailObj.beschreibung || ""}
                     onShare={(type) => {
-                      const text = `\u{1F3E0} ${detailObj.kurzinfo || detailObj.objektart} \u2013 ${detailObj.kaufpreis ? `\u20AC${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "Preis auf Anfrage"}`;
-                      if (type === "whatsapp") window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-                      else window.open(`mailto:?subject=${encodeURIComponent(detailObj.kurzinfo || "Immobilie")}&body=${encodeURIComponent(text)}`);
+                  const addr = [detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ");
+                      const shareText = `🏠 *${detailObj.kurzinfo || detailObj.objektart}*\n📍 ${addr}\n💰 ${detailObj.kaufpreis ? `€${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "Preis auf Anfrage"}\n📐 ${detailObj.flaeche_m2 || "–"} m² · ${detailObj.zimmer || "–"} Zimmer\n\n👉 https://immoexpress.at/objekt/${detailObj.id}`;
+                      if (type === "whatsapp") window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank");
+                      else window.open(`mailto:?subject=${encodeURIComponent(detailObj.kurzinfo || "Immobilie")}&body=${encodeURIComponent(shareText)}`);
                       if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "video", kanal: type });
                     }}
                   />

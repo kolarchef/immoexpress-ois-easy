@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { User, Mail, LogOut, Server } from "lucide-react";
+import { User, Mail, LogOut, Server, Sparkles, Link } from "lucide-react";
 
 export default function Profil() {
   const { user, signOut } = useAuth();
@@ -16,6 +16,8 @@ export default function Profil() {
   const [smtpHost, setSmtpHost] = useState("");
   const [smtpPort, setSmtpPort] = useState("587");
   const [smtpUser, setSmtpUser] = useState("");
+  const [elevenlabsApiKey, setElevenlabsApiKey] = useState("");
+  const [videoWebhookUrl, setVideoWebhookUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -29,6 +31,8 @@ export default function Profil() {
         setSmtpHost((data as any).smtp_host || "");
         setSmtpPort(String((data as any).smtp_port || 587));
         setSmtpUser((data as any).smtp_user || "");
+        setElevenlabsApiKey((data as any).elevenlabs_api_key || "");
+        setVideoWebhookUrl((data as any).video_webhook_url || "");
       }
     });
   }, [user]);
@@ -44,6 +48,8 @@ export default function Profil() {
       smtp_host: smtpHost || null,
       smtp_port: Number(smtpPort) || 587,
       smtp_user: smtpUser || null,
+      elevenlabs_api_key: elevenlabsApiKey || null,
+      video_webhook_url: videoWebhookUrl || null,
     } as any).eq("user_id", user.id);
     if (error) toast.error(error.message);
     else toast.success("Profil gespeichert");
@@ -64,6 +70,33 @@ export default function Profil() {
         <div>
           <Label>E-Mail</Label>
           <Input value={user?.email || ""} disabled className="mt-1 opacity-60" />
+        </div>
+      </section>
+
+      {/* KI & Video Profi-Optionen */}
+      <section className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
+        <h2 className="font-bold text-foreground flex items-center gap-2"><Sparkles size={18} className="text-primary" /> KI & Video (Profi-Optionen)</h2>
+        <p className="text-xs text-muted-foreground">Optional: Premium-Stimme via ElevenLabs und externe Video-KI via Webhook</p>
+        <div>
+          <Label className="flex items-center gap-1.5"><Sparkles size={12} /> ElevenLabs API Key</Label>
+          <Input
+            type="password"
+            value={elevenlabsApiKey}
+            onChange={e => setElevenlabsApiKey(e.target.value)}
+            placeholder="sk_..."
+            className="mt-1"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">Für Premium-Voiceover im Video-Rundgang. Erhältlich unter elevenlabs.io</p>
+        </div>
+        <div>
+          <Label className="flex items-center gap-1.5"><Link size={12} /> Webhook-URL für Video-KI</Label>
+          <Input
+            value={videoWebhookUrl}
+            onChange={e => setVideoWebhookUrl(e.target.value)}
+            placeholder="https://api.runway.ml/..."
+            className="mt-1"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">Für Runway/HeyGen Video-Generierung (optional)</p>
         </div>
       </section>
 

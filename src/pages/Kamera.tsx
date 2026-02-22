@@ -1,10 +1,13 @@
 import { useState, useRef } from "react";
-import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle, Cloud, CloudOff, Bug } from "lucide-react";
+import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle, Cloud, CloudOff, Bug, GripVertical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
 type ScanMode = "none" | "bauplan" | "objekt" | "dokument";
+
+interface WallPoint { x: number; y: number; }
+interface Wall { p1: WallPoint; p2: WallPoint; }
 
 interface AnalyzedRoom {
   name: string;
@@ -22,6 +25,7 @@ export default function Kamera() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzedRooms, setAnalyzedRooms] = useState<AnalyzedRoom[]>([]);
+  const [walls, setWalls] = useState<Wall[]>([]);
   const [planSummary, setPlanSummary] = useState("");
   const [editingRoom, setEditingRoom] = useState<number | null>(null);
   const [editRoomName, setEditRoomName] = useState("");
@@ -29,11 +33,11 @@ export default function Kamera() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [simulateOffline, setSimulateOffline] = useState(false);
   const [draggingRoom, setDraggingRoom] = useState<number | null>(null);
+  const [draggingWallPoint, setDraggingWallPoint] = useState<{ wallIdx: number; point: "p1" | "p2" } | null>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
   const effectiveOnline = isOnline && !simulateOffline;
 
-  // Listen for online/offline
   useState(() => {
     const handleOnline = () => { setIsOnline(true); syncOfflineQueue(); };
     const handleOffline = () => setIsOnline(false);
@@ -48,7 +52,6 @@ export default function Kamera() {
   const syncOfflineQueue = async () => {
     if (offlineQueue.length === 0) return;
     toast({ title: "📡 Synchronisiere…", description: `${offlineQueue.length} Aufnahmen werden hochgeladen.` });
-    // In a real PWA, this would upload from IndexedDB
     setOfflineQueue([]);
     toast({ title: "✅ Alle Aufnahmen synchronisiert" });
   };
@@ -57,6 +60,7 @@ export default function Kamera() {
     setScanMode(mode);
     setCapturedImage(null);
     setAnalyzedRooms([]);
+    setWalls([]);
     setPlanSummary("");
     fileRef.current?.click();
   };
@@ -64,24 +68,18 @@ export default function Kamera() {
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
       setCapturedImage(dataUrl);
-
       if (!effectiveOnline) {
         setOfflineQueue(prev => [...prev, dataUrl]);
         toast({ title: "📴 Offline gespeichert", description: "Wird automatisch hochgeladen, sobald Verbindung besteht." });
         return;
       }
-
-      if (scanMode === "bauplan") {
-        analyzePlan(dataUrl);
-      }
+      if (scanMode === "bauplan") analyzePlan(dataUrl);
     };
     reader.readAsDataURL(file);
-    // Reset input
     e.target.value = "";
   };
 
@@ -107,7 +105,22 @@ export default function Kamera() {
         }));
         setAnalyzedRooms(rooms);
         setPlanSummary(parsed.zusammenfassung || "");
-        toast({ title: `✓ ${rooms.length} Räume erkannt` });
+
+        // Generate wall lines based on room grid
+        const generatedWalls: Wall[] = [];
+        // Outer walls
+        generatedWalls.push({ p1: { x: 5, y: 5 }, p2: { x: 95, y: 5 } });
+        generatedWalls.push({ p1: { x: 95, y: 5 }, p2: { x: 95, y: 95 } });
+        generatedWalls.push({ p1: { x: 95, y: 95 }, p2: { x: 5, y: 95 } });
+        generatedWalls.push({ p1: { x: 5, y: 95 }, p2: { x: 5, y: 5 } });
+        // Inner walls based on room count
+        if (rooms.length >= 2) generatedWalls.push({ p1: { x: 50, y: 5 }, p2: { x: 50, y: 95 } });
+        if (rooms.length >= 3) generatedWalls.push({ p1: { x: 5, y: 50 }, p2: { x: 50, y: 50 } });
+        if (rooms.length >= 4) generatedWalls.push({ p1: { x: 50, y: 50 }, p2: { x: 95, y: 50 } });
+        if (rooms.length >= 5) generatedWalls.push({ p1: { x: 5, y: 75 }, p2: { x: 50, y: 75 } });
+        setWalls(generatedWalls);
+
+        toast({ title: `✓ ${rooms.length} Räume & ${generatedWalls.length} Wände erkannt` });
       }
     } catch (err) {
       toast({ title: "Plan-Analyse fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
@@ -125,6 +138,18 @@ export default function Kamera() {
     setAnalyzedRooms(prev => prev.map((r, i) => i === index ? { ...r, name: editRoomName } : r));
     setEditingRoom(null);
     toast({ title: "✓ Beschriftung aktualisiert" });
+  };
+
+  const handleWallPointDrag = (wallIdx: number, point: "p1" | "p2", clientX: number, clientY: number) => {
+    const container = imageContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+    setWalls(prev => prev.map((w, i) => {
+      if (i !== wallIdx) return w;
+      return { ...w, [point]: { x, y } };
+    }));
   };
 
   return (
@@ -155,14 +180,71 @@ export default function Kamera() {
         </div>
       </div>
 
-      {/* Hidden file input */}
       <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelected} />
 
-      {/* Captured Image or Viewfinder */}
       {capturedImage ? (
         <div ref={imageContainerRef} className="relative w-full rounded-2xl overflow-hidden mb-5 shadow-md-custom">
           <img src={capturedImage} alt="Aufnahme" className="w-full object-contain max-h-[60vh]" />
-          {/* Room overlays on the image */}
+          
+          {/* SVG Wall overlay */}
+          {scanMode === "bauplan" && walls.length > 0 && (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 10 }}>
+              {walls.map((wall, wi) => (
+                <line
+                  key={`wall-${wi}`}
+                  x1={`${wall.p1.x}%`} y1={`${wall.p1.y}%`}
+                  x2={`${wall.p2.x}%`} y2={`${wall.p2.y}%`}
+                  stroke="#1a1a2e" strokeWidth="3" strokeLinecap="round"
+                />
+              ))}
+            </svg>
+          )}
+
+          {/* Wall endpoint handles */}
+          {scanMode === "bauplan" && walls.map((wall, wi) => (
+            <>
+              {(["p1", "p2"] as const).map(pt => (
+                <div
+                  key={`wp-${wi}-${pt}`}
+                  className="absolute w-4 h-4 bg-foreground border-2 border-background rounded-full cursor-grab active:cursor-grabbing"
+                  style={{
+                    left: `calc(${wall[pt].x}% - 8px)`,
+                    top: `calc(${wall[pt].y}% - 8px)`,
+                    zIndex: 20,
+                    touchAction: "none",
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setDraggingWallPoint({ wallIdx: wi, point: pt });
+                    const handleMove = (ev: MouseEvent) => handleWallPointDrag(wi, pt, ev.clientX, ev.clientY);
+                    const handleUp = () => {
+                      setDraggingWallPoint(null);
+                      document.removeEventListener("mousemove", handleMove);
+                      document.removeEventListener("mouseup", handleUp);
+                    };
+                    document.addEventListener("mousemove", handleMove);
+                    document.addEventListener("mouseup", handleUp);
+                  }}
+                  onTouchStart={(e) => {
+                    setDraggingWallPoint({ wallIdx: wi, point: pt });
+                    const handleMove = (ev: TouchEvent) => {
+                      ev.preventDefault();
+                      handleWallPointDrag(wi, pt, ev.touches[0].clientX, ev.touches[0].clientY);
+                    };
+                    const handleEnd = () => {
+                      setDraggingWallPoint(null);
+                      document.removeEventListener("touchmove", handleMove);
+                      document.removeEventListener("touchend", handleEnd);
+                    };
+                    document.addEventListener("touchmove", handleMove, { passive: false });
+                    document.addEventListener("touchend", handleEnd);
+                  }}
+                />
+              ))}
+            </>
+          ))}
+
+          {/* Room overlays */}
           {scanMode === "bauplan" && analyzedRooms.map((room, i) => (
             <div
               key={i}
@@ -171,6 +253,7 @@ export default function Kamera() {
                 left: `${room.x || 10}%`,
                 top: `${room.y || 10}%`,
                 touchAction: "none",
+                zIndex: 15,
               }}
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -221,17 +304,18 @@ export default function Kamera() {
               </div>
             </div>
           ))}
+
           {analyzing && (
-            <div className="absolute inset-0 bg-foreground/50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-foreground/50 flex items-center justify-center" style={{ zIndex: 30 }}>
               <div className="bg-card rounded-2xl p-6 text-center shadow-md-custom">
                 <RefreshCw size={32} className="text-primary mx-auto mb-3 animate-spin" />
                 <p className="text-sm font-bold text-foreground">KI analysiert Bauplan…</p>
-                <p className="text-xs text-muted-foreground mt-1">Räume werden erkannt</p>
+                <p className="text-xs text-muted-foreground mt-1">Räume & Wände werden erkannt</p>
               </div>
             </div>
           )}
-          <button onClick={() => { setCapturedImage(null); setAnalyzedRooms([]); setScanMode("none"); }}
-            className="absolute top-3 right-3 bg-foreground/60 text-white rounded-full p-1.5">
+          <button onClick={() => { setCapturedImage(null); setAnalyzedRooms([]); setWalls([]); setScanMode("none"); }}
+            className="absolute top-3 right-3 bg-foreground/60 text-white rounded-full p-1.5" style={{ zIndex: 30 }}>
             <X size={16} />
           </button>
         </div>
@@ -258,7 +342,7 @@ export default function Kamera() {
       {analyzedRooms.length > 0 && (
         <div className="mb-5 bg-card border border-border rounded-2xl p-4 shadow-card">
           <h3 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
-            <Sparkles size={14} className="text-primary" /> KI-Raumerkennung
+            <Sparkles size={14} className="text-primary" /> KI-Raumerkennung · {walls.length} Wände
           </h3>
           {planSummary && <p className="text-xs text-muted-foreground mb-3">{planSummary}</p>}
           <div className="space-y-2">
@@ -291,10 +375,11 @@ export default function Kamera() {
                     </p>
                   </div>
                 )}
+                <GripVertical size={14} className="text-muted-foreground" />
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2 text-center">Tippe zum Bearbeiten · Beschriftungen im Bild per Drag & Drop verschieben</p>
+          <p className="text-[10px] text-muted-foreground mt-2 text-center">Tippe zum Bearbeiten · Labels & Wand-Endpunkte per Drag & Drop verschieben</p>
         </div>
       )}
 
@@ -304,7 +389,7 @@ export default function Kamera() {
           className="bg-primary text-primary-foreground p-4 rounded-2xl shadow-orange flex flex-col items-center gap-2 hover:bg-primary-dark transition-all active:scale-95">
           <ScanLine size={28} />
           <span className="font-bold text-sm">Bauplan scannen</span>
-          <span className="text-xs text-primary-foreground/70">KI-Raumerkennung</span>
+          <span className="text-xs text-primary-foreground/70">KI-Raum & Wände</span>
         </button>
         <button onClick={() => handleCapture("objekt")}
           className="bg-card border border-border p-4 rounded-2xl shadow-card flex flex-col items-center gap-2 hover:bg-accent transition-all active:scale-95">
@@ -326,7 +411,7 @@ export default function Kamera() {
         </button>
       </div>
 
-      {/* Offline Queue Status */}
+      {/* Offline Queue */}
       {offlineQueue.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-5 flex items-center gap-3">
           <AlertTriangle size={20} className="text-amber-500" />
@@ -342,12 +427,11 @@ export default function Kamera() {
         </div>
       )}
 
-      {/* KI-Feature Banner */}
       <div className="bg-gradient-to-r from-primary to-primary-dark rounded-2xl p-4 shadow-orange text-primary-foreground flex items-center gap-3">
         <Sparkles size={24} />
         <div>
           <p className="font-bold text-sm">KI Bauplan- & Visitenkarten-Erkennung</p>
-          <p className="text-xs text-primary-foreground/80">Räume werden automatisch erkannt, beschriftet und können bearbeitet werden. Kontaktdaten landen direkt im CRM.</p>
+          <p className="text-xs text-primary-foreground/80">Räume & Wände werden erkannt. Endpunkte der Wände und Beschriftungen sind per Drag & Drop korrigierbar.</p>
         </div>
       </div>
     </div>

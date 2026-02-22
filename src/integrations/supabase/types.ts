@@ -371,6 +371,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string | null
+          elevenlabs_api_key: string | null
           email: string | null
           id: string
           imap_host: string | null
@@ -383,11 +384,13 @@ export type Database = {
           smtp_user: string | null
           updated_at: string
           user_id: string
+          video_webhook_url: string | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          elevenlabs_api_key?: string | null
           email?: string | null
           id?: string
           imap_host?: string | null
@@ -400,11 +403,13 @@ export type Database = {
           smtp_user?: string | null
           updated_at?: string
           user_id: string
+          video_webhook_url?: string | null
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          elevenlabs_api_key?: string | null
           email?: string | null
           id?: string
           imap_host?: string | null
@@ -417,6 +422,7 @@ export type Database = {
           smtp_user?: string | null
           updated_at?: string
           user_id?: string
+          video_webhook_url?: string | null
         }
         Relationships: []
       }
