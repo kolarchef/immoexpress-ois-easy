@@ -422,6 +422,7 @@ export type Database = {
           imap_password: string | null
           imap_port: number | null
           imap_user: string | null
+          replicate_api_key: string | null
           smtp_host: string | null
           smtp_password: string | null
           smtp_port: number | null
@@ -441,6 +442,7 @@ export type Database = {
           imap_password?: string | null
           imap_port?: number | null
           imap_user?: string | null
+          replicate_api_key?: string | null
           smtp_host?: string | null
           smtp_password?: string | null
           smtp_port?: number | null
@@ -460,6 +462,7 @@ export type Database = {
           imap_password?: string | null
           imap_port?: number | null
           imap_user?: string | null
+          replicate_api_key?: string | null
           smtp_host?: string | null
           smtp_password?: string | null
           smtp_port?: number | null
