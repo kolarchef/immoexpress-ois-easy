@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText } from "lucide-react";
+import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ObjektModal from "@/components/ObjektModal";
@@ -7,6 +7,8 @@ import ExposePreviewModal from "@/components/ExposePreviewModal";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
+import VideoSlideshow from "@/components/VideoSlideshow";
+import ObjektStatistiken from "@/components/ObjektStatistiken";
 
 type Objekt = {
   id: string;
@@ -38,11 +40,11 @@ type Interessent = { id: string; name: string; typ: string | null; email: string
 type HistorieEntry = { id: string; feld: string; alter_wert: string | null; neuer_wert: string | null; created_at: string };
 
 const statusOptions = [
-  { value: "aktiv", label: "Aktiv", emoji: "🟢", color: "bg-green-500" },
-  { value: "reserviert", label: "Reserviert", emoji: "🟡", color: "bg-amber-400" },
-  { value: "verkauft", label: "Verkauft", emoji: "🔴", color: "bg-red-500" },
-  { value: "vermietet", label: "Vermietet", emoji: "🔵", color: "bg-blue-500" },
-  { value: "deaktiviert", label: "Deaktiviert", emoji: "⚫", color: "bg-gray-800" },
+  { value: "aktiv", label: "Aktiv", emoji: "\u{1F7E2}", color: "bg-green-500" },
+  { value: "reserviert", label: "Reserviert", emoji: "\u{1F7E1}", color: "bg-amber-400" },
+  { value: "verkauft", label: "Verkauft", emoji: "\u{1F534}", color: "bg-red-500" },
+  { value: "vermietet", label: "Vermietet", emoji: "\u{1F535}", color: "bg-blue-500" },
+  { value: "deaktiviert", label: "Deaktiviert", emoji: "\u26AB", color: "bg-gray-800" },
 ];
 
 const statusBadge: Record<string, string> = {
@@ -79,7 +81,7 @@ export default function Objektverwaltung() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [objPhotos, setObjPhotos] = useState<Record<string, string>>({});
   const [showExposePreview, setShowExposePreview] = useState(false);
-  const [detailTab, setDetailTab] = useState<"info" | "historie">("info");
+  const [detailTab, setDetailTab] = useState<"info" | "historie" | "medien" | "statistiken">("info");
   const [historie, setHistorie] = useState<HistorieEntry[]>([]);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -150,27 +152,24 @@ export default function Objektverwaltung() {
     await supabase.from("objekt_historie").insert({
       objekt_id: objId, user_id: user.id, feld: "status", alter_wert: oldStatus, neuer_wert: newStatus,
     });
-    toast({ title: `Status → ${newStatus.toUpperCase()}` });
+    toast({ title: `Status \u2192 ${newStatus.toUpperCase()}` });
     load();
     if (detailId === objId) loadHistorie(objId);
   };
 
   const deleteObjekt = async (objId: string) => {
     if (!user) return;
-    // Delete photos from storage
     const { data: files } = await supabase.storage.from("objekt-fotos").list(objId);
     if (files && files.length > 0) {
       const paths = files.map(f => `${objId}/${f.name}`);
       await supabase.storage.from("objekt-fotos").remove(paths);
     }
-    // Delete historie
     await supabase.from("objekt_historie").delete().eq("objekt_id", objId);
-    // Delete object
     const { error } = await supabase.from("objekte").delete().eq("id", objId);
     if (error) {
-      toast({ title: "❌ Fehler beim Löschen", description: error.message, variant: "destructive" });
+      toast({ title: "\u274C Fehler beim L\u00f6schen", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "✅ Objekt endgültig gelöscht" });
+      toast({ title: "\u2705 Objekt endg\u00fcltig gel\u00f6scht" });
       setDetailId(null);
       load();
     }
@@ -208,7 +207,6 @@ export default function Objektverwaltung() {
     const changes: Array<{ feld: string; alter_wert: string | null; neuer_wert: string | null }> = [];
     const update: Record<string, unknown> = {};
 
-    // Track all editable fields
     const trackField = (key: string, dbKey: string, parse?: (v: string) => unknown) => {
       const oldVal = (obj as Record<string, unknown>)[dbKey];
       const oldStr = oldVal != null ? String(oldVal) : "";
@@ -246,7 +244,7 @@ export default function Objektverwaltung() {
     if (Object.keys(update).length > 0) {
       const { error } = await supabase.from("objekte").update(update).eq("id", detailId);
       if (error) {
-        toast({ title: "❌ Fehler beim Speichern", description: error.message, variant: "destructive" });
+        toast({ title: "\u274C Fehler beim Speichern", description: error.message, variant: "destructive" });
         setSavingEdit(false);
         return;
       }
@@ -258,14 +256,14 @@ export default function Objektverwaltung() {
           objekte_ids: [detailId], anzahl: 1, status: "Erfolgreich",
           dateiname: `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`,
         });
-        toast({ title: "✅ Gespeichert & an ImmoZ übertragen" });
+        toast({ title: "\u2705 Gespeichert & an ImmoZ \u00fcbertragen" });
       } else {
-        toast({ title: `✅ ${changes.length} Änderung(en) gespeichert` });
+        toast({ title: `\u2705 ${changes.length} \u00c4nderung(en) gespeichert` });
       }
       load();
       loadHistorie(detailId);
     } else {
-      toast({ title: "Keine Änderungen erkannt" });
+      toast({ title: "Keine \u00c4nderungen erkannt" });
     }
     setEditing(false);
     setSavingEdit(false);
@@ -303,11 +301,11 @@ export default function Objektverwaltung() {
       {/* Search */}
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Adresse, PLZ oder Objektnummer…"
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Adresse, PLZ oder Objektnummer\u2026"
           className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground placeholder:text-muted-foreground" />
       </div>
 
-      {/* Typ-Filter Pill Bar (like reference image) */}
+      {/* Typ-Filter Pill Bar */}
       <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-3">
         {filterTabs.map(t => (
           <button key={t.value} onClick={() => setTypFilter(t.value)}
@@ -361,7 +359,6 @@ export default function Objektverwaltung() {
                     <h3 className="font-bold text-white text-sm drop-shadow">{obj.strasse ? `${obj.strasse} ${obj.hnr || ""}` : obj.objektart}{obj.ort ? `, ${obj.plz || ""} ${obj.ort}` : ""}</h3>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[10px] text-white/80 font-mono">{obj.objektnummer}</span>
-                      {/* Status Dropdown */}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button onClick={e => e.stopPropagation()}
@@ -380,7 +377,7 @@ export default function Objektverwaltung() {
                       <span className="text-[10px] text-white/70 flex items-center gap-0.5"><Clock size={9} /> {daysSince(obj.created_at)}d</span>
                     </div>
                   </div>
-                  {obj.kaufpreis && <span className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-lg shadow">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
+                  {obj.kaufpreis && <span className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-lg shadow">\u20AC{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
                 </div>
               ) : (
                 <div className="p-4">
@@ -416,8 +413,8 @@ export default function Objektverwaltung() {
               <div className="flex items-center gap-3 text-xs text-muted-foreground px-4 py-2.5 border-t border-border">
                 {obj.objektart && <span><MapPin size={11} className="inline mr-0.5" />{obj.objektart}</span>}
                 {obj.zimmer && <span><BedDouble size={11} className="inline mr-0.5" />{obj.zimmer} Zi.</span>}
-                {obj.flaeche_m2 && <span><Maximize2 size={11} className="inline mr-0.5" />{obj.flaeche_m2}m²</span>}
-                {!objPhotos[obj.id] && obj.kaufpreis && <span className="font-bold text-primary">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
+                {obj.flaeche_m2 && <span><Maximize2 size={11} className="inline mr-0.5" />{obj.flaeche_m2}m\u00B2</span>}
+                {!objPhotos[obj.id] && obj.kaufpreis && <span className="font-bold text-primary">\u20AC{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
               </div>
             </div>
           );
@@ -435,22 +432,21 @@ export default function Objektverwaltung() {
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => startEdit(detailObj)} className="p-2 rounded-xl hover:bg-accent"><Edit3 size={16} className="text-primary" /></button>
-                {/* Delete Button with Confirmation */}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <button className="p-2 rounded-xl hover:bg-destructive/10"><Trash2 size={16} className="text-destructive" /></button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Objekt endgültig löschen?</AlertDialogTitle>
+                      <AlertDialogTitle>Objekt endg\u00fcltig l\u00f6schen?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Diese Aktion kann nicht rückgängig gemacht werden. Das Objekt "{detailObj.strasse ? `${detailObj.strasse} ${detailObj.hnr || ""}` : detailObj.objektart}" wird mit allen Fotos und der Historie unwiderruflich gelöscht.
+                        Diese Aktion kann nicht r\u00fcckg\u00e4ngig gemacht werden. Das Objekt "{detailObj.strasse ? `${detailObj.strasse} ${detailObj.hnr || ""}` : detailObj.objektart}" wird mit allen Fotos und der Historie unwiderruflich gel\u00f6scht.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Abbrechen</AlertDialogCancel>
                       <AlertDialogAction onClick={() => deleteObjekt(detailObj.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                        Endgültig löschen
+                        Endg\u00fcltig l\u00f6schen
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -477,10 +473,16 @@ export default function Objektverwaltung() {
               </div>
             )}
 
-            {/* Info / Historie Tabs */}
-            <div className="flex gap-2 mb-4">
+            {/* Tabs: Info / Medien / Stats / Historie */}
+            <div className="flex gap-1.5 mb-4 overflow-x-auto scrollbar-hide">
               <button onClick={() => setDetailTab("info")} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${detailTab === "info" ? "bg-primary text-primary-foreground border-primary" : "bg-accent text-foreground border-border"}`}>
-                📋 Info
+                {"📋"} Info
+              </button>
+              <button onClick={() => setDetailTab("medien")} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${detailTab === "medien" ? "bg-primary text-primary-foreground border-primary" : "bg-accent text-foreground border-border"}`}>
+                <Film size={12} className="inline mr-1" /> Medien
+              </button>
+              <button onClick={() => setDetailTab("statistiken")} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${detailTab === "statistiken" ? "bg-primary text-primary-foreground border-primary" : "bg-accent text-foreground border-border"}`}>
+                <BarChart3 size={12} className="inline mr-1" /> Stats
               </button>
               <button onClick={() => setDetailTab("historie")} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${detailTab === "historie" ? "bg-primary text-primary-foreground border-primary" : "bg-accent text-foreground border-border"}`}>
                 <History size={12} className="inline mr-1" /> Historie
@@ -495,15 +497,15 @@ export default function Objektverwaltung() {
                       <label className={labelCls}>Status</label>
                       <select className={inputCls} value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })}>
                         {statusOptions.map(s => <option key={s.value} value={s.value}>{s.emoji} {s.label}</option>)}
-                        <option value="entwurf">📝 Entwurf</option>
+                        <option value="entwurf">{"\u{1F4DD}"} Entwurf</option>
                       </select>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={labelCls}>Objektart</label>
                         <select className={inputCls} value={editForm.objektart} onChange={e => setEditForm({ ...editForm, objektart: e.target.value })}>
-                          <option value="">Auswählen…</option>
-                          {["Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Doppelhaushälfte", "Reihenhaus", "Grundstück", "Büro/Gewerbefläche", "Zinshaus", "Dachgeschosswohnung", "Penthouse"].map(o => <option key={o}>{o}</option>)}
+                          <option value="">Ausw\u00e4hlen\u2026</option>
+                          {["Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Doppelhaush\u00e4lfte", "Reihenhaus", "Grundst\u00fcck", "B\u00fcro/Gewerbefl\u00e4che", "Zinshaus", "Dachgeschosswohnung", "Penthouse"].map(o => <option key={o}>{o}</option>)}
                         </select>
                       </div>
                       <div>
@@ -516,7 +518,7 @@ export default function Objektverwaltung() {
                     <div className="grid grid-cols-4 gap-2">
                       <div><label className={labelCls}>PLZ</label><input className={inputCls} value={editForm.plz} onChange={e => setEditForm({ ...editForm, plz: e.target.value })} /></div>
                       <div><label className={labelCls}>Ort</label><input className={inputCls} value={editForm.ort} onChange={e => setEditForm({ ...editForm, ort: e.target.value })} /></div>
-                      <div><label className={labelCls}>Straße</label><input className={inputCls} value={editForm.strasse} onChange={e => setEditForm({ ...editForm, strasse: e.target.value })} /></div>
+                      <div><label className={labelCls}>Stra\u00dfe</label><input className={inputCls} value={editForm.strasse} onChange={e => setEditForm({ ...editForm, strasse: e.target.value })} /></div>
                       <div><label className={labelCls}>HNR</label><input className={inputCls} value={editForm.hnr} onChange={e => setEditForm({ ...editForm, hnr: e.target.value })} /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -524,13 +526,13 @@ export default function Objektverwaltung() {
                       <div><label className={labelCls}>Stock</label><input className={inputCls} value={editForm.stock} onChange={e => setEditForm({ ...editForm, stock: e.target.value })} /></div>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
-                      <div><label className={labelCls}>Fläche m²</label><input type="number" className={inputCls} value={editForm.flaeche_m2} onChange={e => setEditForm({ ...editForm, flaeche_m2: e.target.value })} /></div>
+                      <div><label className={labelCls}>Fl\u00e4che m\u00B2</label><input type="number" className={inputCls} value={editForm.flaeche_m2} onChange={e => setEditForm({ ...editForm, flaeche_m2: e.target.value })} /></div>
                       <div><label className={labelCls}>Zimmer</label><input type="number" className={inputCls} value={editForm.zimmer} onChange={e => setEditForm({ ...editForm, zimmer: e.target.value })} /></div>
-                      <div><label className={labelCls}>Kaufpreis €</label><input type="number" className={inputCls} value={editForm.kaufpreis} onChange={e => setEditForm({ ...editForm, kaufpreis: e.target.value })} /></div>
+                      <div><label className={labelCls}>Kaufpreis \u20AC</label><input type="number" className={inputCls} value={editForm.kaufpreis} onChange={e => setEditForm({ ...editForm, kaufpreis: e.target.value })} /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div><label className={labelCls}>Käufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.kaeufer_provision} onChange={e => setEditForm({ ...editForm, kaeufer_provision: e.target.value })} /></div>
-                      <div><label className={labelCls}>Verkäufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.verkaeufer_provision} onChange={e => setEditForm({ ...editForm, verkaeufer_provision: e.target.value })} /></div>
+                      <div><label className={labelCls}>K\u00e4ufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.kaeufer_provision} onChange={e => setEditForm({ ...editForm, kaeufer_provision: e.target.value })} /></div>
+                      <div><label className={labelCls}>Verk\u00e4ufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.verkaeufer_provision} onChange={e => setEditForm({ ...editForm, verkaeufer_provision: e.target.value })} /></div>
                     </div>
                     <div>
                       <label className={labelCls}>Kurzinfo</label>
@@ -541,7 +543,7 @@ export default function Objektverwaltung() {
                       <textarea className={`${inputCls} resize-none`} rows={6} value={editForm.beschreibung} onChange={e => setEditForm({ ...editForm, beschreibung: e.target.value })} />
                     </div>
                     <div>
-                      <label className={labelCls}>🔒 Interne Notizen</label>
+                      <label className={labelCls}>{"\u{1F512}"} Interne Notizen</label>
                       <textarea className={`${inputCls} resize-none bg-amber-50/50 dark:bg-amber-900/10`} rows={2} value={editForm.interne_notizen} onChange={e => setEditForm({ ...editForm, interne_notizen: e.target.value })} />
                     </div>
                     <div className="flex gap-2">
@@ -551,22 +553,22 @@ export default function Objektverwaltung() {
                       </button>
                     </div>
                     <button onClick={() => saveEdit(true)} disabled={savingEdit} className="w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange flex items-center justify-center gap-2">
-                      <Copy size={14} /> Speichern & an ImmoZ übertragen
+                      <Copy size={14} /> Speichern & an ImmoZ \u00fcbertragen
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-2 text-sm mb-4">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Objektnummer</span><span className="font-semibold">{detailObj.objektnummer || "–"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Objektnummer</span><span className="font-semibold">{detailObj.objektnummer || "\u2013"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Art</span><span className="font-semibold">{detailObj.objektart}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Vermarktung</span><span className="font-semibold">{detailObj.verkaufsart || "Kauf"}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Adresse</span><span className="font-semibold">{[detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ") || "–"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Adresse</span><span className="font-semibold">{[detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ") || "\u2013"}</span></div>
                     {detailObj.top && <div className="flex justify-between"><span className="text-muted-foreground">Top</span><span className="font-semibold">{detailObj.top}</span></div>}
                     {detailObj.stock && <div className="flex justify-between"><span className="text-muted-foreground">Stock</span><span className="font-semibold">{detailObj.stock}</span></div>}
-                    <div className="flex justify-between"><span className="text-muted-foreground">Fläche</span><span className="font-semibold">{detailObj.flaeche_m2 ? `${detailObj.flaeche_m2} m²` : "–"}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Zimmer</span><span className="font-semibold">{detailObj.zimmer || "–"}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Preis</span><span className="font-bold text-primary">{detailObj.kaufpreis ? `€${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "auf Anfrage"}</span></div>
-                    {detailObj.kaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Käufer-Provision</span><span className="font-semibold">{detailObj.kaeufer_provision}%</span></div>}
-                    {detailObj.verkaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Verkäufer-Provision</span><span className="font-semibold">{detailObj.verkaeufer_provision}%</span></div>}
+                    <div className="flex justify-between"><span className="text-muted-foreground">Fl\u00e4che</span><span className="font-semibold">{detailObj.flaeche_m2 ? `${detailObj.flaeche_m2} m\u00B2` : "\u2013"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Zimmer</span><span className="font-semibold">{detailObj.zimmer || "\u2013"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Preis</span><span className="font-bold text-primary">{detailObj.kaufpreis ? `\u20AC${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "auf Anfrage"}</span></div>
+                    {detailObj.kaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">K\u00e4ufer-Provision</span><span className="font-semibold">{detailObj.kaeufer_provision}%</span></div>}
+                    {detailObj.verkaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Verk\u00e4ufer-Provision</span><span className="font-semibold">{detailObj.verkaeufer_provision}%</span></div>}
                     {detailObj.kurzinfo && <p className="text-muted-foreground text-xs pt-2 border-t border-border">{detailObj.kurzinfo}</p>}
                     {detailObj.beschreibung && (
                       <div className="pt-2 border-t border-border">
@@ -575,7 +577,7 @@ export default function Objektverwaltung() {
                     )}
                     {detailObj.interne_notizen && (
                       <div className="pt-2 border-t border-border">
-                        <span className="text-xs font-bold text-amber-600">🔒 Interne Notizen</span>
+                        <span className="text-xs font-bold text-amber-600">{"\u{1F512}"} Interne Notizen</span>
                         <p className="text-xs text-muted-foreground mt-1">{detailObj.interne_notizen}</p>
                       </div>
                     )}
@@ -583,9 +585,28 @@ export default function Objektverwaltung() {
                 )}
 
                 <button onClick={() => setShowExposePreview(true)}
-                  className="w-full bg-primary text-primary-foreground rounded-xl py-2.5 font-semibold text-sm shadow-orange hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2 mb-4">
-                  <Eye size={14} /> Exposé Vorschau & Senden
+                  className="w-full bg-primary text-primary-foreground rounded-xl py-2.5 font-semibold text-sm shadow-orange hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2 mb-3">
+                  <Eye size={14} /> Expos\u00e9 Vorschau & Senden
                 </button>
+
+                {/* One-Click Sharing */}
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <button onClick={() => {
+                    const text = `\u{1F3E0} ${detailObj.kurzinfo || detailObj.objektart} \u2013 ${detailObj.kaufpreis ? `\u20AC${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "Preis auf Anfrage"}`;
+                    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+                    if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "expose", kanal: "whatsapp" });
+                  }} className="bg-green-600 text-white rounded-xl py-2 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-700 transition-all active:scale-95">
+                    <MessageCircle size={13} /> WhatsApp
+                  </button>
+                  <button onClick={() => {
+                    const subject = detailObj.kurzinfo || detailObj.objektart || "Immobilie";
+                    const body = `${subject}\nPreis: ${detailObj.kaufpreis ? `\u20AC${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "auf Anfrage"}\nFl\u00e4che: ${detailObj.flaeche_m2 || "\u2013"} m\u00B2`;
+                    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+                    if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "expose", kanal: "email" });
+                  }} className="bg-card border border-border text-foreground rounded-xl py-2 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-accent transition-all active:scale-95">
+                    <Mail size={13} /> E-Mail
+                  </button>
+                </div>
 
                 <div className="border-t border-border pt-4">
                   <h3 className="font-bold text-foreground text-sm flex items-center gap-2 mb-3"><Users size={15} className="text-primary" /> Interessenten</h3>
@@ -611,11 +632,36 @@ export default function Objektverwaltung() {
                   )}
                 </div>
               </>
+            ) : detailTab === "medien" ? (
+              <div>
+                {photos.length > 0 ? (
+                  <VideoSlideshow
+                    images={photos}
+                    titel={detailObj.kurzinfo || detailObj.objektart || "Immobilie"}
+                    preis={detailObj.kaufpreis?.toString() || ""}
+                    flaeche={detailObj.flaeche_m2?.toString() || ""}
+                    zimmer={detailObj.zimmer?.toString() || ""}
+                    beschreibung={detailObj.beschreibung || ""}
+                    onShare={(type) => {
+                      const text = `\u{1F3E0} ${detailObj.kurzinfo || detailObj.objektart} \u2013 ${detailObj.kaufpreis ? `\u20AC${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "Preis auf Anfrage"}`;
+                      if (type === "whatsapp") window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+                      else window.open(`mailto:?subject=${encodeURIComponent(detailObj.kurzinfo || "Immobilie")}&body=${encodeURIComponent(text)}`);
+                      if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "video", kanal: type });
+                    }}
+                  />
+                ) : (
+                  <div className="text-center py-8">
+                    <Film size={32} className="text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">Keine Fotos vorhanden \u2013 lade Fotos hoch f\u00fcr einen Video-Rundgang.</p>
+                  </div>
+                )}
+              </div>
+            ) : detailTab === "statistiken" ? (
+              <ObjektStatistiken objektId={detailObj.id} />
             ) : (
-              /* Historie Tab */
               <div className="space-y-2">
                 {historie.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-6">Noch keine Änderungen aufgezeichnet.</p>
+                  <p className="text-xs text-muted-foreground text-center py-6">Noch keine \u00c4nderungen aufgezeichnet.</p>
                 ) : historie.map(h => (
                   <div key={h.id} className="p-3 bg-accent rounded-xl border border-border">
                     <div className="flex items-center justify-between mb-1">
@@ -623,9 +669,9 @@ export default function Objektverwaltung() {
                       <span className="text-[10px] text-muted-foreground">{new Date(h.created_at).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-destructive line-through">{h.alter_wert || "–"}</span>
-                      <span className="text-muted-foreground">→</span>
-                      <span className="text-green-600 font-semibold">{h.neuer_wert || "–"}</span>
+                      <span className="text-destructive line-through">{h.alter_wert || "\u2013"}</span>
+                      <span className="text-muted-foreground">\u2192</span>
+                      <span className="text-green-600 font-semibold">{h.neuer_wert || "\u2013"}</span>
                     </div>
                   </div>
                 ))}
@@ -650,7 +696,7 @@ export default function Objektverwaltung() {
             flaeche: detailObj.flaeche_m2?.toString() || "",
             zimmer: detailObj.zimmer?.toString() || "",
             kaufpreis: detailObj.kaufpreis?.toString() || "",
-            provisionsstellung: "Käufer",
+            provisionsstellung: "K\u00e4ufer",
             plz: detailObj.plz || "",
             strasse: detailObj.strasse || "",
             hnr: detailObj.hnr || "",

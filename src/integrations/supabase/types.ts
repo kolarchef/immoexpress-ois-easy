@@ -225,6 +225,60 @@ export type Database = {
           },
         ]
       }
+      objekt_statistiken: {
+        Row: {
+          aufrufe: number
+          created_at: string
+          id: string
+          kanal: string | null
+          kunde_id: string | null
+          kunde_name: string | null
+          letzter_aufruf: string
+          objekt_id: string
+          typ: string
+          user_id: string | null
+        }
+        Insert: {
+          aufrufe?: number
+          created_at?: string
+          id?: string
+          kanal?: string | null
+          kunde_id?: string | null
+          kunde_name?: string | null
+          letzter_aufruf?: string
+          objekt_id: string
+          typ?: string
+          user_id?: string | null
+        }
+        Update: {
+          aufrufe?: number
+          created_at?: string
+          id?: string
+          kanal?: string | null
+          kunde_id?: string | null
+          kunde_name?: string | null
+          letzter_aufruf?: string
+          objekt_id?: string
+          typ?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "objekt_statistiken_kunde_id_fkey"
+            columns: ["kunde_id"]
+            isOneToOne: false
+            referencedRelation: "crm_kunden"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "objekt_statistiken_objekt_id_fkey"
+            columns: ["objekt_id"]
+            isOneToOne: false
+            referencedRelation: "objekte"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       objekte: {
         Row: {
           beschreibung: string | null
