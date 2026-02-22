@@ -417,11 +417,13 @@ export type Database = {
           display_name: string | null
           elevenlabs_api_key: string | null
           email: string | null
+          fal_api_key: string | null
           id: string
           imap_host: string | null
           imap_password: string | null
           imap_port: number | null
           imap_user: string | null
+          make_webhook_url: string | null
           replicate_api_key: string | null
           smtp_host: string | null
           smtp_password: string | null
@@ -430,6 +432,7 @@ export type Database = {
           updated_at: string
           user_id: string
           video_webhook_url: string | null
+          whatsapp_api_key: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -437,11 +440,13 @@ export type Database = {
           display_name?: string | null
           elevenlabs_api_key?: string | null
           email?: string | null
+          fal_api_key?: string | null
           id?: string
           imap_host?: string | null
           imap_password?: string | null
           imap_port?: number | null
           imap_user?: string | null
+          make_webhook_url?: string | null
           replicate_api_key?: string | null
           smtp_host?: string | null
           smtp_password?: string | null
@@ -450,6 +455,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           video_webhook_url?: string | null
+          whatsapp_api_key?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -457,11 +463,13 @@ export type Database = {
           display_name?: string | null
           elevenlabs_api_key?: string | null
           email?: string | null
+          fal_api_key?: string | null
           id?: string
           imap_host?: string | null
           imap_password?: string | null
           imap_port?: number | null
           imap_user?: string | null
+          make_webhook_url?: string | null
           replicate_api_key?: string | null
           smtp_host?: string | null
           smtp_password?: string | null
@@ -470,6 +478,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           video_webhook_url?: string | null
+          whatsapp_api_key?: string | null
         }
         Relationships: []
       }
