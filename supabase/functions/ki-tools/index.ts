@@ -45,20 +45,24 @@ Erkenne automatisch: Raumtyp (Bad, Küche, Wohnzimmer, Schlafzimmer, Balkon etc.
           type: "text",
           text: `Du bist ein Experte für die Analyse von Bauplänen und Grundrissen.
 
-Analysiere diesen Bauplan/Grundriss und identifiziere alle Räume.
+Analysiere diesen Bauplan/Grundriss. Konzentriere dich NUR auf echte Wände (starke, durchgehende Kontraste). Ignoriere Maßlinien, Bemaßungspfeile, Schraffuren und dünne Hilfslinien.
 
 Für JEDEN erkannten Raum gib an:
 - name: Der Raumtyp (z.B. Wohnzimmer, Schlafzimmer, Küche, Bad, WC, Vorraum, Abstellraum, Balkon, Terrasse, Loggia)
 - flaeche_ca: Geschätzte Fläche in m² (wenn erkennbar)
 - merkmale: Besonderheiten (z.B. "mit Fenster", "Durchgangsraum", "offene Küche")
 
+Erkenne außerdem alle Wände als Linien-Segmente. Gib jede Wand als Start- und Endpunkt in Prozentwerten (0-100) relativ zur Bildgröße an.
+WICHTIG: Zeichne NUR echte tragende Wände und Trennwände nach. KEINE Maßlinien, KEINE Fensterlinien, KEINE Bemaßungspfeile.
+
 Antworte als JSON-Objekt:
 {
-  "raeume": [{"name": "Wohnzimmer", "flaeche_ca": 28, "merkmale": "großes Panoramafenster, Parkettboden"}],
+  "raeume": [{"name": "Wohnzimmer", "flaeche_ca": 28, "merkmale": "großes Panoramafenster"}],
+  "waende": [{"p1": {"x": 10, "y": 5}, "p2": {"x": 90, "y": 5}}],
   "gesamtflaeche_ca": 85,
   "zimmeranzahl": 3,
-  "zusammenfassung": "Helle 3-Zimmer-Wohnung mit offener Wohnküche und großzügigem Balkon. Durchdachter Grundriss mit separatem WC und geräumigem Bad.",
-  "raumtrennung_text": "Vorraum → links Bad/WC → geradeaus offene Wohnküche → rechts 2 Schlafzimmer → Balkon vom Wohnzimmer aus"
+  "zusammenfassung": "Helle 3-Zimmer-Wohnung mit offener Wohnküche.",
+  "raumtrennung_text": "Vorraum → links Bad/WC → geradeaus Wohnküche"
 }`
         }
       ];
