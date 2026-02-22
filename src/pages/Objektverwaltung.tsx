@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown } from "lucide-react";
+import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ObjektModal from "@/components/ObjektModal";
 import ExposePreviewModal from "@/components/ExposePreviewModal";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 
 type Objekt = {
@@ -31,39 +31,34 @@ type Objekt = {
   ki_text: string | null;
   created_at: string;
   immoz_exportiert: boolean | null;
+  provisionsstellung: string | null;
 };
 
 type Interessent = { id: string; name: string; typ: string | null; email: string | null; phone: string | null };
 type HistorieEntry = { id: string; feld: string; alter_wert: string | null; neuer_wert: string | null; created_at: string };
 
 const statusOptions = [
-  { value: "aktiv", label: "Aktiv", emoji: "🟢" },
-  { value: "reserviert", label: "Reserviert", emoji: "🟡" },
-  { value: "verkauft", label: "Verkauft", emoji: "🔴" },
-  { value: "vermietet", label: "Vermietet", emoji: "🔵" },
-  { value: "deaktiviert", label: "Deaktiviert", emoji: "⚫" },
+  { value: "aktiv", label: "Aktiv", emoji: "🟢", color: "bg-green-500" },
+  { value: "reserviert", label: "Reserviert", emoji: "🟡", color: "bg-amber-400" },
+  { value: "verkauft", label: "Verkauft", emoji: "🔴", color: "bg-red-500" },
+  { value: "vermietet", label: "Vermietet", emoji: "🔵", color: "bg-blue-500" },
+  { value: "deaktiviert", label: "Deaktiviert", emoji: "⚫", color: "bg-gray-800" },
 ];
 
-const statusStyle: Record<string, string> = {
+const statusBadge: Record<string, string> = {
   aktiv: "bg-green-500 text-white",
-  reserviert: "bg-amber-500 text-white",
-  verkauft: "bg-muted-foreground text-white",
+  reserviert: "bg-amber-400 text-white",
+  verkauft: "bg-red-500 text-white",
   vermietet: "bg-blue-500 text-white",
-  deaktiviert: "bg-muted text-muted-foreground",
+  deaktiviert: "bg-gray-800 text-white",
   entwurf: "bg-orange-400 text-white",
 };
 
-const statusTabs = [
+const filterTabs = [
   { value: "alle", label: "Alle" },
-  { value: "aktiv", label: "🟢 Aktiv" },
-  { value: "entwurf", label: "📝 Entwurf" },
-  { value: "reserviert", label: "🟡 Reserviert" },
-  { value: "verkauft", label: "🔴 Verkauft" },
-  { value: "vermietet", label: "🔵 Vermietet" },
-  { value: "deaktiviert", label: "⚫ Deaktiviert" },
+  { value: "Eigentumswohnung", label: "Eigentumswohnung" },
+  { value: "Mietwohnung", label: "Mietwohnung" },
 ];
-
-const filterTypen = ["Alle", "Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Grundstück", "Zinshaus"];
 
 function daysSince(dateStr: string) {
   const created = new Date(dateStr);
@@ -75,7 +70,7 @@ export default function Objektverwaltung() {
   const { user } = useAuth();
   const [objekte, setObjekte] = useState<Objekt[]>([]);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("Alle");
+  const [typFilter, setTypFilter] = useState("alle");
   const [statusFilter, setStatusFilter] = useState("alle");
   const [showModal, setShowModal] = useState(false);
   const [editObjekt, setEditObjekt] = useState<Objekt | null>(null);
@@ -160,6 +155,27 @@ export default function Objektverwaltung() {
     if (detailId === objId) loadHistorie(objId);
   };
 
+  const deleteObjekt = async (objId: string) => {
+    if (!user) return;
+    // Delete photos from storage
+    const { data: files } = await supabase.storage.from("objekt-fotos").list(objId);
+    if (files && files.length > 0) {
+      const paths = files.map(f => `${objId}/${f.name}`);
+      await supabase.storage.from("objekt-fotos").remove(paths);
+    }
+    // Delete historie
+    await supabase.from("objekt_historie").delete().eq("objekt_id", objId);
+    // Delete object
+    const { error } = await supabase.from("objekte").delete().eq("id", objId);
+    if (error) {
+      toast({ title: "❌ Fehler beim Löschen", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✅ Objekt endgültig gelöscht" });
+      setDetailId(null);
+      load();
+    }
+  };
+
   const startEdit = (obj: Objekt) => {
     setEditing(true);
     setEditForm({
@@ -168,10 +184,22 @@ export default function Objektverwaltung() {
       beschreibung: obj.beschreibung || "",
       interne_notizen: obj.interne_notizen || "",
       status: obj.status || "aktiv",
+      objektart: obj.objektart || "",
+      verkaufsart: obj.verkaufsart || "Kauf",
+      plz: obj.plz || "",
+      ort: obj.ort || "",
+      strasse: obj.strasse || "",
+      hnr: obj.hnr || "",
+      top: obj.top || "",
+      stock: obj.stock || "",
+      flaeche_m2: obj.flaeche_m2?.toString() || "",
+      zimmer: obj.zimmer?.toString() || "",
+      kaeufer_provision: obj.kaeufer_provision?.toString() || "",
+      verkaeufer_provision: obj.verkaeufer_provision?.toString() || "",
     });
   };
 
-  const saveEdit = async () => {
+  const saveEdit = async (exportToImmoZ?: boolean) => {
     if (!user || !detailId) return;
     setSavingEdit(true);
     const obj = objekte.find(o => o.id === detailId);
@@ -180,52 +208,85 @@ export default function Objektverwaltung() {
     const changes: Array<{ feld: string; alter_wert: string | null; neuer_wert: string | null }> = [];
     const update: Record<string, unknown> = {};
 
-    if (editForm.kaufpreis !== (obj.kaufpreis?.toString() || "")) {
-      changes.push({ feld: "kaufpreis", alter_wert: obj.kaufpreis?.toString() || null, neuer_wert: editForm.kaufpreis || null });
-      update.kaufpreis = editForm.kaufpreis ? parseFloat(editForm.kaufpreis) : null;
-    }
-    if (editForm.kurzinfo !== (obj.kurzinfo || "")) {
-      changes.push({ feld: "kurzinfo", alter_wert: obj.kurzinfo, neuer_wert: editForm.kurzinfo || null });
-      update.kurzinfo = editForm.kurzinfo || null;
-    }
-    if (editForm.beschreibung !== (obj.beschreibung || "")) {
-      changes.push({ feld: "beschreibung", alter_wert: obj.beschreibung, neuer_wert: editForm.beschreibung || null });
-      update.beschreibung = editForm.beschreibung || null;
-    }
-    if (editForm.interne_notizen !== (obj.interne_notizen || "")) {
-      changes.push({ feld: "interne_notizen", alter_wert: obj.interne_notizen, neuer_wert: editForm.interne_notizen || null });
-      update.interne_notizen = editForm.interne_notizen || null;
-    }
-    if (editForm.status !== (obj.status || "aktiv")) {
-      changes.push({ feld: "status", alter_wert: obj.status, neuer_wert: editForm.status });
-      update.status = editForm.status;
+    // Track all editable fields
+    const trackField = (key: string, dbKey: string, parse?: (v: string) => unknown) => {
+      const oldVal = (obj as Record<string, unknown>)[dbKey];
+      const oldStr = oldVal != null ? String(oldVal) : "";
+      const newStr = editForm[key] || "";
+      if (newStr !== oldStr) {
+        changes.push({ feld: dbKey, alter_wert: oldStr || null, neuer_wert: newStr || null });
+        update[dbKey] = parse ? parse(newStr) : (newStr || null);
+      }
+    };
+
+    trackField("kaufpreis", "kaufpreis", v => v ? parseFloat(v) : null);
+    trackField("kurzinfo", "kurzinfo");
+    trackField("beschreibung", "beschreibung");
+    trackField("interne_notizen", "interne_notizen");
+    trackField("status", "status");
+    trackField("objektart", "objektart");
+    trackField("verkaufsart", "verkaufsart");
+    trackField("plz", "plz");
+    trackField("ort", "ort");
+    trackField("strasse", "strasse");
+    trackField("hnr", "hnr");
+    trackField("top", "top");
+    trackField("stock", "stock");
+    trackField("flaeche_m2", "flaeche_m2", v => v ? parseFloat(v) : null);
+    trackField("zimmer", "zimmer", v => v ? parseFloat(v) : null);
+    trackField("kaeufer_provision", "kaeufer_provision", v => v ? parseFloat(v) : null);
+    trackField("verkaeufer_provision", "verkaeufer_provision", v => v ? parseFloat(v) : null);
+
+    if (exportToImmoZ) {
+      update.immoz_exportiert = true;
+      update.immoz_export_datum = new Date().toISOString();
+      if (!update.status) update.status = "aktiv";
     }
 
     if (Object.keys(update).length > 0) {
-      await supabase.from("objekte").update(update).eq("id", detailId);
+      const { error } = await supabase.from("objekte").update(update).eq("id", detailId);
+      if (error) {
+        toast({ title: "❌ Fehler beim Speichern", description: error.message, variant: "destructive" });
+        setSavingEdit(false);
+        return;
+      }
       for (const c of changes) {
         await supabase.from("objekt_historie").insert({ objekt_id: detailId, user_id: user.id, ...c });
       }
-      toast({ title: `✓ ${changes.length} Änderung(en) gespeichert` });
+      if (exportToImmoZ) {
+        await supabase.from("immoz_exporte").insert({
+          objekte_ids: [detailId], anzahl: 1, status: "Erfolgreich",
+          dateiname: `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`,
+        });
+        toast({ title: "✅ Gespeichert & an ImmoZ übertragen" });
+      } else {
+        toast({ title: `✅ ${changes.length} Änderung(en) gespeichert` });
+      }
       load();
       loadHistorie(detailId);
+    } else {
+      toast({ title: "Keine Änderungen erkannt" });
     }
     setEditing(false);
     setSavingEdit(false);
   };
 
   const filtered = objekte.filter(o => {
-    const matchType = filter === "Alle" || o.objektart === filter;
+    const matchType = typFilter === "alle" || o.objektart === typFilter;
     const s = o.status || "aktiv";
     const matchStatus = statusFilter === "alle" || s === statusFilter;
     const matchSearch = (o.strasse || "").toLowerCase().includes(search.toLowerCase()) ||
       (o.ort || "").toLowerCase().includes(search.toLowerCase()) ||
-      (o.objektnummer || "").toLowerCase().includes(search.toLowerCase());
+      (o.objektnummer || "").toLowerCase().includes(search.toLowerCase()) ||
+      (o.plz || "").toLowerCase().includes(search.toLowerCase());
     return matchType && matchStatus && matchSearch;
   });
 
   const detailObj = objekte.find(o => o.id === detailId);
-  const isEntwurf = (obj: Objekt) => (obj.status === "entwurf") || (!obj.immoz_exportiert && obj.status !== "aktiv" && obj.status !== "reserviert" && obj.status !== "verkauft" && obj.status !== "vermietet");
+  const isEntwurf = (obj: Objekt) => obj.status === "entwurf";
+
+  const inputCls = "mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  const labelCls = "text-xs font-semibold text-muted-foreground uppercase tracking-wide";
 
   return (
     <div className="p-4 lg:p-8 animate-fade-in max-w-3xl mx-auto">
@@ -239,31 +300,41 @@ export default function Objektverwaltung() {
         </button>
       </div>
 
+      {/* Search */}
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Adresse, PLZ oder Objektnummer…"
           className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground placeholder:text-muted-foreground" />
       </div>
 
-      {/* Status-Tabs */}
-      <Tabs value={statusFilter} onValueChange={setStatusFilter} className="mb-4">
-        <TabsList className="w-full flex overflow-x-auto scrollbar-hide bg-card border border-border rounded-xl p-1">
-          {statusTabs.map(t => (
-            <TabsTrigger key={t.value} value={t.value} className="flex-1 text-xs font-semibold whitespace-nowrap">
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
-      {/* Typ-Filter */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-5">
-        {filterTypen.map(t => (
-          <button key={t} onClick={() => setFilter(t)}
-            className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all ${filter === t ? "bg-primary text-primary-foreground shadow-orange" : "bg-card text-muted-foreground border border-border hover:bg-accent"}`}>
-            {t}
+      {/* Typ-Filter Pill Bar (like reference image) */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-3">
+        {filterTabs.map(t => (
+          <button key={t.value} onClick={() => setTypFilter(t.value)}
+            className={`flex-shrink-0 px-5 py-2 rounded-full text-sm font-semibold transition-all ${typFilter === t.value ? "bg-primary text-primary-foreground shadow-orange" : "bg-card text-muted-foreground border border-border hover:bg-accent"}`}>
+            {t.label}
           </button>
         ))}
+      </div>
+
+      {/* Status-Filter Pills */}
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 mb-5">
+        <button onClick={() => setStatusFilter("alle")}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${statusFilter === "alle" ? "bg-foreground text-background" : "bg-card text-muted-foreground border border-border hover:bg-accent"}`}>
+          Alle
+        </button>
+        {statusOptions.map(s => (
+          <button key={s.value} onClick={() => setStatusFilter(s.value)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${statusFilter === s.value ? `${s.color} text-white` : "bg-card text-muted-foreground border border-border hover:bg-accent"}`}>
+            <span className={`w-2 h-2 rounded-full ${statusFilter === s.value ? "bg-white/60" : s.color}`} />
+            {s.label}
+          </button>
+        ))}
+        <button onClick={() => setStatusFilter("entwurf")}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${statusFilter === "entwurf" ? "bg-orange-400 text-white" : "bg-card text-muted-foreground border border-border hover:bg-accent"}`}>
+          <span className={`w-2 h-2 rounded-full ${statusFilter === "entwurf" ? "bg-white/60" : "bg-orange-400"}`} />
+          Entwurf
+        </button>
       </div>
 
       <div className="space-y-3">
@@ -294,7 +365,7 @@ export default function Objektverwaltung() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button onClick={e => e.stopPropagation()}
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 cursor-pointer hover:opacity-80 ${statusStyle[objStatus] || "bg-muted text-muted-foreground"}`}>
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 cursor-pointer hover:opacity-80 ${statusBadge[objStatus] || "bg-muted text-muted-foreground"}`}>
                             {objStatus.toUpperCase()} <ChevronDown size={9} />
                           </button>
                         </DropdownMenuTrigger>
@@ -326,7 +397,7 @@ export default function Objektverwaltung() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button onClick={e => e.stopPropagation()}
-                            className={`text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer hover:opacity-80 flex items-center gap-1 ${statusStyle[objStatus] || "bg-muted text-muted-foreground"}`}>
+                            className={`text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer hover:opacity-80 flex items-center gap-1 ${statusBadge[objStatus] || "bg-muted text-muted-foreground"}`}>
                             {objStatus.toUpperCase()} <ChevronDown size={10} />
                           </button>
                         </DropdownMenuTrigger>
@@ -364,6 +435,26 @@ export default function Objektverwaltung() {
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => startEdit(detailObj)} className="p-2 rounded-xl hover:bg-accent"><Edit3 size={16} className="text-primary" /></button>
+                {/* Delete Button with Confirmation */}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button className="p-2 rounded-xl hover:bg-destructive/10"><Trash2 size={16} className="text-destructive" /></button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Objekt endgültig löschen?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Diese Aktion kann nicht rückgängig gemacht werden. Das Objekt "{detailObj.strasse ? `${detailObj.strasse} ${detailObj.hnr || ""}` : detailObj.objektart}" wird mit allen Fotos und der Historie unwiderruflich gelöscht.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => deleteObjekt(detailObj.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Endgültig löschen
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 <button onClick={() => setDetailId(null)} className="p-2 rounded-xl hover:bg-accent"><X size={16} className="text-muted-foreground" /></button>
               </div>
             </div>
@@ -377,7 +468,7 @@ export default function Objektverwaltung() {
               )}
             </div>
 
-            {/* Photos – object-cover, no grey bars */}
+            {/* Photos */}
             {photos.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-3 mb-3">
                 {photos.map((url, i) => (
@@ -401,42 +492,78 @@ export default function Objektverwaltung() {
                 {editing ? (
                   <div className="space-y-3 mb-4">
                     <div>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase">Status</label>
-                      <select className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm" value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })}>
+                      <label className={labelCls}>Status</label>
+                      <select className={inputCls} value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })}>
                         {statusOptions.map(s => <option key={s.value} value={s.value}>{s.emoji} {s.label}</option>)}
                         <option value="entwurf">📝 Entwurf</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase">Kaufpreis €</label>
-                      <input type="number" className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm" value={editForm.kaufpreis} onChange={e => setEditForm({ ...editForm, kaufpreis: e.target.value })} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Objektart</label>
+                        <select className={inputCls} value={editForm.objektart} onChange={e => setEditForm({ ...editForm, objektart: e.target.value })}>
+                          <option value="">Auswählen…</option>
+                          {["Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Doppelhaushälfte", "Reihenhaus", "Grundstück", "Büro/Gewerbefläche", "Zinshaus", "Dachgeschosswohnung", "Penthouse"].map(o => <option key={o}>{o}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Vermarktung</label>
+                        <select className={inputCls} value={editForm.verkaufsart} onChange={e => setEditForm({ ...editForm, verkaufsart: e.target.value })}>
+                          <option>Kauf</option><option>Miete</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div><label className={labelCls}>PLZ</label><input className={inputCls} value={editForm.plz} onChange={e => setEditForm({ ...editForm, plz: e.target.value })} /></div>
+                      <div><label className={labelCls}>Ort</label><input className={inputCls} value={editForm.ort} onChange={e => setEditForm({ ...editForm, ort: e.target.value })} /></div>
+                      <div><label className={labelCls}>Straße</label><input className={inputCls} value={editForm.strasse} onChange={e => setEditForm({ ...editForm, strasse: e.target.value })} /></div>
+                      <div><label className={labelCls}>HNR</label><input className={inputCls} value={editForm.hnr} onChange={e => setEditForm({ ...editForm, hnr: e.target.value })} /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className={labelCls}>Top</label><input className={inputCls} value={editForm.top} onChange={e => setEditForm({ ...editForm, top: e.target.value })} /></div>
+                      <div><label className={labelCls}>Stock</label><input className={inputCls} value={editForm.stock} onChange={e => setEditForm({ ...editForm, stock: e.target.value })} /></div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><label className={labelCls}>Fläche m²</label><input type="number" className={inputCls} value={editForm.flaeche_m2} onChange={e => setEditForm({ ...editForm, flaeche_m2: e.target.value })} /></div>
+                      <div><label className={labelCls}>Zimmer</label><input type="number" className={inputCls} value={editForm.zimmer} onChange={e => setEditForm({ ...editForm, zimmer: e.target.value })} /></div>
+                      <div><label className={labelCls}>Kaufpreis €</label><input type="number" className={inputCls} value={editForm.kaufpreis} onChange={e => setEditForm({ ...editForm, kaufpreis: e.target.value })} /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className={labelCls}>Käufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.kaeufer_provision} onChange={e => setEditForm({ ...editForm, kaeufer_provision: e.target.value })} /></div>
+                      <div><label className={labelCls}>Verkäufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.verkaeufer_provision} onChange={e => setEditForm({ ...editForm, verkaeufer_provision: e.target.value })} /></div>
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase">Kurzinfo</label>
-                      <input className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm" value={editForm.kurzinfo} onChange={e => setEditForm({ ...editForm, kurzinfo: e.target.value })} />
+                      <label className={labelCls}>Kurzinfo</label>
+                      <input className={inputCls} value={editForm.kurzinfo} onChange={e => setEditForm({ ...editForm, kurzinfo: e.target.value })} />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase">Beschreibung</label>
-                      <textarea className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm resize-none" rows={6} value={editForm.beschreibung} onChange={e => setEditForm({ ...editForm, beschreibung: e.target.value })} />
+                      <label className={labelCls}>Beschreibung</label>
+                      <textarea className={`${inputCls} resize-none`} rows={6} value={editForm.beschreibung} onChange={e => setEditForm({ ...editForm, beschreibung: e.target.value })} />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase">🔒 Interne Notizen</label>
-                      <textarea className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm resize-none bg-amber-50/50 dark:bg-amber-900/10" rows={2} value={editForm.interne_notizen} onChange={e => setEditForm({ ...editForm, interne_notizen: e.target.value })} />
+                      <label className={labelCls}>🔒 Interne Notizen</label>
+                      <textarea className={`${inputCls} resize-none bg-amber-50/50 dark:bg-amber-900/10`} rows={2} value={editForm.interne_notizen} onChange={e => setEditForm({ ...editForm, interne_notizen: e.target.value })} />
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => setEditing(false)} className="flex-1 border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-accent">Abbrechen</button>
-                      <button onClick={saveEdit} disabled={savingEdit} className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange flex items-center justify-center gap-2">
-                        {savingEdit ? <RefreshCw size={14} className="animate-spin" /> : null} Speichern
+                      <button onClick={() => saveEdit(false)} disabled={savingEdit} className="flex-1 bg-foreground text-background rounded-xl py-2.5 text-sm font-bold flex items-center justify-center gap-2">
+                        {savingEdit ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />} Intern speichern
                       </button>
                     </div>
+                    <button onClick={() => saveEdit(true)} disabled={savingEdit} className="w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange flex items-center justify-center gap-2">
+                      <Copy size={14} /> Speichern & an ImmoZ übertragen
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-2 text-sm mb-4">
                     <div className="flex justify-between"><span className="text-muted-foreground">Objektnummer</span><span className="font-semibold">{detailObj.objektnummer || "–"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Art</span><span className="font-semibold">{detailObj.objektart}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Vermarktung</span><span className="font-semibold">{detailObj.verkaufsart || "Kauf"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Adresse</span><span className="font-semibold">{[detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ") || "–"}</span></div>
                     {detailObj.top && <div className="flex justify-between"><span className="text-muted-foreground">Top</span><span className="font-semibold">{detailObj.top}</span></div>}
                     {detailObj.stock && <div className="flex justify-between"><span className="text-muted-foreground">Stock</span><span className="font-semibold">{detailObj.stock}</span></div>}
                     <div className="flex justify-between"><span className="text-muted-foreground">Fläche</span><span className="font-semibold">{detailObj.flaeche_m2 ? `${detailObj.flaeche_m2} m²` : "–"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Zimmer</span><span className="font-semibold">{detailObj.zimmer || "–"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Preis</span><span className="font-bold text-primary">{detailObj.kaufpreis ? `€${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "auf Anfrage"}</span></div>
                     {detailObj.kaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Käufer-Provision</span><span className="font-semibold">{detailObj.kaeufer_provision}%</span></div>}
                     {detailObj.verkaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Verkäufer-Provision</span><span className="font-semibold">{detailObj.verkaeufer_provision}%</span></div>}

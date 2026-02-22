@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, RefreshCw, Plus, Upload, Trash2, Sparkles, Save, Copy } from "lucide-react";
+import { X, RefreshCw, Plus, Upload, Trash2, Sparkles, Save, Copy, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -21,6 +21,8 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
   const [previews, setPreviews] = useState<string[]>([]);
   const [titleIndex, setTitleIndex] = useState(0);
   const [describingImages, setDescribingImages] = useState(false);
+  const [analyzingPlan, setAnalyzingPlan] = useState(false);
+  const [planPreviews, setPlanPreviews] = useState<string[]>([]);
   const [form, setForm] = useState({
     objektnummer: "", objektart: "", verkaufsart: "Kauf",
     plz: "", ort: "", strasse: "", hnr: "", top: "", stock: "",
@@ -79,6 +81,54 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
     }
   };
 
+  const handlePlanUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.slice(0, 3).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => setPlanPreviews(prev => [...prev, ev.target?.result as string]);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAnalyzePlan = async () => {
+    if (planPreviews.length === 0) return;
+    setAnalyzingPlan(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: { action: "analyze-floorplan", imageDataUrls: planPreviews },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const text = data.result || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        // Fill in recognized data
+        if (parsed.gesamtflaeche_ca && !form.flaeche) {
+          setForm(prev => ({ ...prev, flaeche: String(parsed.gesamtflaeche_ca) }));
+        }
+        if (parsed.zimmeranzahl && !form.zimmer) {
+          setForm(prev => ({ ...prev, zimmer: String(parsed.zimmeranzahl) }));
+        }
+        if (parsed.zusammenfassung) {
+          const summary = parsed.zusammenfassung.slice(0, KURZINFO_LIMIT);
+          setForm(prev => ({ ...prev, kurzinfo: prev.kurzinfo || summary }));
+        }
+        // Build room description
+        const roomLines = (parsed.raeume || []).map((r: { name: string; flaeche_ca?: number; merkmale?: string }) =>
+          `• ${r.name}${r.flaeche_ca ? ` (~${r.flaeche_ca} m²)` : ""}${r.merkmale ? ` – ${r.merkmale}` : ""}`
+        ).join("\n");
+        const planDesc = `Raumaufteilung:\n${roomLines}${parsed.raumtrennung_text ? `\n\nGrundriss: ${parsed.raumtrennung_text}` : ""}`;
+        setForm(prev => ({ ...prev, beschreibung: prev.beschreibung ? `${prev.beschreibung}\n\n${planDesc}` : planDesc }));
+        toast({ title: `✓ Plan analysiert: ${parsed.raeume?.length || 0} Räume erkannt` });
+      }
+    } catch (err: unknown) {
+      toast({ title: "Plan-Analyse fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setAnalyzingPlan(false);
+    }
+  };
+
   const handleSave = async (exportToImmoZ: boolean) => {
     if (!user || !form.objektart) {
       toast({ title: "Objektart ist Pflicht", variant: "destructive" });
@@ -112,7 +162,6 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
       if (error) throw error;
 
       if (photos.length > 0 && obj) {
-        // Upload title image first (index 0 in storage)
         const orderedPhotos = [...photos];
         if (titleIndex > 0) {
           const [title] = orderedPhotos.splice(titleIndex, 1);
@@ -131,17 +180,17 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
           objekte_ids: [obj.id], anzahl: 1, status: "Erfolgreich",
           dateiname: `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`,
         });
-        toast({ title: "✓ Objekt angelegt & an ImmoZ übertragen" });
+        toast({ title: "✅ Erfolgreich gespeichert & an ImmoZ übertragen", description: "Das Objekt ist jetzt online und in der Verwaltung sichtbar." });
       } else {
-        toast({ title: "✓ Als Entwurf gespeichert", description: "Nur intern sichtbar." });
+        toast({ title: "✅ Erfolgreich als Entwurf gespeichert", description: "Nur intern sichtbar – kann jederzeit veröffentlicht werden." });
       }
 
       setForm({ objektnummer: "", objektart: "", verkaufsart: "Kauf", plz: "", ort: "", strasse: "", hnr: "", top: "", stock: "", kurzinfo: "", flaeche: "", zimmer: "", kaufpreis: "", kaeufer_provision: "", verkaeufer_provision: "", interne_notizen: "", beschreibung: "" });
-      setPhotos([]); setPreviews([]); setTitleIndex(0);
+      setPhotos([]); setPreviews([]); setTitleIndex(0); setPlanPreviews([]);
       onSaved?.();
       onClose();
     } catch (err: unknown) {
-      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Unbekannt", variant: "destructive" });
+      toast({ title: "❌ Fehler beim Speichern", description: err instanceof Error ? err.message : "Unbekannter Fehler", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -280,6 +329,36 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
                   <><Sparkles size={14} className="text-primary" /> KI-Bilderkennung ({Math.min(previews.length, 10)} Fotos)</>
                 )}
               </button>
+            )}
+          </div>
+
+          {/* Plan-Analyse */}
+          <div className="border border-dashed border-primary/30 rounded-xl p-4 bg-primary/5">
+            <label className={`${labelCls} flex items-center gap-2 mb-2`}>
+              <FileText size={14} className="text-primary" /> Grundriss / Bauplan analysieren
+            </label>
+            <div className="flex gap-2 items-center">
+              <label className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground cursor-pointer hover:bg-accent transition-colors text-center">
+                {planPreviews.length > 0 ? `${planPreviews.length} Plan(e) geladen` : "Plan hochladen…"}
+                <input type="file" accept="image/*" multiple className="hidden" onChange={handlePlanUpload} />
+              </label>
+              <button onClick={handleAnalyzePlan} disabled={analyzingPlan || planPreviews.length === 0}
+                className="bg-primary text-primary-foreground rounded-xl px-4 py-2.5 text-sm font-semibold shadow-orange hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2">
+                {analyzingPlan ? <><RefreshCw size={14} className="animate-spin" /> Analysiert…</> : <><Sparkles size={14} /> Plan lesen</>}
+              </button>
+            </div>
+            {planPreviews.length > 0 && (
+              <div className="flex gap-2 mt-2">
+                {planPreviews.map((src, i) => (
+                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border">
+                    <img src={src} alt={`Plan ${i+1}`} className="w-full h-full object-cover" />
+                    <button onClick={() => setPlanPreviews(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute top-0.5 right-0.5 bg-foreground/60 text-white rounded-full p-0.5">
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
