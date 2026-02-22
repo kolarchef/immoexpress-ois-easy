@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { User, Mail, LogOut, Server, Sparkles, Link } from "lucide-react";
+import { User, Mail, LogOut, Server, Sparkles, Link, Key, AlertTriangle } from "lucide-react";
 
 export default function Profil() {
   const { user, signOut } = useAuth();
@@ -17,6 +17,7 @@ export default function Profil() {
   const [smtpPort, setSmtpPort] = useState("587");
   const [smtpUser, setSmtpUser] = useState("");
   const [elevenlabsApiKey, setElevenlabsApiKey] = useState("");
+  const [replicateApiKey, setReplicateApiKey] = useState("");
   const [videoWebhookUrl, setVideoWebhookUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -32,6 +33,7 @@ export default function Profil() {
         setSmtpPort(String((data as any).smtp_port || 587));
         setSmtpUser((data as any).smtp_user || "");
         setElevenlabsApiKey((data as any).elevenlabs_api_key || "");
+        setReplicateApiKey((data as any).replicate_api_key || "");
         setVideoWebhookUrl((data as any).video_webhook_url || "");
       }
     });
@@ -49,6 +51,7 @@ export default function Profil() {
       smtp_port: Number(smtpPort) || 587,
       smtp_user: smtpUser || null,
       elevenlabs_api_key: elevenlabsApiKey || null,
+      replicate_api_key: replicateApiKey || null,
       video_webhook_url: videoWebhookUrl || null,
     } as any).eq("user_id", user.id);
     if (error) toast.error(error.message);
@@ -56,11 +59,29 @@ export default function Profil() {
     setLoading(false);
   };
 
+  const hasReplicateKey = !!replicateApiKey;
+  const hasElevenlabsKey = !!elevenlabsApiKey;
+
   return (
     <div className="p-4 lg:p-8 max-w-2xl mx-auto space-y-6 animate-fade-in" style={{ paddingBottom: 200 }}>
       <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
         <User size={22} className="text-primary" /> Mein Profil
       </h1>
+
+      {/* API Key Status Banner */}
+      {(!hasReplicateKey || !hasElevenlabsKey) && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-amber-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-bold text-sm text-foreground">Bitte hinterlege deine API-Keys im Profil</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              KI-Funktionen wie Magic Eraser, Outpainting und Video-Generierung benötigen deine eigenen API-Keys.
+              {!hasReplicateKey && " ⚠ Replicate fehlt."}
+              {!hasElevenlabsKey && " ⚠ ElevenLabs fehlt."}
+            </p>
+          </div>
+        </div>
+      )}
 
       <section className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
         <div>
@@ -73,12 +94,35 @@ export default function Profil() {
         </div>
       </section>
 
-      {/* KI & Video Profi-Optionen */}
+      {/* KI API Keys */}
       <section className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
-        <h2 className="font-bold text-foreground flex items-center gap-2"><Sparkles size={18} className="text-primary" /> KI & Video (Profi-Optionen)</h2>
-        <p className="text-xs text-muted-foreground">Optional: Premium-Stimme via ElevenLabs und externe Video-KI via Webhook</p>
+        <h2 className="font-bold text-foreground flex items-center gap-2">
+          <Key size={18} className="text-primary" /> KI API-Keys (SaaS)
+        </h2>
+        <p className="text-xs text-muted-foreground">Jeder Nutzer verwendet seine eigenen API-Keys. Credits werden direkt bei den Anbietern abgerechnet.</p>
+
         <div>
-          <Label className="flex items-center gap-1.5"><Sparkles size={12} /> ElevenLabs API Key</Label>
+          <Label className="flex items-center gap-1.5">
+            <Key size={12} /> Replicate API Token
+            {hasReplicateKey && <span className="text-green-500 text-[10px] ml-1">✓ Aktiv</span>}
+          </Label>
+          <Input
+            type="password"
+            value={replicateApiKey}
+            onChange={e => setReplicateApiKey(e.target.value)}
+            placeholder="r8_..."
+            className="mt-1"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Für Magic Eraser, Outpainting & Video-KI. Erhältlich unter <span className="font-semibold">replicate.com/account/api-tokens</span>
+          </p>
+        </div>
+
+        <div>
+          <Label className="flex items-center gap-1.5">
+            <Sparkles size={12} /> ElevenLabs API Key
+            {hasElevenlabsKey && <span className="text-green-500 text-[10px] ml-1">✓ Aktiv</span>}
+          </Label>
           <Input
             type="password"
             value={elevenlabsApiKey}
@@ -86,8 +130,11 @@ export default function Profil() {
             placeholder="sk_..."
             className="mt-1"
           />
-          <p className="text-[10px] text-muted-foreground mt-1">Für Premium-Voiceover im Video-Rundgang. Erhältlich unter elevenlabs.io</p>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Für Premium-Voiceover. Erhältlich unter <span className="font-semibold">elevenlabs.io</span>
+          </p>
         </div>
+
         <div>
           <Label className="flex items-center gap-1.5"><Link size={12} /> Webhook-URL für Video-KI</Label>
           <Input

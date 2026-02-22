@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN replicate_api_key text;
