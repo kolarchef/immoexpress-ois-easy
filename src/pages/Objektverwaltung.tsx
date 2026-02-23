@@ -611,24 +611,33 @@ export default function Objektverwaltung() {
                   <Eye size={14} /> Expos\u00e9 Vorschau & Senden
                 </button>
 
-                {/* One-Click Sharing */}
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <button onClick={() => {
-                  const addr = [detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ");
-                    const kiText = `🏠 *${detailObj.kurzinfo || detailObj.objektart}*\n📍 ${addr}\n💰 ${detailObj.kaufpreis ? `€${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "Preis auf Anfrage"}\n📐 ${detailObj.flaeche_m2 || "–"} m² · ${detailObj.zimmer || "–"} Zimmer\n\n${(detailObj.beschreibung || "").slice(0, 200)}${(detailObj.beschreibung || "").length > 200 ? "…" : ""}\n\n👉 Mehr Infos: https://immoexpress.at/objekt/${detailObj.id}`;
-                    window.open(`https://wa.me/?text=${encodeURIComponent(kiText)}`, "_blank");
-                    if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "expose", kanal: "whatsapp" });
-                  }} className="bg-green-600 text-white rounded-xl py-2 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-700 transition-all active:scale-95">
-                    <MessageCircle size={13} /> WhatsApp
-                  </button>
-                  <button onClick={() => {
-                    const subject = detailObj.kurzinfo || detailObj.objektart || "Immobilie";
-                    const body = `${subject}\nPreis: ${detailObj.kaufpreis ? `\u20AC${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "auf Anfrage"}\nFl\u00e4che: ${detailObj.flaeche_m2 || "\u2013"} m\u00B2`;
-                    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
-                    if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "expose", kanal: "email" });
-                  }} className="bg-card border border-border text-foreground rounded-xl py-2 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-accent transition-all active:scale-95">
-                    <Mail size={13} /> E-Mail
-                  </button>
+                {/* One-Click Share Bundle */}
+                <div className="bg-accent rounded-2xl p-3 border border-border mb-4">
+                  <h4 className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
+                    <Share2 size={12} className="text-primary" /> One-Click-Share Paket
+                  </h4>
+                  <p className="text-[10px] text-muted-foreground mb-2.5">
+                    Exposé + Analyse-Link + Video gebündelt versenden
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => {
+                      const addr = [detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ");
+                      const kiText = `🏠 *${detailObj.kurzinfo || detailObj.objektart}*\n📍 ${addr}\n💰 ${detailObj.kaufpreis ? `€${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "Preis auf Anfrage"}\n📐 ${detailObj.flaeche_m2 || "–"} m² · ${detailObj.zimmer || "–"} Zimmer\n\n${(detailObj.beschreibung || "").slice(0, 200)}${(detailObj.beschreibung || "").length > 200 ? "…" : ""}\n\n📄 Exposé: https://immoexpress.at/objekt/${detailObj.id}\n🎬 Video: https://immoexpress.at/video/${detailObj.id}`;
+                      window.open(`https://wa.me/?text=${encodeURIComponent(kiText)}`, "_blank");
+                      if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "expose", kanal: "whatsapp" });
+                    }} className="bg-green-600 text-white rounded-xl py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-700 transition-all active:scale-95">
+                      <MessageCircle size={13} /> WhatsApp
+                    </button>
+                    <button onClick={() => {
+                      const subject = detailObj.kurzinfo || detailObj.objektart || "Immobilie";
+                      const addr = [detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ");
+                      const body = `${subject}\n\n📍 ${addr}\nPreis: ${detailObj.kaufpreis ? `€${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "auf Anfrage"}\nFläche: ${detailObj.flaeche_m2 || "–"} m²\n\n${(detailObj.beschreibung || "").slice(0, 300)}\n\n📄 Exposé: https://immoexpress.at/objekt/${detailObj.id}\n🎬 Video: https://immoexpress.at/video/${detailObj.id}`;
+                      window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+                      if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "expose", kanal: "email" });
+                    }} className="bg-card border border-border text-foreground rounded-xl py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-accent transition-all active:scale-95">
+                      <Mail size={13} /> E-Mail
+                    </button>
+                  </div>
                 </div>
 
                 <div className="border-t border-border pt-4">

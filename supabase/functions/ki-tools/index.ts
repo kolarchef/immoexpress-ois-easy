@@ -190,6 +190,40 @@ Antworte als JSON-Objekt:
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
+    } else if (action === "outpainting") {
+      // Outpainting: Erweitere schmale Fotos zu Weitwinkel-Aufnahmen
+      model = "google/gemini-2.5-flash-image";
+      const outpaintContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+        { type: "text", text: context || "Erweitere dieses Immobilienfoto nach links und rechts zu einer beeindruckenden Weitwinkel-Aufnahme. Halte den Stil konsistent, photorealistisch. Die Erweiterung soll die Umgebung der Immobilie natürlich ergänzen." }
+      ];
+      const outpaintImages = (imageDataUrls || []).slice(0, 1);
+      for (const imgUrl of outpaintImages) {
+        outpaintContent.push({ type: "image_url", image_url: { url: imgUrl } });
+      }
+      messages = [{ role: "user", content: outpaintContent }];
+
+      const outpaintResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ model, messages, modalities: ["image", "text"], stream: false }),
+      });
+
+      if (!outpaintResponse.ok) {
+        const errText = await outpaintResponse.text();
+        throw new Error(`KI-Gateway Fehler [${outpaintResponse.status}]: ${errText}`);
+      }
+
+      const outpaintData = await outpaintResponse.json();
+      const outpaintResultImages = outpaintData.choices?.[0]?.message?.images || [];
+      const outpaintedImageUrl = outpaintResultImages[0]?.image_url?.url || null;
+
+      return new Response(JSON.stringify({ result: "Outpainting fertig", editedImage: outpaintedImageUrl, model }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+
     } else {
       throw new Error("Unbekannte Aktion: " + action);
     }
