@@ -58,6 +58,7 @@ export default function Expose() {
   const [notebookLmText, setNotebookLmText] = useState("");
   const [sprachnotizen, setSprachnotizen] = useState("");
   const [sendingWebhook, setSendingWebhook] = useState(false);
+  const [videoFormat, setVideoFormat] = useState<"16:9" | "9:16">("16:9");
   const [form, setForm] = useState({
     titel: "", objektnummer: "", bezirk: "", plz: "", ort: "", strasse: "", hnr: "",
     objektart: "", kaufpreis: "", miete: "",
@@ -212,6 +213,7 @@ export default function Expose() {
       const payload = {
         action: "video-generieren",
         template: selectedTemplate,
+        video_format: videoFormat,
         timestamp: new Date().toISOString(),
         objekt: {
           titel: form.titel,

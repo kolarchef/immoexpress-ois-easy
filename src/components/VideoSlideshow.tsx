@@ -4,6 +4,8 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import logoImg from "@/assets/logo_immoexpress_zug.jpeg";
 
+export type VideoFormat = "16:9" | "9:16";
+
 interface VideoSlideshowProps {
   images: string[];
   titel: string;
@@ -14,9 +16,11 @@ interface VideoSlideshowProps {
   maklerName?: string;
   maklerEmail?: string;
   onShare?: (type: "whatsapp" | "email") => void;
+  videoFormat?: VideoFormat;
+  onFormatChange?: (format: VideoFormat) => void;
 }
 
-export default function VideoSlideshow({ images, titel, preis, flaeche, zimmer, beschreibung, maklerName, maklerEmail, onShare }: VideoSlideshowProps) {
+export default function VideoSlideshow({ images, titel, preis, flaeche, zimmer, beschreibung, maklerName, maklerEmail, onShare, videoFormat = "16:9", onFormatChange }: VideoSlideshowProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -160,8 +164,15 @@ export default function VideoSlideshow({ images, titel, preis, flaeche, zimmer, 
       const canvas = canvasRef.current;
       if (!canvas) throw new Error("Canvas nicht verfügbar");
       const ctx = canvas.getContext("2d")!;
-      canvas.width = 1280;
-      canvas.height = 720;
+      
+      // Set canvas size based on format
+      if (videoFormat === "9:16") {
+        canvas.width = 720;
+        canvas.height = 1280;
+      } else {
+        canvas.width = 1280;
+        canvas.height = 720;
+      }
 
       const stream = canvas.captureStream(30);
       const audioCtx = new AudioContext();
@@ -320,6 +331,36 @@ export default function VideoSlideshow({ images, titel, preis, flaeche, zimmer, 
           <Switch checked={voiceGender === "male"} onCheckedChange={c => setVoiceGender(c ? "male" : "female")} />
           <span className="text-xs text-muted-foreground">♂️</span>
         </div>
+      </div>
+
+      {/* Format Selection (9:16 / 16:9) */}
+      <div className="bg-card border border-border rounded-xl px-4 py-3 space-y-2">
+        <p className="text-sm font-semibold text-foreground">Videoformat</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onFormatChange?.("16:9")}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all border ${
+              videoFormat === "16:9"
+                ? "bg-primary text-primary-foreground border-primary shadow-orange"
+                : "bg-accent text-foreground border-border hover:bg-secondary"
+            }`}
+          >
+            <span className="inline-block w-6 h-4 border-2 border-current rounded-sm" /> 16:9 Quer
+          </button>
+          <button
+            onClick={() => onFormatChange?.("9:16")}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all border ${
+              videoFormat === "9:16"
+                ? "bg-primary text-primary-foreground border-primary shadow-orange"
+                : "bg-accent text-foreground border-border hover:bg-secondary"
+            }`}
+          >
+            <span className="inline-block w-4 h-6 border-2 border-current rounded-sm" /> 9:16 Hoch
+          </button>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          {videoFormat === "9:16" ? "Social Media (Instagram Reels, TikTok, Stories)" : "YouTube, Website, Präsentation"}
+        </p>
       </div>
 
       {/* Action Buttons */}

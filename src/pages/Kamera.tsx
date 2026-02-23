@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle, Cloud, CloudOff, Bug, GripVertical, Plus, Trash2, Pencil, Save, Palette } from "lucide-react";
+import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle, Cloud, CloudOff, Bug, GripVertical, Plus, Trash2, Pencil, Save, Palette, Wand2, Crop, RectangleVertical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -49,6 +49,10 @@ export default function Kamera() {
   const [newWallStart, setNewWallStart] = useState<WallPoint | null>(null);
   const [saving, setSaving] = useState(false);
   const [annotationId, setAnnotationId] = useState<string | null>(null);
+  const [magicEditing, setMagicEditing] = useState(false);
+  const [magicPrompt, setMagicPrompt] = useState("");
+  const [editedImage, setEditedImage] = useState<string | null>(null);
+  const [smartCropping, setSmartCropping] = useState(false);
 
   const effectiveOnline = isOnline && !simulateOffline;
 
@@ -252,6 +256,65 @@ export default function Kamera() {
     }
   };
 
+  const handleMagicEdit = async () => {
+    if (!capturedImage) return;
+    setMagicEditing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: {
+          action: "magic-edit",
+          imageDataUrls: [capturedImage],
+          context: magicPrompt || "Entferne störende Objekte, verbessere das Foto für ein professionelles Immobilien-Exposé.",
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.editedImage) {
+        setEditedImage(data.editedImage);
+        toast({ title: "✨ Magic Tool fertig", description: "Bearbeitetes Bild wird angezeigt." });
+      } else {
+        toast({ title: "Kein bearbeitetes Bild erhalten", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Magic Tool fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setMagicEditing(false);
+    }
+  };
+
+  const handleSmartCrop = async () => {
+    if (!capturedImage) return;
+    setSmartCropping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: {
+          action: "smart-crop",
+          imageDataUrls: [capturedImage],
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.editedImage) {
+        setEditedImage(data.editedImage);
+        toast({ title: "✅ Smart Crop fertig", description: "Bild auf 9:16 zugeschnitten – Fokus auf Immobilie." });
+      } else {
+        toast({ title: "Kein zugeschnittenes Bild erhalten", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Smart Crop fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setSmartCropping(false);
+    }
+  };
+
+  const applyEditedImage = () => {
+    if (editedImage) {
+      setCapturedImage(editedImage);
+      setEditedImage(null);
+      toast({ title: "✓ Bearbeitetes Bild übernommen" });
+    }
+  };
+
   return (
     <div className="p-4 lg:p-8 animate-fade-in max-w-3xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
@@ -439,7 +502,7 @@ export default function Kamera() {
               </div>
             </div>
           )}
-          <button onClick={() => { setCapturedImage(null); setAnalyzedRooms([]); setWalls([]); setScanMode("none"); setEditMode(false); }}
+          <button onClick={() => { setCapturedImage(null); setEditedImage(null); setAnalyzedRooms([]); setWalls([]); setScanMode("none"); setEditMode(false); }}
             className="absolute top-3 right-3 bg-foreground/60 text-white rounded-full p-1.5" style={{ zIndex: 30 }}>
             <X size={16} />
           </button>
@@ -463,7 +526,61 @@ export default function Kamera() {
         </div>
       )}
 
-      {/* Edit Mode Toolbar */}
+      {/* Magic Tool & Smart Crop Toolbar */}
+      {capturedImage && scanMode !== "bauplan" && (
+        <div className="mb-3 bg-card border border-border rounded-2xl p-4 shadow-card space-y-3">
+          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <Wand2 size={14} className="text-primary" /> Artlist Magic Tools
+          </h3>
+
+          <div className="space-y-2">
+            <input
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="z.B. Entferne den Müll, verbessere die Beleuchtung…"
+              value={magicPrompt}
+              onChange={(e) => setMagicPrompt(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={handleMagicEdit}
+                disabled={magicEditing}
+                className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all disabled:opacity-50"
+              >
+                {magicEditing ? <><RefreshCw size={14} className="animate-spin" /> Bearbeite…</> : <><Wand2 size={14} /> Magic Edit</>}
+              </button>
+              <button
+                onClick={handleSmartCrop}
+                disabled={smartCropping}
+                className="flex items-center justify-center gap-2 bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-bold hover:bg-secondary transition-all disabled:opacity-50"
+              >
+                {smartCropping ? <><RefreshCw size={14} className="animate-spin" /> Croppe…</> : <><Crop size={14} /> Smart Crop 9:16</>}
+              </button>
+            </div>
+          </div>
+
+          {editedImage && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-primary">✨ Bearbeitetes Ergebnis:</p>
+              <img src={editedImage} alt="Bearbeitet" className="w-full rounded-xl border border-primary/30 max-h-[40vh] object-contain" />
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={applyEditedImage}
+                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-2 text-sm font-bold hover:opacity-90 transition-all"
+                >
+                  <Check size={14} /> Übernehmen
+                </button>
+                <button
+                  onClick={() => setEditedImage(null)}
+                  className="flex items-center justify-center gap-2 bg-accent text-foreground border border-border rounded-xl py-2 text-sm font-bold hover:bg-secondary transition-all"
+                >
+                  <X size={14} /> Verwerfen
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {scanMode === "bauplan" && walls.length > 0 && (
         <div className="mb-3 bg-card border border-border rounded-2xl p-3 shadow-card">
           <div className="flex items-center justify-between mb-2">

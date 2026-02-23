@@ -119,6 +119,77 @@ Antworte als JSON-Objekt:
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    } else if (action === "magic-edit") {
+      // Magic Tool: KI-basierte Bildbearbeitung (Objekte entfernen, verbessern)
+      model = "google/gemini-2.5-flash-image";
+      const editContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+        { type: "text", text: context || "Entferne störende Objekte aus diesem Immobilienfoto. Halte die Szene sauber und professionell. Photorealistisch." }
+      ];
+      const editImages = (imageDataUrls || []).slice(0, 1);
+      for (const imgUrl of editImages) {
+        editContent.push({ type: "image_url", image_url: { url: imgUrl } });
+      }
+      messages = [{ role: "user", content: editContent }];
+
+      // Use image generation endpoint
+      const editResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ model, messages, modalities: ["image", "text"], stream: false }),
+      });
+
+      if (!editResponse.ok) {
+        const errText = await editResponse.text();
+        throw new Error(`KI-Gateway Fehler [${editResponse.status}]: ${errText}`);
+      }
+
+      const editData = await editResponse.json();
+      const editText = editData.choices?.[0]?.message?.content || "";
+      const editImages2 = editData.choices?.[0]?.message?.images || [];
+      const editedImageUrl = editImages2[0]?.image_url?.url || null;
+
+      return new Response(JSON.stringify({ result: editText, editedImage: editedImageUrl, model }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+
+    } else if (action === "smart-crop") {
+      // Smart Cropping: KI-basiertes Zuschneiden für Portrait-Format
+      model = "google/gemini-2.5-flash-image";
+      const cropContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+        { type: "text", text: "Schneide dieses Immobilienfoto auf ein 9:16 Hochformat zu. Der Fokus muss auf dem Gebäude / der Immobilie liegen. Das Hauptobjekt muss perfekt zentriert und vollständig sichtbar sein. Photorealistisch, keine Artefakte." }
+      ];
+      const cropImages = (imageDataUrls || []).slice(0, 1);
+      for (const imgUrl of cropImages) {
+        cropContent.push({ type: "image_url", image_url: { url: imgUrl } });
+      }
+      messages = [{ role: "user", content: cropContent }];
+
+      const cropResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ model, messages, modalities: ["image", "text"], stream: false }),
+      });
+
+      if (!cropResponse.ok) {
+        const errText = await cropResponse.text();
+        throw new Error(`KI-Gateway Fehler [${cropResponse.status}]: ${errText}`);
+      }
+
+      const cropData = await cropResponse.json();
+      const cropText = cropData.choices?.[0]?.message?.content || "";
+      const cropResultImages = cropData.choices?.[0]?.message?.images || [];
+      const croppedImageUrl = cropResultImages[0]?.image_url?.url || null;
+
+      return new Response(JSON.stringify({ result: cropText, editedImage: croppedImageUrl, model }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+
     } else {
       throw new Error("Unbekannte Aktion: " + action);
     }
