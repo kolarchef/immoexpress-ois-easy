@@ -1,34 +1,14 @@
-import {
-  MapPin,
-  Clock,
-  Users,
-  Building2,
-  ShieldAlert,
-  GraduationCap,
-  FileText,
-  ArrowLeftRight,
-  Video,
-  FolderPlus,
-  Search as SearchIcon,
-  ShoppingCart,
-  CheckSquare,
-  FileSearch,
-  Calculator,
-  Handshake,
-  TrendingUp,
-  Clipboard,
-  KeyRound,
-  Scale,
-  BookOpen,
-  Mic,
-  MicOff,
-  X,
-  ChevronRight,
-  Loader2,
-  FileCheck,
-  BarChart3,
-  Home,
-  Star,
-  ChevronDown,
-  Menu,
-} from "lucide-react";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
+const Index = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    navigate("/launchpad", { replace: true });
+  }, [navigate]);
+
+  return null;
+};
+
+export default Index;
