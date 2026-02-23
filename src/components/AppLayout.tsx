@@ -44,7 +44,7 @@ export default function AppLayout() {
       const res = await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "sprachnotiz", text: lastTranscript, timestamp: new Date().toISOString() }),
+        body: JSON.stringify({ action: "notiz_speichern", payload: { text: lastTranscript, timestamp: new Date().toISOString() } }),
       });
       if (res.ok) {
         toast({ title: "✅ Notiz gesendet", description: "Sprachnotiz wurde an Make.com übermittelt." });

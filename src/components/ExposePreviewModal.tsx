@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import jsPDF from "jspdf";
 import type { PdfTemplate } from "@/pages/Expose";
+import { getWebhookUrl } from "@/lib/getWebhookUrl";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ExposeData {
   titel: string;
@@ -48,6 +50,7 @@ const templateLabels: Record<PdfTemplate, string> = {
 };
 
 export default function ExposePreviewModal({ open, onClose, data, template }: Props) {
+  const { user } = useAuth();
   const [step, setStep] = useState<"preview" | "send">("preview");
   const [kunden, setKunden] = useState<Kunde[]>([]);
   const [search, setSearch] = useState("");
@@ -212,6 +215,27 @@ ${data.aiText ? `<div class="section"><h3>KI-Analyse</h3><div style="background:
     if (k) setKunden(k);
   };
 
+  const notifyWebhook = async (action: string, extra: Record<string, unknown> = {}) => {
+    if (!user) return;
+    try {
+      const webhookUrl = await getWebhookUrl(user.id);
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          payload: {
+            timestamp: new Date().toISOString(),
+            template,
+            objekt: { titel: data.titel, objektnummer: data.objektnummer, bezirk: data.bezirk, objektart: data.objektart, verkaufsart: data.verkaufsart },
+            user_id: user.id,
+            ...extra,
+          },
+        }),
+      });
+    } catch { /* silent */ }
+  };
+
   const confirmAndSend = () => {
     setStep("send");
     loadKunden();
@@ -326,6 +350,7 @@ ${data.aiText ? `<div class="section"><h3>KI-Analyse</h3><div style="background:
     doc.text("ImmoExpress GmbH · ÖVI-Mitglied", 15, 284);
 
     doc.save(`${template}_${data.objektnummer || data.titel || "Immobilie"}.pdf`);
+    notifyWebhook("expose_pdf_download");
   };
 
   const sendTo = (kunde: Kunde, via: "wa" | "email") => {
@@ -336,6 +361,7 @@ ${data.aiText ? `<div class="section"><h3>KI-Analyse</h3><div style="background:
     } else if (via === "email" && kunde.email) {
       window.open(`mailto:${kunde.email}?subject=${encodeURIComponent(`Exposé: ${data.titel}`)}&body=${encodeURIComponent(text)}`, "_blank");
     }
+    notifyWebhook("expose_pdf_senden", { kunde_name: kunde.name, kanal: via });
     onClose();
   };
 
