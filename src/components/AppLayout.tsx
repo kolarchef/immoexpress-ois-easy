@@ -1,11 +1,12 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle, Mic, MicOff, X } from "lucide-react";
+import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle, Mic, MicOff, X, Send, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import MessengerDrawer from "@/components/MessengerDrawer";
 import AudioRecorder from "@/components/AudioRecorder";
 import logoImg from "@/assets/logo_immoexpress_zug.jpeg";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const bottomNav = [
   { path: "/", icon: LayoutDashboard, label: "Home" },
@@ -16,15 +17,50 @@ const bottomNav = [
 
 export default function AppLayout() {
   const navigate = useNavigate();
-  const { displayName } = useAuth();
+  const { displayName, user } = useAuth();
   const [showMicPanel, setShowMicPanel] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
+  const [sendingNote, setSendingNote] = useState(false);
 
   const handleTranscript = (text: string) => {
     setLastTranscript(text);
     // Copy to clipboard for easy pasting
     navigator.clipboard?.writeText(text);
     toast({ title: "🎙️ Sprachnotiz aufgenommen", description: "Text wurde kopiert – füge ihn im Exposé oder Objekt ein." });
+  };
+
+  const handleSendNote = async () => {
+    if (!lastTranscript.trim()) {
+      toast({ title: "Kein Text vorhanden", description: "Bitte zuerst eine Sprachnotiz aufnehmen.", variant: "destructive" });
+      return;
+    }
+    if (!user) {
+      toast({ title: "Bitte einloggen", variant: "destructive" });
+      return;
+    }
+    setSendingNote(true);
+    try {
+      const { data: profile } = await supabase.from("profiles").select("make_webhook_url").eq("user_id", user.id).single();
+      const webhookUrl = (profile as any)?.make_webhook_url;
+      if (!webhookUrl) {
+        toast({ title: "Kein Webhook konfiguriert", description: "Bitte hinterlege deine Make.com Webhook-URL im Profil.", variant: "destructive" });
+        return;
+      }
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "sprachnotiz", text: lastTranscript, timestamp: new Date().toISOString() }),
+      });
+      if (res.ok) {
+        toast({ title: "✅ Notiz gesendet", description: "Sprachnotiz wurde an Make.com übermittelt." });
+      } else {
+        throw new Error(`Webhook Fehler: ${res.status}`);
+      }
+    } catch (err: unknown) {
+      toast({ title: "Senden fehlgeschlagen", description: err instanceof Error ? err.message : "Unbekannter Fehler", variant: "destructive" });
+    } finally {
+      setSendingNote(false);
+    }
   };
 
   return (
@@ -86,6 +122,13 @@ export default function AppLayout() {
               <p className="text-sm text-foreground">{lastTranscript}</p>
             </div>
           )}
+          <button
+            onClick={handleSendNote}
+            disabled={!lastTranscript.trim() || sendingNote}
+            className="mt-3 w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50"
+          >
+            {sendingNote ? <><Loader2 size={14} className="animate-spin" /> Wird gesendet…</> : <><Send size={14} /> Notiz senden</>}
+          </button>
         </div>
       )}
 
