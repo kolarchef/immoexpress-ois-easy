@@ -6,7 +6,7 @@ import MessengerDrawer from "@/components/MessengerDrawer";
 import AudioRecorder from "@/components/AudioRecorder";
 import logoImg from "@/assets/logo_immoexpress_zug.jpeg";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { getWebhookUrl } from "@/lib/getWebhookUrl";
 
 const bottomNav = [
   { path: "/", icon: LayoutDashboard, label: "Home" },
@@ -40,12 +40,7 @@ export default function AppLayout() {
     }
     setSendingNote(true);
     try {
-      const { data: profile } = await supabase.from("profiles").select("make_webhook_url").eq("user_id", user.id).single();
-      const webhookUrl = (profile as any)?.make_webhook_url;
-      if (!webhookUrl) {
-        toast({ title: "Kein Webhook konfiguriert", description: "Bitte hinterlege deine Make.com Webhook-URL im Profil.", variant: "destructive" });
-        return;
-      }
+      const webhookUrl = await getWebhookUrl(user.id);
       const res = await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -6,6 +6,7 @@ import AudioRecorder from "@/components/AudioRecorder";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { getWebhookUrl } from "@/lib/getWebhookUrl";
 
 const bundeslaender = [
   "Wien – 1. Bezirk (Innere Stadt)", "Wien – 2. Bezirk (Leopoldstadt)", "Wien – 3. Bezirk (Landstraße)",
@@ -202,13 +203,8 @@ export default function Expose() {
     if (!user) { toast({ title: "Bitte einloggen", variant: "destructive" }); return; }
     setSendingWebhook(true);
     try {
-      // Load user's webhook URL from profile
-      const { data: profile } = await supabase.from("profiles").select("make_webhook_url").eq("user_id", user.id).single();
-      const webhookUrl = (profile as any)?.make_webhook_url;
-      if (!webhookUrl) {
-        toast({ title: "Kein Webhook konfiguriert", description: "Bitte hinterlege deine Make.com Webhook-URL im Profil.", variant: "destructive" });
-        return;
-      }
+      // Load user's webhook URL from profile (with fallback)
+      const webhookUrl = await getWebhookUrl(user.id);
 
       const payload = {
         action: "video-generieren",
