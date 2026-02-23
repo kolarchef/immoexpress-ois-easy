@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus, Eye, Sparkles, Save } from "lucide-react";
+import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus, Eye, Sparkles, Save, Mic, BookOpen, LayoutTemplate, Send } from "lucide-react";
 import ObjektModal from "@/components/ObjektModal";
 import ExposePreviewModal from "@/components/ExposePreviewModal";
+import AudioRecorder from "@/components/AudioRecorder";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
 const bundeslaender = [
@@ -23,6 +25,14 @@ const objektarten = ["Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Dopp
 
 const KURZBESCHREIBUNG_LIMIT = 2000;
 
+export type PdfTemplate = "quick-check" | "expose-style" | "investment";
+
+const pdfTemplates: { id: PdfTemplate; label: string; icon: string; desc: string }[] = [
+  { id: "quick-check", label: "Quick-Check", icon: "⚡", desc: "Kompakt · Infografiken · Harte Fakten" },
+  { id: "expose-style", label: "Exposé-Style", icon: "🏠", desc: "Emotional · Große Bilder · Sprachnotizen" },
+  { id: "investment", label: "Investment-Analyse", icon: "📊", desc: "Seriös · Tabellen · Marktdaten" },
+];
+
 interface ImageDesc {
   index: number;
   label: string;
@@ -30,6 +40,7 @@ interface ImageDesc {
 }
 
 export default function Expose() {
+  const { user } = useAuth();
   const [images, setImages] = useState<string[]>([]);
   const [titleImageIndex, setTitleImageIndex] = useState(0);
   const [aiText, setAiText] = useState("");
@@ -43,6 +54,10 @@ export default function Expose() {
   const [imageDescriptions, setImageDescriptions] = useState<ImageDesc[]>([]);
   const [describingImages, setDescribingImages] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<PdfTemplate>("expose-style");
+  const [notebookLmText, setNotebookLmText] = useState("");
+  const [sprachnotizen, setSprachnotizen] = useState("");
+  const [sendingWebhook, setSendingWebhook] = useState(false);
   const [form, setForm] = useState({
     titel: "", objektnummer: "", bezirk: "", plz: "", ort: "", strasse: "", hnr: "",
     objektart: "", kaufpreis: "", miete: "",
@@ -98,9 +113,12 @@ export default function Expose() {
     try {
       const formData = {
         ...form,
-        beschreibung: withKorrektur && korrekturText
-          ? `${form.beschreibung}\n\nKorrektur-Hinweis: ${korrekturText}`
-          : form.beschreibung,
+        beschreibung: [
+          form.beschreibung,
+          sprachnotizen ? `\n\nSprachnotizen vom Objekt:\n${sprachnotizen}` : "",
+          notebookLmText ? `\n\nNotebookLM-Analyse:\n${notebookLmText}` : "",
+          withKorrektur && korrekturText ? `\n\nKorrektur-Hinweis: ${korrekturText}` : "",
+        ].filter(Boolean).join(""),
       };
       const { data, error } = await supabase.functions.invoke("expose-ki", {
         body: { form: formData, imageDataUrls: images.slice(0, 5), laenge: exposeLaenge },
@@ -179,6 +197,77 @@ export default function Expose() {
     setShowPreview(true);
   };
 
+  const handleVideoWebhook = async () => {
+    if (!user) { toast({ title: "Bitte einloggen", variant: "destructive" }); return; }
+    setSendingWebhook(true);
+    try {
+      // Load user's webhook URL from profile
+      const { data: profile } = await supabase.from("profiles").select("make_webhook_url").eq("user_id", user.id).single();
+      const webhookUrl = (profile as any)?.make_webhook_url;
+      if (!webhookUrl) {
+        toast({ title: "Kein Webhook konfiguriert", description: "Bitte hinterlege deine Make.com Webhook-URL im Profil.", variant: "destructive" });
+        return;
+      }
+
+      const payload = {
+        action: "video-generieren",
+        template: selectedTemplate,
+        timestamp: new Date().toISOString(),
+        objekt: {
+          titel: form.titel,
+          objektnummer: form.objektnummer,
+          bezirk: form.bezirk,
+          plz: form.plz,
+          ort: form.ort,
+          strasse: form.strasse,
+          hnr: form.hnr,
+          objektart: form.objektart,
+          verkaufsart: form.verkaufsart,
+          kaufpreis: form.kaufpreis,
+          miete: form.miete,
+          flaeche: form.flaeche,
+          zimmer: form.zimmer,
+          provisionsstellung: form.provisionsstellung,
+        },
+        texte: {
+          ki_expose: aiText,
+          kurzbeschreibung,
+          beschreibung: form.beschreibung,
+          sprachnotizen,
+          notebook_lm: notebookLmText,
+        },
+        bilder_anzahl: images.length,
+        user_id: user.id,
+      };
+
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: { action: "test-webhook", context: webhookUrl, messageText: JSON.stringify(payload) },
+      });
+
+      // Also send directly to webhook with full payload
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        toast({ title: "✅ An Make.com gesendet", description: `Template: ${pdfTemplates.find(t => t.id === selectedTemplate)?.label}` });
+      } else {
+        throw new Error(`Webhook Fehler: ${res.status}`);
+      }
+    } catch (err: unknown) {
+      toast({ title: "Webhook-Fehler", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setSendingWebhook(false);
+    }
+  };
+
+  const handleSprachnotiz = (text: string) => {
+    setSprachnotizen(prev => prev ? `${prev} ${text}` : text);
+    toast({ title: "🎙️ Notiz hinzugefügt" });
+  };
+
   const formValid = form.titel && form.objektart;
   const kurzbeschreibungLen = kurzbeschreibung.length;
 
@@ -186,7 +275,7 @@ export default function Expose() {
     <div className="p-4 lg:p-8 space-y-5 animate-fade-in max-w-2xl mx-auto pb-28">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Exposé-Generator</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">KI-gestützt · Wiener Makler-Stil · PDF-Export</p>
+        <p className="text-muted-foreground text-sm mt-0.5">KI-gestützt · Wiener Makler-Stil · 3 PDF-Vorlagen</p>
       </div>
 
       {/* Objektdaten */}
@@ -291,7 +380,7 @@ export default function Expose() {
         </div>
       </div>
 
-      {/* Foto-Upload – kompakt */}
+      {/* Foto-Upload */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
         <div className="flex items-center gap-2 mb-3">
           <Image size={18} className="text-primary" />
@@ -365,7 +454,43 @@ export default function Expose() {
         )}
       </div>
 
-      {/* Beschreibung – groß, unter Bildern */}
+      {/* 🎙️ Sprachnotizen */}
+      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-3">
+        <div className="flex items-center gap-2">
+          <Mic size={18} className="text-primary" />
+          <h2 className="font-bold text-foreground">Sprachnotizen</h2>
+          <AudioRecorder onTranscript={handleSprachnotiz} className="ml-auto" />
+        </div>
+        <p className="text-xs text-muted-foreground">Sprich vor Ort ins Mikrofon – Text wird automatisch transkribiert und dem Exposé zugeordnet.</p>
+        <textarea
+          className="w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          rows={3} placeholder="Diktierte Notizen erscheinen hier…"
+          value={sprachnotizen} onChange={(e) => setSprachnotizen(e.target.value)}
+        />
+        {sprachnotizen && (
+          <p className="text-xs text-primary font-semibold">✓ {sprachnotizen.split(" ").length} Wörter · Wird im Exposé-Style PDF verwendet</p>
+        )}
+      </div>
+
+      {/* 📓 NotebookLM Import */}
+      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-3">
+        <div className="flex items-center gap-2">
+          <BookOpen size={18} className="text-primary" />
+          <h2 className="font-bold text-foreground">NotebookLM-Daten</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">Füge strukturierte Analyse-Outputs aus NotebookLM ein – für Video-Skripte und detaillierte Berichte.</p>
+        <textarea
+          className="w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          rows={5}
+          placeholder="NotebookLM-Output hier einfügen (Marktdaten, Infrastruktur-Analyse, Mietpreisentwicklung…)"
+          value={notebookLmText} onChange={(e) => setNotebookLmText(e.target.value)}
+        />
+        {notebookLmText && (
+          <p className="text-xs text-primary font-semibold">✓ {notebookLmText.length} Zeichen · Wird in KI-Textgenerierung & Investment-PDF verwendet</p>
+        )}
+      </div>
+
+      {/* Beschreibung */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Beschreibung / Notizen</label>
         <textarea className="mt-2 w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -434,7 +559,35 @@ export default function Expose() {
         )}
       </div>
 
-      {/* Aktions-Buttons – Selektive Speicher-Logik */}
+      {/* 📄 PDF-Vorlage wählen */}
+      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-3">
+        <div className="flex items-center gap-2">
+          <LayoutTemplate size={18} className="text-primary" />
+          <h2 className="font-bold text-foreground">PDF-Vorlage wählen</h2>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {pdfTemplates.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setSelectedTemplate(t.id)}
+              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
+                selectedTemplate === t.id
+                  ? "border-primary bg-primary/5 shadow-orange"
+                  : "border-border bg-surface hover:bg-accent"
+              }`}
+            >
+              <span className="text-2xl">{t.icon}</span>
+              <span className="text-sm font-bold text-foreground">{t.label}</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">{t.desc}</span>
+              {selectedTemplate === t.id && (
+                <span className="text-[10px] font-bold text-primary">✓ Ausgewählt</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Aktions-Buttons */}
       <div className="space-y-3">
         <button onClick={() => handleSave(true)} disabled={!formValid || saving}
           className="w-full bg-primary text-primary-foreground rounded-2xl py-4 text-base font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3">
@@ -450,6 +603,11 @@ export default function Expose() {
           className="w-full border border-border bg-card text-foreground rounded-2xl py-3.5 text-sm font-bold hover:bg-accent transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
           <Eye size={16} className="text-primary" /> PDF-Vorschau & Versenden
         </button>
+
+        <button onClick={handleVideoWebhook} disabled={!formValid || sendingWebhook}
+          className="w-full bg-foreground text-background rounded-2xl py-3.5 text-sm font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+          {sendingWebhook ? <><RefreshCw size={16} className="animate-spin" /> Wird gesendet…</> : <><Send size={16} /> Video generieren (Make.com)</>}
+        </button>
       </div>
 
       <div className="bg-accent rounded-xl p-4 border border-border">
@@ -461,7 +619,8 @@ export default function Expose() {
       <ExposePreviewModal
         open={showPreview}
         onClose={() => setShowPreview(false)}
-        data={{ ...form, aiText, kurzbeschreibung, images }}
+        data={{ ...form, aiText, kurzbeschreibung, images, sprachnotizen, notebookLmText }}
+        template={selectedTemplate}
       />
     </div>
   );

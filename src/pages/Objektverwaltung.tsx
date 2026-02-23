@@ -711,6 +711,7 @@ export default function Objektverwaltung() {
         <ExposePreviewModal
           open={showExposePreview}
           onClose={() => setShowExposePreview(false)}
+          template="expose-style"
           data={{
             titel: detailObj.kurzinfo || detailObj.objektart || "Immobilie",
             objektnummer: detailObj.objektnummer || "",
