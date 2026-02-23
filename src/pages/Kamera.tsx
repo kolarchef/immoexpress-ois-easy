@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle, Cloud, CloudOff, Bug, GripVertical, Plus, Trash2, Pencil, Save, Palette, Wand2, Crop, RectangleVertical } from "lucide-react";
+import { Camera, ScanLine, FileText, Image, Upload, Sparkles, RefreshCw, X, Check, AlertTriangle, Cloud, CloudOff, Bug, GripVertical, Plus, Trash2, Pencil, Save, Palette, Wand2, Crop, RectangleVertical, Expand } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -53,6 +53,7 @@ export default function Kamera() {
   const [magicPrompt, setMagicPrompt] = useState("");
   const [editedImage, setEditedImage] = useState<string | null>(null);
   const [smartCropping, setSmartCropping] = useState(false);
+  const [outpainting, setOutpainting] = useState(false);
 
   const effectiveOnline = isOnline && !simulateOffline;
 
@@ -307,6 +308,32 @@ export default function Kamera() {
     }
   };
 
+  const handleOutpainting = async () => {
+    if (!capturedImage) return;
+    setOutpainting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: {
+          action: "outpainting",
+          imageDataUrls: [capturedImage],
+          context: "Erweitere dieses Immobilienfoto zu einer beeindruckenden Weitwinkel-Aufnahme. Ergänze die Umgebung natürlich und photorealistisch.",
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.editedImage) {
+        setEditedImage(data.editedImage);
+        toast({ title: "🖼️ Outpainting fertig", description: "Foto wurde zu Weitwinkel erweitert." });
+      } else {
+        toast({ title: "Kein erweitertes Bild erhalten", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Outpainting fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setOutpainting(false);
+    }
+  };
+
   const applyEditedImage = () => {
     if (editedImage) {
       setCapturedImage(editedImage);
@@ -540,20 +567,27 @@ export default function Kamera() {
               value={magicPrompt}
               onChange={(e) => setMagicPrompt(e.target.value)}
             />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={handleMagicEdit}
                 disabled={magicEditing}
-                className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 bg-primary text-primary-foreground rounded-xl py-2.5 text-xs font-bold shadow-orange hover:opacity-90 transition-all disabled:opacity-50"
               >
-                {magicEditing ? <><RefreshCw size={14} className="animate-spin" /> Bearbeite…</> : <><Wand2 size={14} /> Magic Edit</>}
+                {magicEditing ? <><RefreshCw size={12} className="animate-spin" /> …</> : <><Wand2 size={12} /> Magic Edit</>}
               </button>
               <button
                 onClick={handleSmartCrop}
                 disabled={smartCropping}
-                className="flex items-center justify-center gap-2 bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-bold hover:bg-secondary transition-all disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 bg-accent text-foreground border border-border rounded-xl py-2.5 text-xs font-bold hover:bg-secondary transition-all disabled:opacity-50"
               >
-                {smartCropping ? <><RefreshCw size={14} className="animate-spin" /> Croppe…</> : <><Crop size={14} /> Smart Crop 9:16</>}
+                {smartCropping ? <><RefreshCw size={12} className="animate-spin" /> …</> : <><Crop size={12} /> Crop 9:16</>}
+              </button>
+              <button
+                onClick={handleOutpainting}
+                disabled={outpainting}
+                className="flex items-center justify-center gap-1.5 bg-accent text-foreground border border-border rounded-xl py-2.5 text-xs font-bold hover:bg-secondary transition-all disabled:opacity-50"
+              >
+                {outpainting ? <><RefreshCw size={12} className="animate-spin" /> …</> : <><Expand size={12} /> Outpaint</>}
               </button>
             </div>
           </div>
