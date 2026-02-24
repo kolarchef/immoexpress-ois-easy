@@ -34,6 +34,7 @@ type Objekt = {
   ort: string | null; objektart: string | null; zimmer: number | null;
   flaeche_m2: number | null; kaufpreis: number | null; status: string | null;
   objektnummer: string | null; kurzinfo: string | null;
+  beschreibung: string | null; stock: string | null; top: string | null;
 };
 
 type TresorNotiz = { id: string; notiz: string; created_at: string; updated_at: string };
@@ -346,7 +347,13 @@ export default function FinanzTresor() {
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1"><Mail size={12} />{selected.email || "–"}</span>
-                  <span className="flex items-center gap-1"><Phone size={12} />{selected.phone || "–"}</span>
+                  {selected.phone ? (
+                    <a href={`tel:${selected.phone}`} className="flex items-center gap-1 text-primary hover:underline font-semibold">
+                      <Phone size={12} />{selected.phone}
+                    </a>
+                  ) : (
+                    <span className="flex items-center gap-1"><Phone size={12} />–</span>
+                  )}
                   <span className="flex items-center gap-1"><MapPin size={12} />{selected.ort || "–"}</span>
                   <span className="flex items-center gap-1 font-bold text-primary"><Euro size={12} />{selected.budget || "–"}</span>
                 </div>
@@ -409,6 +416,64 @@ export default function FinanzTresor() {
 
               {/* ===== RIGHT MAIN AREA ===== */}
               <div className="flex-1 space-y-4">
+
+                {/* VERKNÜPFTES OBJEKT Card */}
+                <Card className="card-radius shadow-card border-2 border-primary/20">
+                  <CardContent className="p-5">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-4">
+                      <Building size={14} className="text-primary" /> Verknüpftes Objekt
+                    </h4>
+                    {objekt ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Adresse</p>
+                            <p className="text-sm font-semibold text-foreground">
+                              {[objekt.strasse, objekt.hnr].filter(Boolean).join(" ")}{objekt.top ? ` / Top ${objekt.top}` : ""}{objekt.stock ? ` / ${objekt.stock}. Stock` : ""}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{[objekt.plz, objekt.ort].filter(Boolean).join(" ")}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Kaufpreis</p>
+                            <p className="text-sm font-bold text-primary">{formatCurrency(objekt.kaufpreis)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Wohnfläche</p>
+                            <p className="text-sm font-semibold text-foreground">{objekt.flaeche_m2 ? `${objekt.flaeche_m2} m²` : "–"}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Objektart / Zimmer</p>
+                            <p className="text-sm font-semibold text-foreground">{objekt.objektart || "–"} · {objekt.zimmer ? `${objekt.zimmer} Zimmer` : "–"}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl gap-1.5"
+                            onClick={() => window.open(`/expose?objekt=${objekt.id}`, "_blank")}
+                          >
+                            <FileText size={13} /> Exposé-PDF öffnen
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="rounded-xl gap-1.5"
+                            onClick={() => {
+                              toast({ title: "Bank-Exposé wird generiert…", description: "Das PDF wird für den Bankversand vorbereitet." });
+                            }}
+                          >
+                            <FileText size={13} /> Bank-Exposé generieren
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-primary/30 rounded-xl p-6 text-center">
+                        <Building size={24} className="text-muted-foreground mx-auto mb-2" />
+                        <p className="text-xs text-muted-foreground">Kein Objekt verknüpft</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
                 {/* Card 1: FINANZIERUNGS-STATUS ÄNDERN - Runde Buttons mit farbigen Punkten */}
                 <Card className="card-radius shadow-card">
