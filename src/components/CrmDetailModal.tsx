@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Calendar, Home, Key, FileText, Upload, Download, Trash2, Loader2, Send, CheckCircle, FileSpreadsheet, File, ClipboardCheck, CircleCheck, Circle } from "lucide-react";
+import { X, Calendar, Home, Key, FileText, Upload, Download, Trash2, Loader2, Send, CheckCircle, FileSpreadsheet, File, ClipboardCheck, CircleCheck, Circle, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { sendAction } from "@/lib/sendAction";
@@ -44,10 +44,14 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
   const [loadingDoks, setLoadingDoks] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [financeShared, setFinanceShared] = useState(selected.finance_shared ?? false);
+  const [financeStatus, setFinanceStatus] = useState<string>(selected.finance_status ?? "offen");
   const [sendingFinance, setSendingFinance] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [showChecklist, setShowChecklist] = useState(false);
+
+  // Is the case locked for the Makler? (status = uebertragen or abgeschlossen)
+  const isLocked = financeStatus === "uebertragen" || financeStatus === "abgeschlossen";
 
   // Auto-detect which required documents are already uploaded
   const detectedItems = CHECKLIST_ITEMS.reduce<Record<string, string | null>>((acc, item) => {
@@ -75,7 +79,7 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
   };
 
   const handleUpload = async (file: File) => {
-    if (!user) return;
+    if (!user || isLocked) return;
     setUploading(true);
     try {
       const path = `crm/${selected.id}/${Date.now()}_${file.name}`;
@@ -103,6 +107,7 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
   };
 
   const handleDelete = async (dok: Dok) => {
+    if (isLocked) return;
     await supabase.storage.from("kundenunterlagen").remove([dok.storage_path]);
     await supabase.from("crm_dokumente").delete().eq("id", dok.id);
     toast({ title: "Gelöscht", description: dok.dateiname });
@@ -113,7 +118,6 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
     if (financeShared || sendingFinance) return;
     setSendingFinance(true);
     try {
-      // Trigger webhook
       await sendAction("finance_transfer", {
         kunde_id: selected.id,
         kunde_name: selected.name,
@@ -121,9 +125,9 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
         phone: selected.phone,
         budget: selected.budget,
       });
-      // Update DB
-      await supabase.from("crm_kunden").update({ finance_shared: true }).eq("id", selected.id);
+      await supabase.from("crm_kunden").update({ finance_shared: true, finance_status: "uebertragen" }).eq("id", selected.id);
       setFinanceShared(true);
+      setFinanceStatus("uebertragen");
       toast({ title: "✓ Übertragen", description: `${selected.name} an Finanzierung gesendet.` });
     } catch (err: any) {
       toast({ title: "Fehler", description: err.message, variant: "destructive" });
@@ -132,6 +136,15 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
     }
   };
 
+  const financeStatusLabel: Record<string, { color: string; label: string }> = {
+    uebertragen: { color: "bg-blue-100 text-blue-700", label: "🔵 Übertragen – Schreibschutz aktiv" },
+    nachfordern: { color: "bg-yellow-100 text-yellow-700", label: "🟡 Infos nachfordern" },
+    abgeschlossen: { color: "bg-green-100 text-green-700", label: "🟢 Finanzierung abgeschlossen" },
+    storniert: { color: "bg-red-100 text-red-700", label: "🔴 Finanzierung storniert" },
+  };
+
+  const statusInfo = financeStatus !== "offen" ? financeStatusLabel[financeStatus] : null;
+
   return (
     <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
       <div className="bg-card rounded-2xl shadow-md-custom border border-border w-full max-w-md p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
@@ -139,31 +152,48 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
           <h2 className="text-lg font-bold text-foreground">{selected.name}</h2>
           <div className="flex items-center gap-2">
             {/* Finance Button */}
-            <button
-              onClick={() => {
-                if (financeShared) return;
-                // Load docs first to ensure detection is current
-                loadDokumente().then(() => setShowChecklist(true));
-              }}
-              disabled={financeShared || sendingFinance}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
-                financeShared
-                  ? "bg-green-600 text-white cursor-default"
-                  : "bg-primary text-primary-foreground shadow-orange hover:opacity-90"
-              }`}
-            >
-              {sendingFinance ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : financeShared ? (
-                <CheckCircle size={13} />
-              ) : (
-                <Send size={13} />
-              )}
-              {financeShared ? "Übertragen ✓" : "An Finanzierung senden"}
-            </button>
+            {!isLocked && financeStatus !== "abgeschlossen" && financeStatus !== "storniert" && (
+              <button
+                onClick={() => {
+                  if (financeShared) return;
+                  loadDokumente().then(() => setShowChecklist(true));
+                }}
+                disabled={financeShared || sendingFinance}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+                  financeShared
+                    ? "bg-green-600 text-white cursor-default"
+                    : "bg-primary text-primary-foreground shadow-orange hover:opacity-90"
+                }`}
+              >
+                {sendingFinance ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : financeShared ? (
+                  <CheckCircle size={13} />
+                ) : (
+                  <Send size={13} />
+                )}
+                {financeShared ? "Übertragen ✓" : "An Finanzierung senden"}
+              </button>
+            )}
             <button onClick={onClose} className="p-2 rounded-xl hover:bg-accent transition-colors"><X size={18} /></button>
           </div>
         </div>
+
+        {/* Finance Status Banner */}
+        {statusInfo && (
+          <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 ${statusInfo.color}`}>
+            {isLocked && <Lock size={13} />}
+            {statusInfo.label}
+          </div>
+        )}
+
+        {/* Ablehnungsgrund anzeigen */}
+        {financeStatus === "storniert" && selected.ablehnungsgrund_bank && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3">
+            <p className="text-xs font-semibold text-red-700 mb-1">Ablehnungsgrund Bank:</p>
+            <p className="text-sm text-red-800">{selected.ablehnungsgrund_bank}</p>
+          </div>
+        )}
 
         {/* Finanzierungs-Checkliste Overlay */}
         {showChecklist && (
@@ -255,18 +285,20 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                     <Calendar size={13} /> Newsletter-Trigger Daten
                   </p>
-                  <button
-                    onClick={() => {
-                      if (!editDates) setEditedDates({ geburtsdatum: selected.geburtsdatum, kaufdatum: selected.kaufdatum, einzugsdatum: selected.einzugsdatum });
-                      setEditDates(!editDates);
-                    }}
-                    className="text-xs text-primary font-semibold hover:underline"
-                  >
-                    {editDates ? "Abbrechen" : "✏️ Bearbeiten"}
-                  </button>
+                  {!isLocked && (
+                    <button
+                      onClick={() => {
+                        if (!editDates) setEditedDates({ geburtsdatum: selected.geburtsdatum, kaufdatum: selected.kaufdatum, einzugsdatum: selected.einzugsdatum });
+                        setEditDates(!editDates);
+                      }}
+                      className="text-xs text-primary font-semibold hover:underline"
+                    >
+                      {editDates ? "Abbrechen" : "✏️ Bearbeiten"}
+                    </button>
+                  )}
                 </div>
 
-                {editDates ? (
+                {editDates && !isLocked ? (
                   <div className="space-y-3 bg-accent rounded-xl p-3">
                     <div>
                       <label className="text-xs font-semibold text-muted-foreground block mb-1 flex items-center gap-1"><Calendar size={11} /> Geburtsdatum</label>
@@ -327,14 +359,20 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
               className="hidden"
               onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0])}
             />
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2.5 rounded-xl text-sm font-semibold shadow-orange hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50"
-            >
-              {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-              {uploading ? "Wird hochgeladen..." : "Dokument hochladen"}
-            </button>
+            {isLocked ? (
+              <div className="w-full flex items-center justify-center gap-2 bg-muted text-muted-foreground py-2.5 rounded-xl text-sm font-semibold">
+                <Lock size={15} /> Schreibschutz – Upload gesperrt
+              </div>
+            ) : (
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2.5 rounded-xl text-sm font-semibold shadow-orange hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50"
+              >
+                {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                {uploading ? "Wird hochgeladen..." : "Dokument hochladen"}
+              </button>
+            )}
             <p className="text-xs text-muted-foreground text-center">PDF, Word, Excel, Bilder</p>
 
             {loadingDoks ? (
@@ -356,9 +394,11 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
                     <button onClick={() => handleDownload(dok)} className="p-2 rounded-lg hover:bg-card transition-colors" title="Herunterladen">
                       <Download size={15} className="text-primary" />
                     </button>
-                    <button onClick={() => handleDelete(dok)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors" title="Löschen">
-                      <Trash2 size={15} className="text-destructive" />
-                    </button>
+                    {!isLocked && (
+                      <button onClick={() => handleDelete(dok)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors" title="Löschen">
+                        <Trash2 size={15} className="text-destructive" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

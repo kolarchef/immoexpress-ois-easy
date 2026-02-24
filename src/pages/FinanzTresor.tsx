@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Shield, Lock, FileText, Upload, Download, Trash2, Loader2,
   User, Home, MapPin, Euro, Phone, Mail, StickyNote, FileSpreadsheet,
-  File, Building, Save, ChevronRight
+  File, Building, Save, ChevronRight, AlertTriangle
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -16,6 +16,8 @@ type Kunde = {
   typ: string | null; ort: string | null; budget: string | null; status: string | null;
   notiz: string | null; finance_shared: boolean;
   objekt_id: string | null;
+  finance_status: string | null;
+  ablehnungsgrund_bank: string | null;
 };
 
 type Objekt = {
@@ -27,6 +29,13 @@ type Objekt = {
 
 type TresorNotiz = { id: string; notiz: string; created_at: string; updated_at: string };
 type TresorUpload = { id: string; dateiname: string; storage_path: string; created_at: string };
+
+const STATUS_OPTIONS = [
+  { value: "uebertragen", label: "🔵 Übertragen", color: "bg-blue-100 text-blue-700 border-blue-300" },
+  { value: "nachfordern", label: "🟡 Infos nachfordern", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
+  { value: "abgeschlossen", label: "🟢 Abgeschlossen", color: "bg-green-100 text-green-700 border-green-300" },
+  { value: "storniert", label: "🔴 Storniert", color: "bg-red-100 text-red-700 border-red-300" },
+];
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -55,6 +64,9 @@ export default function FinanzTresor() {
   const [savingNotiz, setSavingNotiz] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [showStornoInput, setShowStornoInput] = useState(false);
+  const [stornoGrund, setStornoGrund] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Check admin role
@@ -68,23 +80,24 @@ export default function FinanzTresor() {
   // Load finance-shared customers
   useEffect(() => {
     if (!isAdmin) return;
+    loadKunden();
+  }, [isAdmin]);
+
+  const loadKunden = () => {
     setLoading(true);
     supabase.from("crm_kunden").select("*").eq("finance_shared", true).order("updated_at", { ascending: false })
       .then(({ data }) => { setKunden((data as Kunde[]) || []); setLoading(false); });
-  }, [isAdmin]);
+  };
 
   // Load objekt + notizen + uploads when selecting a Kunde
   useEffect(() => {
     if (!selected) { setObjekt(null); setNotizen([]); setUploads([]); return; }
-    // Objekt
     if (selected.objekt_id) {
       supabase.from("objekte").select("*").eq("id", selected.objekt_id).single()
         .then(({ data }) => setObjekt(data as Objekt | null));
     } else { setObjekt(null); }
-    // Notizen
     supabase.from("finanz_tresor_notizen").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false })
       .then(({ data }) => setNotizen((data as TresorNotiz[]) || []));
-    // Uploads
     supabase.from("finanz_tresor_uploads").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false })
       .then(({ data }) => setUploads((data as TresorUpload[]) || []));
   }, [selected]);
@@ -109,14 +122,23 @@ export default function FinanzTresor() {
     if (!selected || !user) return;
     setUploading(true);
     try {
-      const path = `tresor/${selected.id}/${Date.now()}_${file.name}`;
-      const { error: upErr } = await supabase.storage.from("finanz-tresor").upload(path, file);
+      // Upload to tresor bucket
+      const tresorPath = `tresor/${selected.id}/${Date.now()}_${file.name}`;
+      const { error: upErr } = await supabase.storage.from("finanz-tresor").upload(tresorPath, file);
       if (upErr) throw upErr;
       const { error: dbErr } = await supabase.from("finanz_tresor_uploads").insert({
-        kunde_id: selected.id, user_id: user.id, dateiname: file.name, storage_path: path
+        kunde_id: selected.id, user_id: user.id, dateiname: file.name, storage_path: tresorPath
       });
       if (dbErr) throw dbErr;
-      toast({ title: "✓ Hochgeladen", description: file.name });
+
+      // BACKFLOW: Also insert into crm_dokumente so the Makler sees it
+      const crmPath = `crm/${selected.id}/${Date.now()}_${file.name}`;
+      await supabase.storage.from("kundenunterlagen").upload(crmPath, file);
+      await supabase.from("crm_dokumente").insert({
+        kunde_id: selected.id, user_id: user.id, dateiname: file.name, storage_path: crmPath
+      });
+
+      toast({ title: "✓ Hochgeladen", description: `${file.name} (auch in Kunden-Dokumenten sichtbar)` });
       const { data } = await supabase.from("finanz_tresor_uploads").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false });
       setUploads((data as TresorUpload[]) || []);
     } catch (err: any) {
@@ -137,6 +159,43 @@ export default function FinanzTresor() {
     window.open(data.publicUrl, "_blank");
   };
 
+  const handleStatusChange = async (newStatus: string) => {
+    if (!selected) return;
+    if (newStatus === "storniert") {
+      setShowStornoInput(true);
+      return;
+    }
+    setStatusUpdating(true);
+    const { error } = await supabase.from("crm_kunden").update({ finance_status: newStatus }).eq("id", selected.id);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✓ Status aktualisiert" });
+      setSelected({ ...selected, finance_status: newStatus });
+      loadKunden();
+    }
+    setStatusUpdating(false);
+  };
+
+  const handleStorno = async () => {
+    if (!selected || !stornoGrund.trim()) return;
+    setStatusUpdating(true);
+    const { error } = await supabase.from("crm_kunden").update({
+      finance_status: "storniert",
+      ablehnungsgrund_bank: stornoGrund.trim()
+    }).eq("id", selected.id);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Storniert", description: "Ablehnungsgrund gespeichert." });
+      setSelected({ ...selected, finance_status: "storniert", ablehnungsgrund_bank: stornoGrund.trim() });
+      setShowStornoInput(false);
+      setStornoGrund("");
+      loadKunden();
+    }
+    setStatusUpdating(false);
+  };
+
   if (isAdmin === null) {
     return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="animate-spin text-primary" size={32} /></div>;
   }
@@ -150,6 +209,8 @@ export default function FinanzTresor() {
       </div>
     );
   }
+
+  const currentStatusOption = selected?.finance_status ? STATUS_OPTIONS.find(s => s.value === selected.finance_status) : null;
 
   return (
     <div className="min-h-screen">
@@ -174,25 +235,90 @@ export default function FinanzTresor() {
                 <Shield size={40} className="text-muted-foreground mx-auto mb-3" />
                 <p className="text-muted-foreground text-sm">Noch keine übertragenen Kunden.</p>
               </div>
-            ) : kunden.map(k => (
-              <Card key={k.id} className="card-radius shadow-card cursor-pointer hover:shadow-orange transition-shadow" onClick={() => setSelected(k)}>
-                <CardContent className="p-4 flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <User size={18} className="text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-foreground">{k.name}</p>
-                    <p className="text-xs text-muted-foreground">{k.typ} · {k.ort || "–"} · {k.budget || "–"}</p>
-                  </div>
-                  <ChevronRight size={18} className="text-muted-foreground" />
-                </CardContent>
-              </Card>
-            ))}
+            ) : kunden.map(k => {
+              const sOpt = k.finance_status ? STATUS_OPTIONS.find(s => s.value === k.finance_status) : null;
+              return (
+                <Card key={k.id} className="card-radius shadow-card cursor-pointer hover:shadow-orange transition-shadow" onClick={() => setSelected(k)}>
+                  <CardContent className="p-4 flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User size={18} className="text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-foreground">{k.name}</p>
+                        {sOpt && (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sOpt.color}`}>{sOpt.label}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{k.typ} · {k.ort || "–"} · {k.budget || "–"}</p>
+                    </div>
+                    <ChevronRight size={18} className="text-muted-foreground" />
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         ) : (
           /* Verschmolzene Akte */
           <div className="space-y-4">
-            <button onClick={() => setSelected(null)} className="text-sm text-primary font-semibold hover:underline mb-2">← Zurück zur Übersicht</button>
+            <button onClick={() => { setSelected(null); setShowStornoInput(false); setStornoGrund(""); }} className="text-sm text-primary font-semibold hover:underline mb-2">← Zurück zur Übersicht</button>
+
+            {/* Status-Steuerung */}
+            <Card className="card-radius shadow-card border-primary/30">
+              <CardContent className="p-4">
+                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">Finanzierungs-Status ändern</h4>
+                <div className="flex flex-wrap gap-2">
+                  {STATUS_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleStatusChange(opt.value)}
+                      disabled={statusUpdating || selected.finance_status === opt.value}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 disabled:opacity-50 ${
+                        selected.finance_status === opt.value ? opt.color + " ring-2 ring-offset-1 ring-primary/30" : "bg-card text-muted-foreground border-border hover:bg-accent"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Storno-Grund Eingabe */}
+                {showStornoInput && (
+                  <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 animate-fade-in">
+                    <p className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1.5">
+                      <AlertTriangle size={13} /> Ablehnungsgrund Bank (Pflichtfeld)
+                    </p>
+                    <textarea
+                      value={stornoGrund}
+                      onChange={e => setStornoGrund(e.target.value)}
+                      placeholder="z.B. Bonität nicht ausreichend, Eigenkapital fehlt..."
+                      className="w-full bg-white border border-red-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 min-h-[80px] text-foreground placeholder:text-muted-foreground"
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={handleStorno}
+                        disabled={!stornoGrund.trim() || statusUpdating}
+                        className="flex-1 bg-red-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        {statusUpdating ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Stornierung bestätigen"}
+                      </button>
+                      <button
+                        onClick={() => { setShowStornoInput(false); setStornoGrund(""); }}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold border border-border bg-card text-muted-foreground hover:bg-accent transition-all"
+                      >
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {/* Ablehnungsgrund anzeigen */}
+                {selected.finance_status === "storniert" && selected.ablehnungsgrund_bank && !showStornoInput && (
+                  <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-red-700 mb-1">Ablehnungsgrund Bank:</p>
+                    <p className="text-sm text-red-800">{selected.ablehnungsgrund_bank}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Kunden-Visitenkarte (read-only) */}
             <Card className="card-radius shadow-card border-primary/20">
@@ -282,6 +408,7 @@ export default function FinanzTresor() {
                 <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
                   <Lock size={13} className="text-amber-500" /> Bank-Angebote
                 </h4>
+                <p className="text-[10px] text-muted-foreground mb-3">Dokumente werden automatisch auch in der Kunden-Dokumentenliste sichtbar.</p>
                 <input
                   ref={fileRef}
                   type="file"

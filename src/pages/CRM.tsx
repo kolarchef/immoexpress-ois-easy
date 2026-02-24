@@ -5,42 +5,55 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import CrmDetailModal from "@/components/CrmDetailModal";
 
+const financeStatusConfig: Record<string, { color: string; label: string; dot: string }> = {
+  uebertragen: { color: "bg-blue-100 text-blue-700", label: "Übertragen", dot: "bg-blue-500" },
+  nachfordern: { color: "bg-yellow-100 text-yellow-700", label: "Infos nachfordern", dot: "bg-yellow-500" },
+  abgeschlossen: { color: "bg-green-100 text-green-700", label: "Finanzierung ✓", dot: "bg-green-500" },
+  storniert: { color: "bg-red-100 text-red-700", label: "Storniert", dot: "bg-red-500" },
+};
+
 const kunden = [
   {
     id: 1, name: "Maria Huber", email: "m.huber@email.at", phone: "+43 664 123 4567",
     typ: "Käufer", ort: "Wien 1010", budget: "€650.000", status: "Aktiv", sterne: 5,
     notiz: "Sucht 4-Zimmer-Wohnung, Alleinvermittlung bevorzugt",
     geburtsdatum: "1982-03-15", kaufdatum: "2024-06-01", einzugsdatum: "2024-07-15",
+    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
   },
   {
     id: 2, name: "Thomas Müller", email: "t.mueller@firma.at", phone: "+43 676 987 6543",
     typ: "Verkäufer", ort: "Wien 1030", budget: "€420.000", status: "Aktiv", sterne: 4,
     notiz: "Verkauf Eigentumswohnung, flexibel bei Übergabe",
     geburtsdatum: "1975-11-28", kaufdatum: "2023-09-10", einzugsdatum: "2023-11-01",
+    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
   },
   {
     id: 3, name: "Anna Schmidt", email: "a.schmidt@web.at", phone: "+43 699 555 1234",
     typ: "Mieter", ort: "Graz", budget: "€1.800/Mon", status: "In Bearbeitung", sterne: 3,
     notiz: "Sucht Bürofläche 120m², Nähe Graz-Hauptbahnhof",
     geburtsdatum: "1990-07-04", kaufdatum: "2025-01-15", einzugsdatum: "2025-02-01",
+    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
   },
   {
     id: 4, name: "Karl Bauer", email: "k.bauer@outlook.at", phone: "+43 660 321 7890",
     typ: "Investor", ort: "Salzburg", budget: "€1.2M", status: "Aktiv", sterne: 5,
     notiz: "Anlageimmobilien, Rendite min. 4%, Nebenkostenübersicht angefordert",
     geburtsdatum: "1968-12-25", kaufdatum: "2022-04-20", einzugsdatum: "2022-06-01",
+    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
   },
   {
     id: 5, name: "Sandra Lehner", email: "s.lehner@gmx.at", phone: "+43 650 444 8888",
     typ: "Käufer", ort: "Linz", budget: "€280.000", status: "Neu", sterne: 4,
     notiz: "Erstmals Kaufinteressentin, Finanzamt-Gebühren klären",
     geburtsdatum: "1995-05-20", kaufdatum: "", einzugsdatum: "",
+    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
   },
   {
     id: 6, name: "Peter Wimmer", email: "p.wimmer@aon.at", phone: "+43 664 777 2222",
     typ: "Verkäufer", ort: "Wien 1180", budget: "€890.000", status: "Aktiv", sterne: 5,
     notiz: "Einfamilienhaus, Alleinvermittlungsvertrag unterschrieben",
     geburtsdatum: "1970-08-10", kaufdatum: "2021-12-01", einzugsdatum: "2022-02-15",
+    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
   },
 ];
 
@@ -131,73 +144,89 @@ export default function CRM() {
 
       {/* Kunden-Karten */}
       <div className="space-y-3">
-        {filtered.map((k) => (
-          <div key={k.id} className="bg-card rounded-2xl p-4 shadow-card border border-border hover:shadow-card-hover transition-all duration-200 cursor-pointer" onClick={() => setSelected(k)}>
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 shadow-orange-sm text-primary-foreground font-bold text-lg">
-                {k.name.charAt(0)}
+        {filtered.map((k) => {
+          const fStatus = k.finance_status && k.finance_status !== "offen" ? financeStatusConfig[k.finance_status] : null;
+          return (
+            <div key={k.id} className="bg-card rounded-2xl p-4 shadow-card border border-border hover:shadow-card-hover transition-all duration-200 cursor-pointer" onClick={() => setSelected(k)}>
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 shadow-orange-sm text-primary-foreground font-bold text-lg">
+                  {k.name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-foreground">{k.name}</h3>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${typColors[k.typ]}`}>{k.typ}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColors[k.status]}`}>{k.status}</span>
+                    {/* Finance Status Ampel */}
+                    {fStatus && (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${fStatus.color}`}>
+                        <span className={`w-2 h-2 rounded-full ${fStatus.dot}`} />
+                        {fStatus.label}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 mt-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} size={12} className={i < k.sterne ? "text-primary fill-primary" : "text-muted"} />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{k.ort}</span>
+                    <span className="text-xs font-semibold text-primary">{k.budget}</span>
+                  </div>
+                  {/* Ablehnungsgrund anzeigen */}
+                  {k.finance_status === "storniert" && k.ablehnungsgrund_bank && (
+                    <p className="text-xs text-red-600 mt-1.5 bg-red-50 px-2 py-1 rounded-lg">
+                      ✗ Ablehnung: {k.ablehnungsgrund_bank}
+                    </p>
+                  )}
+                  {/* Datums-Chips */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {k.geburtsdatum && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
+                        <Calendar size={10} /> GEB {formatDate(k.geburtsdatum)}
+                      </span>
+                    )}
+                    {k.kaufdatum && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
+                        <Key size={10} /> KAUF {formatDate(k.kaufdatum)}
+                      </span>
+                    )}
+                    {k.einzugsdatum && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
+                        <Home size={10} /> EINZUG {formatDate(k.einzugsdatum)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{k.notiz}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-foreground">{k.name}</h3>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${typColors[k.typ]}`}>{k.typ}</span>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColors[k.status]}`}>{k.status}</span>
-                </div>
-                <div className="flex items-center gap-1 mt-1">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} size={12} className={i < k.sterne ? "text-primary fill-primary" : "text-muted"} />
-                  ))}
-                </div>
-                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{k.ort}</span>
-                  <span className="text-xs font-semibold text-primary">{k.budget}</span>
-                </div>
-                {/* Datums-Chips */}
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  {k.geburtsdatum && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
-                      <Calendar size={10} /> GEB {formatDate(k.geburtsdatum)}
-                    </span>
-                  )}
-                  {k.kaufdatum && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
-                      <Key size={10} /> KAUF {formatDate(k.kaufdatum)}
-                    </span>
-                  )}
-                  {k.einzugsdatum && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
-                      <Home size={10} /> EINZUG {formatDate(k.einzugsdatum)}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{k.notiz}</p>
-              </div>
-            </div>
 
-            {/* Schnellwahl-Buttons */}
-            <div className="flex gap-2 mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
-              <a
-                href={`https://wa.me/${k.phone.replace(/\s+/g, "")}`}
-                target="_blank" rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-1.5 bg-green-500 text-white py-2 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors active:scale-95"
-              >
-                <MessageCircle size={14} /> WhatsApp
-              </a>
-              <a
-                href={`tel:${k.phone}`}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-primary-foreground py-2 rounded-xl text-xs font-semibold shadow-orange-sm hover:bg-primary-dark transition-colors active:scale-95"
-              >
-                <Phone size={14} /> Anrufen
-              </a>
-              <a
-                href={`mailto:${k.email}`}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-accent text-accent-foreground py-2 rounded-xl text-xs font-semibold border border-border hover:bg-secondary transition-colors active:scale-95"
-              >
-                <Mail size={14} /> E-Mail
-              </a>
+              {/* Schnellwahl-Buttons */}
+              <div className="flex gap-2 mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
+                <a
+                  href={`https://wa.me/${k.phone.replace(/\s+/g, "")}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-green-500 text-white py-2 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors active:scale-95"
+                >
+                  <MessageCircle size={14} /> WhatsApp
+                </a>
+                <a
+                  href={`tel:${k.phone}`}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-primary-foreground py-2 rounded-xl text-xs font-semibold shadow-orange-sm hover:bg-primary-dark transition-colors active:scale-95"
+                >
+                  <Phone size={14} /> Anrufen
+                </a>
+                <a
+                  href={`mailto:${k.email}`}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-accent text-accent-foreground py-2 rounded-xl text-xs font-semibold border border-border hover:bg-secondary transition-colors active:scale-95"
+                >
+                  <Mail size={14} /> E-Mail
+                </a>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Detail Modal */}
