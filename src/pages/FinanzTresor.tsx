@@ -7,7 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Shield, Lock, FileText, Upload, Download, Trash2, Loader2,
   User, Home, MapPin, Euro, Phone, Mail, StickyNote, FileSpreadsheet,
-  File, Building, Save, ChevronRight, AlertTriangle
+  File, Building, Save, ChevronRight, AlertTriangle, CircleCheck, Circle,
+  Plus, History
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -30,12 +31,19 @@ type Objekt = {
 
 type TresorNotiz = { id: string; notiz: string; created_at: string; updated_at: string };
 type TresorUpload = { id: string; dateiname: string; storage_path: string; created_at: string };
+type CrmDok = { id: string; dateiname: string; storage_path: string; created_at: string };
+
+const CHECKLIST_ITEMS = [
+  { key: "grundbuch", label: "Grundbuchauszug", pflicht: true, patterns: ["grundbuch"] },
+  { key: "gehalt", label: "Gehaltszettel (3 Monate)", pflicht: true, patterns: ["gehalt", "lohn", "einkommens"] },
+  { key: "ausweis", label: "Lichtbildausweis", pflicht: true, patterns: ["ausweis", "reisepass", "führerschein", "personalausweis"] },
+  { key: "objektdaten", label: "Objektdaten-Blatt", pflicht: false, patterns: ["objektdaten", "objektblatt"] },
+] as const;
 
 const STATUS_OPTIONS = [
-  { value: "uebertragen", label: "🔵 Übertragen", color: "bg-blue-100 text-blue-700 border-blue-300" },
-  { value: "nachfordern", label: "🟡 Infos nachfordern", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
-  { value: "abgeschlossen", label: "🟢 Abgeschlossen", color: "bg-green-100 text-green-700 border-green-300" },
-  { value: "storniert", label: "🔴 Storniert", color: "bg-red-100 text-red-700 border-red-300" },
+  { value: "nachfordern", label: "Infos nachfordern", color: "bg-yellow-100 text-yellow-700 border-yellow-400 hover:bg-yellow-200" },
+  { value: "abgeschlossen", label: "Abgeschlossen", color: "bg-green-100 text-green-700 border-green-400 hover:bg-green-200" },
+  { value: "storniert", label: "Storniert", color: "bg-red-100 text-red-700 border-red-400 hover:bg-red-200" },
 ];
 
 function formatDate(d: string) {
@@ -61,6 +69,7 @@ export default function FinanzTresor() {
   const [objekt, setObjekt] = useState<Objekt | null>(null);
   const [notizen, setNotizen] = useState<TresorNotiz[]>([]);
   const [uploads, setUploads] = useState<TresorUpload[]>([]);
+  const [crmDokumente, setCrmDokumente] = useState<CrmDok[]>([]);
   const [newNotiz, setNewNotiz] = useState("");
   const [savingNotiz, setSavingNotiz] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -78,7 +87,6 @@ export default function FinanzTresor() {
     });
   }, [user]);
 
-  // Load finance-shared customers
   useEffect(() => {
     if (!isAdmin) return;
     loadKunden();
@@ -90,9 +98,8 @@ export default function FinanzTresor() {
       .then(({ data }) => { setKunden((data as Kunde[]) || []); setLoading(false); });
   };
 
-  // Load objekt + notizen + uploads when selecting a Kunde
   useEffect(() => {
-    if (!selected) { setObjekt(null); setNotizen([]); setUploads([]); return; }
+    if (!selected) { setObjekt(null); setNotizen([]); setUploads([]); setCrmDokumente([]); return; }
     if (selected.objekt_id) {
       supabase.from("objekte").select("*").eq("id", selected.objekt_id).single()
         .then(({ data }) => setObjekt(data as Objekt | null));
@@ -101,7 +108,18 @@ export default function FinanzTresor() {
       .then(({ data }) => setNotizen((data as TresorNotiz[]) || []));
     supabase.from("finanz_tresor_uploads").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false })
       .then(({ data }) => setUploads((data as TresorUpload[]) || []));
+    supabase.from("crm_dokumente").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false })
+      .then(({ data }) => setCrmDokumente((data as CrmDok[]) || []));
   }, [selected]);
+
+  // Checklist detection from CRM documents
+  const detectedItems = CHECKLIST_ITEMS.reduce<Record<string, string | null>>((acc, item) => {
+    const found = crmDokumente.find(dok =>
+      item.patterns.some(p => dok.dateiname.toLowerCase().includes(p))
+    );
+    acc[item.key] = found ? found.dateiname : null;
+    return acc;
+  }, {});
 
   const handleSaveNotiz = async () => {
     if (!newNotiz.trim() || !selected || !user) return;
@@ -123,7 +141,6 @@ export default function FinanzTresor() {
     if (!selected || !user) return;
     setUploading(true);
     try {
-      // Upload to tresor bucket
       const tresorPath = `tresor/${selected.id}/${Date.now()}_${file.name}`;
       const { error: upErr } = await supabase.storage.from("finanz-tresor").upload(tresorPath, file);
       if (upErr) throw upErr;
@@ -132,8 +149,6 @@ export default function FinanzTresor() {
       });
       if (dbErr) throw dbErr;
 
-      // BACKFLOW: Also insert into crm_dokumente so the Makler sees it
-      // Use the customer's user_id (the Makler who owns the customer) so RLS allows them to see it
       const kundeOwnerUserId = selected.user_id || user.id;
       const crmPath = `crm/${selected.id}/${Date.now()}_${file.name}`;
       await supabase.storage.from("kundenunterlagen").upload(crmPath, file);
@@ -214,23 +229,28 @@ export default function FinanzTresor() {
   }
 
   const currentStatusOption = selected?.finance_status ? STATUS_OPTIONS.find(s => s.value === selected.finance_status) : null;
+  const isLocked = selected?.finance_status === "uebertragen" || selected?.finance_status === "abgeschlossen";
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-surface">
       {/* Header */}
-      <div className="bg-[#0A0A0A] text-white px-6 py-8 rounded-b-3xl mb-6">
+      <div className="bg-card border-b border-border px-6 py-6">
         <div className="flex items-center gap-3 mb-1">
-          <Shield size={24} className="text-primary" />
-          <h1 className="text-2xl font-bold">Finanzierungs-Tresor</h1>
+          <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Shield size={20} className="text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Finanzierungs-Tresor</h1>
+            <p className="text-muted-foreground text-xs">Verschlüsselte Kundenakten · Nur für Admins</p>
+          </div>
         </div>
-        <p className="text-white/50 text-sm">Verschlüsselte Kundenakten · Nur für Admins</p>
-        <Badge className="mt-3 bg-primary/20 text-primary border-primary/30">{kunden.length} Akten</Badge>
+        <Badge className="mt-2 bg-primary/10 text-primary border-primary/20">{kunden.length} Akten</Badge>
       </div>
 
-      <div className="px-4 pb-24">
+      <div className="p-4 md:p-6 pb-24">
         {!selected ? (
           /* Kundenliste */
-          <div className="space-y-3">
+          <div className="space-y-3 max-w-2xl mx-auto">
             {loading ? Array.from({ length: 3 }).map((_, i) => (
               <Card key={i} className="card-radius"><CardContent className="p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>
             )) : kunden.length === 0 ? (
@@ -239,15 +259,15 @@ export default function FinanzTresor() {
                 <p className="text-muted-foreground text-sm">Noch keine übertragenen Kunden.</p>
               </div>
             ) : kunden.map(k => {
-              const sOpt = k.finance_status ? STATUS_OPTIONS.find(s => s.value === k.finance_status) : null;
+              const sOpt = k.finance_status ? [...STATUS_OPTIONS, { value: "uebertragen", label: "Übertragen", color: "bg-blue-100 text-blue-700 border-blue-400" }].find(s => s.value === k.finance_status) : null;
               return (
-                <Card key={k.id} className="card-radius shadow-card cursor-pointer hover:shadow-orange transition-shadow" onClick={() => setSelected(k)}>
+                <Card key={k.id} className="card-radius shadow-card cursor-pointer hover:shadow-card-hover transition-shadow" onClick={() => setSelected(k)}>
                   <CardContent className="p-4 flex items-center gap-4">
                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                       <User size={18} className="text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-bold text-foreground">{k.name}</p>
                         {sOpt && (
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sOpt.color}`}>{sOpt.label}</span>
@@ -262,190 +282,271 @@ export default function FinanzTresor() {
             })}
           </div>
         ) : (
-          /* Verschmolzene Akte */
-          <div className="space-y-4">
-            <button onClick={() => { setSelected(null); setShowStornoInput(false); setStornoGrund(""); }} className="text-sm text-primary font-semibold hover:underline mb-2">← Zurück zur Übersicht</button>
+          /* ===== DASHBOARD TWO-COLUMN LAYOUT ===== */
+          <div className="max-w-5xl mx-auto">
+            <button onClick={() => { setSelected(null); setShowStornoInput(false); setStornoGrund(""); }} className="text-sm text-primary font-semibold hover:underline mb-4 inline-flex items-center gap-1">
+              ← Zurück zur Übersicht
+            </button>
 
-            {/* Status-Steuerung */}
-            <Card className="card-radius shadow-card border-primary/30">
-              <CardContent className="p-4">
-                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">Finanzierungs-Status ändern</h4>
-                <div className="flex flex-wrap gap-2">
-                  {STATUS_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => handleStatusChange(opt.value)}
-                      disabled={statusUpdating || selected.finance_status === opt.value}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 disabled:opacity-50 ${
-                        selected.finance_status === opt.value ? opt.color + " ring-2 ring-offset-1 ring-primary/30" : "bg-card text-muted-foreground border-border hover:bg-accent"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+            {/* Customer Header Bar */}
+            <Card className="card-radius shadow-card mb-4">
+              <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <User size={22} className="text-primary" />
                 </div>
-                {/* Storno-Grund Eingabe */}
-                {showStornoInput && (
-                  <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 animate-fade-in">
-                    <p className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1.5">
-                      <AlertTriangle size={13} /> Ablehnungsgrund Bank (Pflichtfeld)
-                    </p>
-                    <textarea
-                      value={stornoGrund}
-                      onChange={e => setStornoGrund(e.target.value)}
-                      placeholder="z.B. Bonität nicht ausreichend, Eigenkapital fehlt..."
-                      className="w-full bg-white border border-red-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 min-h-[80px] text-foreground placeholder:text-muted-foreground"
-                    />
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        onClick={handleStorno}
-                        disabled={!stornoGrund.trim() || statusUpdating}
-                        className="flex-1 bg-red-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
-                      >
-                        {statusUpdating ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Stornierung bestätigen"}
-                      </button>
-                      <button
-                        onClick={() => { setShowStornoInput(false); setStornoGrund(""); }}
-                        className="px-4 py-2 rounded-xl text-sm font-semibold border border-border bg-card text-muted-foreground hover:bg-accent transition-all"
-                      >
-                        Abbrechen
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {/* Ablehnungsgrund anzeigen */}
-                {selected.finance_status === "storniert" && selected.ablehnungsgrund_bank && !showStornoInput && (
-                  <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3">
-                    <p className="text-xs font-semibold text-red-700 mb-1">Ablehnungsgrund Bank:</p>
-                    <p className="text-sm text-red-800">{selected.ablehnungsgrund_bank}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Kunden-Visitenkarte (read-only) */}
-            <Card className="card-radius shadow-card border-primary/20">
-              <CardContent className="p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <User size={22} className="text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-foreground">{selected.name}</h3>
-                    <p className="text-xs text-muted-foreground">{selected.typ} · {selected.status}</p>
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg text-foreground">{selected.name}</h3>
+                  <p className="text-xs text-muted-foreground">{selected.typ} · {selected.status}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground"><Mail size={13} /><span className="truncate">{selected.email || "–"}</span></div>
-                  <div className="flex items-center gap-2 text-muted-foreground"><Phone size={13} /><span>{selected.phone || "–"}</span></div>
-                  <div className="flex items-center gap-2 text-muted-foreground"><MapPin size={13} /><span>{selected.ort || "–"}</span></div>
-                  <div className="flex items-center gap-2 text-muted-foreground"><Euro size={13} /><span className="font-bold text-primary">{selected.budget || "–"}</span></div>
-                </div>
-                {selected.notiz && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground flex items-center gap-1"><StickyNote size={11} /> Makler-Notiz</p>
-                    <p className="text-sm text-foreground mt-1">{selected.notiz}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Objekt-Karte (read-only) */}
-            <Card className="card-radius shadow-card">
-              <CardContent className="p-5">
-                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                  <Building size={13} /> Verknüpftes Objekt
-                </h4>
-                {objekt ? (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Adresse</span><span className="font-semibold text-foreground">{[objekt.strasse, objekt.hnr].filter(Boolean).join(" ")}, {objekt.plz} {objekt.ort}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Objektart</span><span className="font-semibold">{objekt.objektart || "–"}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Zimmer / Fläche</span><span className="font-semibold">{objekt.zimmer ?? "–"} Zi · {objekt.flaeche_m2 ?? "–"} m²</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Kaufpreis</span><span className="font-bold text-primary">{formatCurrency(objekt.kaufpreis)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Status</span><Badge variant="outline">{objekt.status}</Badge></div>
-                    {objekt.kurzinfo && <p className="text-xs text-muted-foreground pt-2 border-t border-border">{objekt.kurzinfo}</p>}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Kein Objekt verknüpft.</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Admin: Interne Notizen */}
-            <Card className="card-radius shadow-card">
-              <CardContent className="p-5">
-                <h4 className="text-xs font-bold text-primary uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                  <Lock size={13} className="text-primary" /> Interne Finanzierungs-Notizen
-                </h4>
-                <div className="space-y-2 mb-3">
-                  {notizen.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Noch keine Notizen.</p>
-                  ) : notizen.map(n => (
-                    <div key={n.id} className="note-highlight">
-                      <p className="text-sm text-foreground">{n.notiz}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">{formatDate(n.created_at)}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <textarea
-                    value={newNotiz}
-                    onChange={e => setNewNotiz(e.target.value)}
-                    placeholder="Interne Notiz hinzufügen..."
-                    className="flex-1 bg-card border border-border rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[60px] text-foreground placeholder:text-muted-foreground"
-                  />
-                  <button
-                    onClick={handleSaveNotiz}
-                    disabled={!newNotiz.trim() || savingNotiz}
-                    className="self-end bg-primary text-primary-foreground p-3 rounded-xl hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {savingNotiz ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  </button>
+                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><Mail size={12} />{selected.email || "–"}</span>
+                  <span className="flex items-center gap-1"><Phone size={12} />{selected.phone || "–"}</span>
+                  <span className="flex items-center gap-1"><MapPin size={12} />{selected.ort || "–"}</span>
+                  <span className="flex items-center gap-1 font-bold text-primary"><Euro size={12} />{selected.budget || "–"}</span>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Admin: Bank-Angebote */}
-            <Card className="card-radius shadow-card">
-              <CardContent className="p-5">
-                <h4 className="text-xs font-bold text-primary uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                  <Lock size={13} className="text-primary" /> Bank-Angebote
-                </h4>
-                <p className="text-[10px] text-muted-foreground mb-3">Dokumente werden automatisch auch in der Kunden-Dokumentenliste sichtbar.</p>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".pdf,.xls,.xlsx,.doc,.docx,.csv"
-                  className="hidden"
-                  onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0])}
-                />
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                  className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2.5 rounded-xl text-sm font-semibold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 mb-3"
-                >
-                  {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                  {uploading ? "Wird hochgeladen..." : "Bank-Angebot hochladen"}
-                </button>
-                {uploads.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Noch keine Bank-Angebote.</p>
-                ) : (
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* ===== LEFT SIDEBAR: Pflichtdokumenten-Checkliste ===== */}
+              <div className="w-full lg:w-72 flex-shrink-0">
+                <div className="bg-muted rounded-2xl p-4 sticky top-4">
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-4">
+                    <CircleCheck size={14} className="text-primary" /> Pflichtdokumente
+                  </h4>
                   <div className="space-y-2">
-                    {uploads.map(u => (
-                      <div key={u.id} className="flex items-center gap-3 bg-accent rounded-xl p-3 border border-border">
-                        {getFileIcon(u.dateiname)}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">{u.dateiname}</p>
-                          <p className="text-xs text-muted-foreground">{formatDate(u.created_at)}</p>
+                    {CHECKLIST_ITEMS.map(item => {
+                      const found = detectedItems[item.key];
+                      return (
+                        <div
+                          key={item.key}
+                          className={`flex items-center gap-2.5 p-2.5 rounded-xl transition-all ${
+                            found
+                              ? "bg-green-50 border border-green-200"
+                              : "bg-card border border-border"
+                          }`}
+                        >
+                          {found ? (
+                            <CircleCheck size={16} className="text-green-500 flex-shrink-0" />
+                          ) : (
+                            <Circle size={16} className="text-muted-foreground flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-medium ${found ? "text-foreground" : "text-muted-foreground"}`}>
+                              {item.label}
+                            </p>
+                            {found && <p className="text-[10px] text-green-600 truncate">✓ {found}</p>}
+                          </div>
+                          {item.pflicht && !found && (
+                            <span className="text-[9px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">Pflicht</span>
+                          )}
                         </div>
-                        <button onClick={() => handleDownload(u)} className="p-2 rounded-lg hover:bg-card transition-colors"><Download size={14} className="text-primary" /></button>
-                        <button onClick={() => handleDeleteUpload(u)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors"><Trash2 size={14} className="text-destructive" /></button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+
+                  {/* Verknüpftes Objekt - kompakt */}
+                  {objekt && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                        <Building size={12} /> Objekt
+                      </h4>
+                      <div className="text-xs space-y-1 text-muted-foreground">
+                        <p className="font-medium text-foreground">{[objekt.strasse, objekt.hnr].filter(Boolean).join(" ")}</p>
+                        <p>{objekt.plz} {objekt.ort}</p>
+                        <p className="font-bold text-primary">{formatCurrency(objekt.kaufpreis)}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ===== RIGHT MAIN AREA ===== */}
+              <div className="flex-1 space-y-4">
+
+                {/* Card 1: FINANZIERUNGS-STATUS ÄNDERN */}
+                <Card className="card-radius shadow-card">
+                  <CardContent className="p-5">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-4">
+                      Finanzierungs-Status ändern
+                    </h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {STATUS_OPTIONS.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => handleStatusChange(opt.value)}
+                          disabled={statusUpdating || selected.finance_status === opt.value}
+                          className={`px-4 py-2 rounded-full text-xs font-semibold border transition-all active:scale-95 disabled:opacity-50 ${
+                            selected.finance_status === opt.value
+                              ? opt.color + " ring-2 ring-offset-1 ring-primary/30"
+                              : "bg-card text-muted-foreground border-border hover:bg-accent"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+
+                      {/* An Finanzierung senden - prominent orange */}
+                      {selected.finance_status === "uebertragen" && (
+                        <span className="px-4 py-2 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-400 ring-2 ring-offset-1 ring-primary/30">
+                          Übertragen
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Storno Input */}
+                    {showStornoInput && (
+                      <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4 animate-fade-in">
+                        <p className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1.5">
+                          <AlertTriangle size={13} /> Ablehnungsgrund Bank (Pflichtfeld)
+                        </p>
+                        <textarea
+                          value={stornoGrund}
+                          onChange={e => setStornoGrund(e.target.value)}
+                          placeholder="z.B. Bonität nicht ausreichend, Eigenkapital fehlt..."
+                          className="w-full bg-card border border-red-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 min-h-[80px] text-foreground placeholder:text-muted-foreground"
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={handleStorno}
+                            disabled={!stornoGrund.trim() || statusUpdating}
+                            className="flex-1 bg-red-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
+                          >
+                            {statusUpdating ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Stornierung bestätigen"}
+                          </button>
+                          <button
+                            onClick={() => { setShowStornoInput(false); setStornoGrund(""); }}
+                            className="px-4 py-2 rounded-xl text-sm font-semibold border border-border bg-card text-muted-foreground hover:bg-accent transition-all"
+                          >
+                            Abbrechen
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ablehnungsgrund anzeigen */}
+                    {selected.finance_status === "storniert" && selected.ablehnungsgrund_bank && !showStornoInput && (
+                      <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4">
+                        <p className="text-xs font-semibold text-red-700 mb-1">Ablehnungsgrund Bank:</p>
+                        <p className="text-sm text-red-800">{selected.ablehnungsgrund_bank}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Card Row: Status-Historie + Interne Notiz (Two Columns) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left: Status-Historie / Lock Info */}
+                  <Card className="card-radius shadow-card">
+                    <CardContent className="p-5">
+                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                        <History size={13} /> Status-Historie
+                      </h4>
+                      {isLocked && (
+                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3 mb-3">
+                          <Lock size={14} className="text-blue-600" />
+                          <p className="text-xs text-blue-700 font-medium">Schreibschutz aktiv – Makler-Zugriff gesperrt</p>
+                        </div>
+                      )}
+                      {selected.notiz && (
+                        <div className="note-highlight mb-3">
+                          <p className="text-[10px] text-muted-foreground mb-1 flex items-center gap-1"><StickyNote size={10} /> Makler-Notiz</p>
+                          <p className="text-sm text-foreground">{selected.notiz}</p>
+                        </div>
+                      )}
+                      {/* Bank-Angebote Liste */}
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">Bank-Angebote ({uploads.length})</p>
+                        {uploads.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">Noch keine.</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {uploads.map(u => (
+                              <div key={u.id} className="flex items-center gap-2 bg-accent rounded-xl p-2.5 border border-border">
+                                {getFileIcon(u.dateiname)}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-foreground truncate">{u.dateiname}</p>
+                                  <p className="text-[10px] text-muted-foreground">{formatDate(u.created_at)}</p>
+                                </div>
+                                <button onClick={() => handleDownload(u)} className="p-1.5 rounded-lg hover:bg-card transition-colors"><Download size={13} className="text-primary" /></button>
+                                <button onClick={() => handleDeleteUpload(u)} className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"><Trash2 size={13} className="text-destructive" /></button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Right: Interne Notiz */}
+                  <Card className="card-radius shadow-card">
+                    <CardContent className="p-5">
+                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                        <Lock size={13} className="text-primary" /> Interne Notiz
+                      </h4>
+                      <div className="space-y-2 mb-3 max-h-48 overflow-y-auto scrollbar-hide">
+                        {notizen.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">Noch keine Notizen.</p>
+                        ) : notizen.map(n => (
+                          <div key={n.id} className="note-highlight">
+                            <p className="text-sm text-foreground">{n.notiz}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">{formatDate(n.created_at)}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <textarea
+                          value={newNotiz}
+                          onChange={e => setNewNotiz(e.target.value)}
+                          placeholder="Interne Notiz hinzufügen..."
+                          className="flex-1 bg-card border border-border rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[60px] text-foreground placeholder:text-muted-foreground"
+                        />
+                        <button
+                          onClick={handleSaveNotiz}
+                          disabled={!newNotiz.trim() || savingNotiz}
+                          className="self-end bg-primary text-primary-foreground p-3 rounded-xl hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
+                          title="Notiz speichern"
+                        >
+                          {savingNotiz ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                        </button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Bottom Card: FINANZ-TRESOR Upload */}
+                <Card className="card-radius shadow-card">
+                  <CardContent className="p-5">
+                    <div className="flex items-start gap-4">
+                      <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Lock size={22} className="text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">Finanz-Tresor</h4>
+                        <p className="text-[10px] text-muted-foreground mb-3">Dokumente werden automatisch auch in der Kunden-Dokumentenliste sichtbar.</p>
+
+                        <input
+                          ref={fileRef}
+                          type="file"
+                          accept=".pdf,.xls,.xlsx,.doc,.docx,.csv"
+                          className="hidden"
+                          onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0])}
+                        />
+                        <button
+                          onClick={() => fileRef.current?.click()}
+                          disabled={uploading}
+                          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2.5 rounded-xl text-sm font-semibold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                          {uploading ? "Wird hochgeladen..." : "Bank-Angebot hochladen"}
+                        </button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+              </div>
+            </div>
           </div>
         )}
       </div>
