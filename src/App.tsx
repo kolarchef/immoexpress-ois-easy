@@ -30,6 +30,7 @@ import Zinshaus from "./pages/Zinshaus";
 import ImmoConcierge from "./pages/ImmoConcierge";
 import Gesetzbuch from "./pages/Gesetzbuch";
 import KiezCheck from "./pages/KiezCheck";
+import FinanzTresor from "./pages/FinanzTresor";
 import Profil from "./pages/Profil";
 import NotFound from "./pages/NotFound";
 
@@ -71,6 +72,7 @@ const AppRoutes = () => (
       <Route path="/immo-concierge" element={<ImmoConcierge />} />
       <Route path="/gesetzbuch" element={<Gesetzbuch />} />
       <Route path="/kiezcheck" element={<KiezCheck />} />
+      <Route path="/finanz-tresor" element={<FinanzTresor />} />
       <Route path="/profil" element={<Profil />} />
     </Route>
     <Route path="*" element={<NotFound />} />
