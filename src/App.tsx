@@ -33,6 +33,7 @@ import Gesetzbuch from "./pages/Gesetzbuch";
 import KiezCheck from "./pages/KiezCheck";
 import FinanzTresor from "./pages/FinanzTresor";
 import Profil from "./pages/Profil";
+import TeamPerformance from "./pages/TeamPerformance";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -76,6 +77,7 @@ const AppRoutes = () => (
       <Route path="/kiezcheck" element={<KiezCheck />} />
       <Route path="/finanz-tresor" element={<FinanzTresor />} />
       <Route path="/profil" element={<Profil />} />
+      <Route path="/team-performance" element={<TeamPerformance />} />
     </Route>
     <Route path="*" element={<NotFound />} />
   </Routes>
