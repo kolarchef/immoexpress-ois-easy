@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getWebhookUrl } from "@/lib/getWebhookUrl";
+import { sendAction } from "@/lib/sendAction";
 
 const bundeslaender = [
   "Wien – 1. Bezirk (Innere Stadt)", "Wien – 2. Bezirk (Leopoldstadt)", "Wien – 3. Bezirk (Landstraße)",
@@ -481,13 +482,24 @@ export default function Expose() {
         <p className="text-xs text-muted-foreground">Füge strukturierte Analyse-Outputs aus NotebookLM ein – für Video-Skripte und detaillierte Berichte.</p>
         <textarea
           className="w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-          rows={5}
+          rows={8}
           placeholder="NotebookLM-Output hier einfügen (Marktdaten, Infrastruktur-Analyse, Mietpreisentwicklung…)"
           value={notebookLmText} onChange={(e) => setNotebookLmText(e.target.value)}
         />
         {notebookLmText && (
           <p className="text-xs text-primary font-semibold">✓ {notebookLmText.length} Zeichen · Wird in KI-Textgenerierung & Investment-PDF verwendet</p>
         )}
+        <button
+          onClick={async () => {
+            const { ok } = await sendAction("notiz_speichern", { text: notebookLmText, quelle: "notebook_lm" });
+            if (ok) toast({ title: "✅ Notiz gespeichert" });
+            else toast({ title: "Fehler beim Speichern", variant: "destructive" });
+          }}
+          disabled={!notebookLmText.trim()}
+          className="w-full bg-foreground text-background rounded-xl py-2.5 text-sm font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          <Save size={14} /> Notiz speichern
+        </button>
       </div>
 
       {/* Beschreibung */}
@@ -559,28 +571,35 @@ export default function Expose() {
         )}
       </div>
 
-      {/* 📄 PDF-Vorlage wählen */}
-      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-3">
+      {/* 📄 PDF-Vorlage wählen – Drei-Säulen-Design */}
+      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
         <div className="flex items-center gap-2">
           <LayoutTemplate size={18} className="text-primary" />
           <h2 className="font-bold text-foreground">PDF-Vorlage wählen</h2>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {pdfTemplates.map((t) => (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[
+            { id: "quick-check" as PdfTemplate, actionId: "expose_pdf_quick", icon: "⚡", label: "Quick-Check", sub: "Kompakt", desc: "Infografiken · Sterne-Ratings · Harte Fakten" },
+            { id: "expose-style" as PdfTemplate, actionId: "expose_pdf_classic", icon: "🏠", label: "Klassisch", sub: "Ausführlich", desc: "Emotionale Bilder · Sprachnotizen · NotebookLM" },
+            { id: "investment" as PdfTemplate, actionId: "expose_pdf_investment", icon: "📊", label: "Investment", sub: "Zahlenfokus", desc: "Tabellen · Marktdaten · Mietpreisentwicklung" },
+          ].map(t => (
             <button
               key={t.id}
               onClick={() => setSelectedTemplate(t.id)}
-              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
+              className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all text-center min-h-[180px] justify-center ${
                 selectedTemplate === t.id
                   ? "border-primary bg-primary/5 shadow-orange"
                   : "border-border bg-surface hover:bg-accent"
               }`}
             >
-              <span className="text-2xl">{t.icon}</span>
-              <span className="text-sm font-bold text-foreground">{t.label}</span>
+              <span className="text-3xl">{t.icon}</span>
+              <div>
+                <span className="text-sm font-bold text-foreground block">{t.label}</span>
+                <span className="text-[10px] font-semibold text-primary">{t.sub}</span>
+              </div>
               <span className="text-[10px] text-muted-foreground leading-tight">{t.desc}</span>
               {selectedTemplate === t.id && (
-                <span className="text-[10px] font-bold text-primary">✓ Ausgewählt</span>
+                <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">✓ Ausgewählt</span>
               )}
             </button>
           ))}
@@ -599,15 +618,17 @@ export default function Expose() {
           <Save size={16} className="text-muted-foreground" /> Nur intern speichern (Entwurf)
         </button>
 
-        <button onClick={handlePdfExport} disabled={!formValid}
-          className="w-full border border-border bg-card text-foreground rounded-2xl py-3.5 text-sm font-bold hover:bg-accent transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
-          <Eye size={16} className="text-primary" /> PDF-Vorschau & Versenden
-        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={handlePdfExport} disabled={!formValid}
+            className="bg-card border border-border text-foreground rounded-2xl py-3.5 text-sm font-bold hover:bg-accent transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+            <Eye size={16} className="text-primary" /> PDF-Vorschau
+          </button>
 
-        <button onClick={handleVideoWebhook} disabled={!formValid || sendingWebhook}
-          className="w-full bg-foreground text-background rounded-2xl py-3.5 text-sm font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
-          {sendingWebhook ? <><RefreshCw size={16} className="animate-spin" /> Wird gesendet…</> : <><Send size={16} /> Video generieren (Make.com)</>}
-        </button>
+          <button onClick={handleVideoWebhook} disabled={!formValid || sendingWebhook}
+            className="bg-foreground text-background rounded-2xl py-3.5 text-sm font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+            {sendingWebhook ? <><RefreshCw size={16} className="animate-spin" /> Senden…</> : <><Send size={16} /> KI Video Rundgang</>}
+          </button>
+        </div>
       </div>
 
       <div className="bg-accent rounded-xl p-4 border border-border">

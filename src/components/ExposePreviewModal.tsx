@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import jsPDF from "jspdf";
 import type { PdfTemplate } from "@/pages/Expose";
-import { getWebhookUrl } from "@/lib/getWebhookUrl";
+import { sendAction } from "@/lib/sendAction";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface ExposeData {
@@ -215,23 +215,13 @@ ${data.aiText ? `<div class="section"><h3>KI-Analyse</h3><div style="background:
     if (k) setKunden(k);
   };
 
-  const notifyWebhook = async (action: string, extra: Record<string, unknown> = {}) => {
+  const notifyWebhook = async (actionId: string, extra: Record<string, unknown> = {}) => {
     if (!user) return;
     try {
-      const webhookUrl = await getWebhookUrl(user.id);
-      await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          payload: {
-            timestamp: new Date().toISOString(),
-            template,
-            objekt: { titel: data.titel, objektnummer: data.objektnummer, bezirk: data.bezirk, objektart: data.objektart, verkaufsart: data.verkaufsart },
-            user_id: user.id,
-            ...extra,
-          },
-        }),
+      await sendAction(actionId, {
+        template,
+        objekt: { titel: data.titel, objektnummer: data.objektnummer, bezirk: data.bezirk, objektart: data.objektart, verkaufsart: data.verkaufsart },
+        ...extra,
       });
     } catch { /* silent */ }
   };
