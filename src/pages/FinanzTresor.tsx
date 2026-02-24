@@ -15,7 +15,7 @@ import {
   Shield, Lock, FileText, Upload, Download, Trash2, Loader2,
   User, Home, MapPin, Euro, Phone, Mail, StickyNote, FileSpreadsheet,
   File, Building, Save, ChevronRight, AlertTriangle, CircleCheck, Circle,
-  Plus, History, Send
+  Plus, History, Send, MessageSquare, Paperclip
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -95,7 +95,14 @@ export default function FinanzTresor() {
   const [mailSubject, setMailSubject] = useState("");
   const [mailBody, setMailBody] = useState("");
   const [sendingMail, setSendingMail] = useState(false);
+  const [kommMsg, setKommMsg] = useState("");
+  const [kommTo, setKommTo] = useState("");
+  const [sendingKomm, setSendingKomm] = useState(false);
+  const [uploadingBankAngebot, setUploadingBankAngebot] = useState(false);
+  const [kommAttachment, setKommAttachment] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const kommFileRef = useRef<HTMLInputElement>(null);
+  const bankAngebotRef = useRef<HTMLInputElement>(null);
 
   // Check admin role
   useEffect(() => {
@@ -243,7 +250,6 @@ export default function FinanzTresor() {
   const handleSendMail = async () => {
     if (!selected || !user || !mailTo.trim() || !mailSubject.trim()) return;
     setSendingMail(true);
-    // Archive as history entry in notizen
     const archiveText = `📧 E-Mail an Bank gesendet\nAn: ${mailTo}\nBetreff: ${mailSubject}\n${mailBody ? `Nachricht: ${mailBody}` : ""}`;
     const { error } = await supabase.from("finanz_tresor_notizen").insert({
       kunde_id: selected.id, user_id: user.id, notiz: archiveText.trim()
@@ -257,6 +263,56 @@ export default function FinanzTresor() {
       setNotizen((data as TresorNotiz[]) || []);
     }
     setSendingMail(false);
+  };
+
+  const handleSendKomm = async () => {
+    if (!selected || !user || !kommMsg.trim()) return;
+    setSendingKomm(true);
+    let attachmentInfo = "";
+    if (kommAttachment) {
+      attachmentInfo = `\n📎 Anhang: ${kommAttachment.name}`;
+    }
+    const archiveText = `💬 Nachricht gesendet${kommTo ? `\nAn: ${kommTo}` : ""}${attachmentInfo}\n${kommMsg}`;
+    const { error } = await supabase.from("finanz_tresor_notizen").insert({
+      kunde_id: selected.id, user_id: user.id, notiz: archiveText.trim()
+    });
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✓ Nachricht archiviert" });
+      setKommMsg("");
+      setKommTo("");
+      setKommAttachment(null);
+      const { data } = await supabase.from("finanz_tresor_notizen").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false });
+      setNotizen((data as TresorNotiz[]) || []);
+    }
+    setSendingKomm(false);
+  };
+
+  const handleEmailAutoFill = () => {
+    if (selected?.email) {
+      setKommTo(selected.email);
+    }
+  };
+
+  const handleUploadBankAngebot = async (file: File) => {
+    if (!selected || !user) return;
+    setUploadingBankAngebot(true);
+    try {
+      const tresorPath = `tresor/${selected.id}/${Date.now()}_${file.name}`;
+      const { error: upErr } = await supabase.storage.from("finanz-tresor").upload(tresorPath, file);
+      if (upErr) throw upErr;
+      const { error: dbErr } = await supabase.from("finanz_tresor_uploads").insert({
+        kunde_id: selected.id, user_id: user.id, dateiname: file.name, storage_path: tresorPath
+      });
+      if (dbErr) throw dbErr;
+      toast({ title: "✓ Bank-Angebot hochgeladen", description: file.name });
+      const { data } = await supabase.from("finanz_tresor_uploads").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false });
+      setUploads((data as TresorUpload[]) || []);
+    } catch (err: any) {
+      toast({ title: "Fehler", description: err.message, variant: "destructive" });
+    }
+    setUploadingBankAngebot(false);
   };
 
   if (isAdmin === null) {
@@ -346,7 +402,13 @@ export default function FinanzTresor() {
                   <p className="text-xs text-muted-foreground">{selected.typ} · {selected.status}</p>
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><Mail size={12} />{selected.email || "–"}</span>
+                  {selected.email ? (
+                    <button onClick={handleEmailAutoFill} className="flex items-center gap-1 text-primary hover:underline font-semibold cursor-pointer">
+                      <Mail size={12} />{selected.email}
+                    </button>
+                  ) : (
+                    <span className="flex items-center gap-1"><Mail size={12} />–</span>
+                  )}
                   {selected.phone ? (
                     <a href={`tel:${selected.phone}`} className="flex items-center gap-1 text-primary hover:underline font-semibold">
                       <Phone size={12} />{selected.phone}
@@ -562,22 +624,17 @@ export default function FinanzTresor() {
                           <p className="text-sm text-foreground">{selected.notiz}</p>
                         </div>
                       )}
-                      {/* Bank-Angebote Liste */}
+                      {/* Nachrichten-Log (chronologisch aus Notizen) */}
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">Bank-Angebote ({uploads.length})</p>
-                        {uploads.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">Noch keine.</p>
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">Nachrichten-Log</p>
+                        {notizen.filter(n => n.notiz.startsWith("💬") || n.notiz.startsWith("📧")).length === 0 ? (
+                          <p className="text-xs text-muted-foreground">Noch keine Nachrichten.</p>
                         ) : (
-                          <div className="space-y-1.5">
-                            {uploads.map(u => (
-                              <div key={u.id} className="flex items-center gap-2 bg-accent rounded-xl p-2.5 border border-border">
-                                {getFileIcon(u.dateiname)}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-foreground truncate">{u.dateiname}</p>
-                                  <p className="text-[10px] text-muted-foreground">{formatDate(u.created_at)}</p>
-                                </div>
-                                <button onClick={() => handleDownload(u)} className="p-1.5 rounded-lg hover:bg-card transition-colors"><Download size={13} className="text-primary" /></button>
-                                <button onClick={() => handleDeleteUpload(u)} className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"><Trash2 size={13} className="text-destructive" /></button>
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto scrollbar-hide">
+                            {notizen.filter(n => n.notiz.startsWith("💬") || n.notiz.startsWith("📧")).map(n => (
+                              <div key={n.id} className="note-highlight border-l-4 border-l-primary/40">
+                                <p className="text-sm text-foreground whitespace-pre-line">{n.notiz}</p>
+                                <p className="text-[10px] text-muted-foreground mt-1">{formatDateTime(n.created_at)}</p>
                               </div>
                             ))}
                           </div>
@@ -622,7 +679,68 @@ export default function FinanzTresor() {
                   </Card>
                 </div>
 
-                {/* Bottom Card: FINANZ-TRESOR with Bank-Email + Upload */}
+                {/* KOMMUNIKATION Card */}
+                <Card className="card-radius shadow-card">
+                  <CardContent className="p-5">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-4">
+                      <MessageSquare size={14} className="text-primary" /> Kommunikation
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="komm-to" className="text-xs font-semibold text-foreground mb-1 block">Empfänger (E-Mail)</Label>
+                        <Input
+                          id="komm-to"
+                          type="email"
+                          placeholder="Klicke oben auf die E-Mail des Kunden"
+                          value={kommTo}
+                          onChange={e => setKommTo(e.target.value)}
+                          className="rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="komm-msg" className="text-xs font-semibold text-foreground mb-1 block">Nachricht</Label>
+                        <Textarea
+                          id="komm-msg"
+                          value={kommMsg}
+                          onChange={e => setKommMsg(e.target.value)}
+                          placeholder="Nachricht verfassen..."
+                          className="min-h-[100px] rounded-xl"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          ref={kommFileRef}
+                          type="file"
+                          className="hidden"
+                          onChange={e => { if (e.target.files?.[0]) setKommAttachment(e.target.files[0]); }}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl gap-1.5"
+                          onClick={() => kommFileRef.current?.click()}
+                        >
+                          <Paperclip size={13} /> Anhang
+                        </Button>
+                        {kommAttachment && (
+                          <span className="text-xs text-muted-foreground truncate max-w-[200px]">📎 {kommAttachment.name}</span>
+                        )}
+                        <div className="flex-1" />
+                        <Button
+                          size="sm"
+                          className="rounded-xl gap-1.5"
+                          onClick={handleSendKomm}
+                          disabled={!kommMsg.trim() || sendingKomm}
+                        >
+                          {sendingKomm ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                          Senden & archivieren
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* FINANZ-TRESOR with Bank-Email */}
                 <Card className="card-radius shadow-card">
                   <CardContent className="p-5">
                     <div className="flex items-start gap-4">
@@ -634,8 +752,6 @@ export default function FinanzTresor() {
                           <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">Finanz-Tresor</h4>
                           <p className="text-[10px] text-muted-foreground">Dokumente werden automatisch auch in der Kunden-Dokumentenliste sichtbar.</p>
                         </div>
-
-                        {/* Bank-E-Mail Eingabe */}
                         <div>
                           <Label htmlFor="bank-email" className="text-xs font-semibold text-foreground mb-1 block">Bank-E-Mail</Label>
                           <div className="flex gap-2">
@@ -647,18 +763,11 @@ export default function FinanzTresor() {
                               onChange={e => setBankEmail(e.target.value)}
                               className="flex-1 rounded-xl"
                             />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={openMailDialog}
-                              disabled={!bankEmail.trim()}
-                              className="rounded-xl gap-1.5"
-                            >
+                            <Button variant="outline" size="sm" onClick={openMailDialog} disabled={!bankEmail.trim()} className="rounded-xl gap-1.5">
                               <Send size={13} /> Dokumente an Bank mailen
                             </Button>
                           </div>
                         </div>
-
                         <input
                           ref={fileRef}
                           type="file"
@@ -672,10 +781,52 @@ export default function FinanzTresor() {
                           className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2.5 rounded-xl text-sm font-semibold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
                         >
                           {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                          {uploading ? "Wird hochgeladen..." : "Bank-Angebot hochladen"}
+                          {uploading ? "Wird hochgeladen..." : "Dokument hochladen"}
                         </button>
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* BANK-ANGEBOTE Section */}
+                <Card className="card-radius shadow-card">
+                  <CardContent className="p-5">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-4">
+                      <FileSpreadsheet size={14} className="text-primary" /> Bank-Angebote
+                    </h4>
+                    {uploads.length === 0 ? (
+                      <p className="text-xs text-muted-foreground mb-3">Noch keine Bank-Angebote hochgeladen.</p>
+                    ) : (
+                      <div className="space-y-1.5 mb-3">
+                        {uploads.map(u => (
+                          <div key={u.id} className="flex items-center gap-2 bg-accent rounded-xl p-2.5 border border-border">
+                            {getFileIcon(u.dateiname)}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-foreground truncate">{u.dateiname}</p>
+                              <p className="text-[10px] text-muted-foreground">{formatDate(u.created_at)}</p>
+                            </div>
+                            <button onClick={() => handleDownload(u)} className="p-1.5 rounded-lg hover:bg-card transition-colors"><Download size={13} className="text-primary" /></button>
+                            <button onClick={() => handleDeleteUpload(u)} className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"><Trash2 size={13} className="text-destructive" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <input
+                      ref={bankAngebotRef}
+                      type="file"
+                      accept=".pdf,.xls,.xlsx,.doc,.docx,.csv"
+                      className="hidden"
+                      onChange={e => e.target.files?.[0] && handleUploadBankAngebot(e.target.files[0])}
+                    />
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-xl gap-1.5"
+                      onClick={() => bankAngebotRef.current?.click()}
+                      disabled={uploadingBankAngebot}
+                    >
+                      {uploadingBankAngebot ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                      {uploadingBankAngebot ? "Wird hochgeladen..." : "Bank-Angebot hochladen"}
+                    </Button>
                   </CardContent>
                 </Card>
 
