@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Calendar, Home, Key, FileText, Upload, Download, Trash2, Loader2 } from "lucide-react";
+import { X, Calendar, Home, Key, FileText, Upload, Download, Trash2, Loader2, Send, CheckCircle, FileSpreadsheet, File } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { sendAction } from "@/lib/sendAction";
 
 function formatDate(dateStr: string) {
   if (!dateStr) return "–";
   const d = new Date(dateStr);
   return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function getFileIcon(filename: string) {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  if (ext === "pdf") return <FileText size={18} className="text-destructive flex-shrink-0" />;
+  if (["xls", "xlsx", "csv"].includes(ext)) return <FileSpreadsheet size={18} className="text-green-600 flex-shrink-0" />;
+  if (["doc", "docx"].includes(ext)) return <File size={18} className="text-blue-600 flex-shrink-0" />;
+  return <FileText size={18} className="text-primary flex-shrink-0" />;
 }
 
 type Dok = { id: string; dateiname: string; storage_path: string; created_at: string };
@@ -27,6 +36,8 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
   const [dokumente, setDokumente] = useState<Dok[]>([]);
   const [loadingDoks, setLoadingDoks] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [financeShared, setFinanceShared] = useState(selected.finance_shared ?? false);
+  const [sendingFinance, setSendingFinance] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -48,7 +59,6 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
     if (!user) return;
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop();
       const path = `crm/${selected.id}/${Date.now()}_${file.name}`;
       const { error: upErr } = await supabase.storage.from("kundenunterlagen").upload(path, file);
       if (upErr) throw upErr;
@@ -80,12 +90,56 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
     loadDokumente();
   };
 
+  const handleSendFinance = async () => {
+    if (financeShared || sendingFinance) return;
+    setSendingFinance(true);
+    try {
+      // Trigger webhook
+      await sendAction("finance_transfer", {
+        kunde_id: selected.id,
+        kunde_name: selected.name,
+        email: selected.email,
+        phone: selected.phone,
+        budget: selected.budget,
+      });
+      // Update DB
+      await supabase.from("crm_kunden").update({ finance_shared: true }).eq("id", selected.id);
+      setFinanceShared(true);
+      toast({ title: "✓ Übertragen", description: `${selected.name} an Finanzierung gesendet.` });
+    } catch (err: any) {
+      toast({ title: "Fehler", description: err.message, variant: "destructive" });
+    } finally {
+      setSendingFinance(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
       <div className="bg-card rounded-2xl shadow-md-custom border border-border w-full max-w-md p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-foreground">{selected.name}</h2>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-accent transition-colors"><X size={18} /></button>
+          <div className="flex items-center gap-2">
+            {/* Finance Button */}
+            <button
+              onClick={handleSendFinance}
+              disabled={financeShared || sendingFinance}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+                financeShared
+                  ? "bg-green-600 text-white cursor-default"
+                  : "bg-primary text-primary-foreground shadow-orange hover:opacity-90"
+              }`}
+            >
+              {sendingFinance ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : financeShared ? (
+                <CheckCircle size={13} />
+              ) : (
+                <Send size={13} />
+              )}
+              {financeShared ? "Übertragen ✓" : "An Finanzierung senden"}
+            </button>
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-accent transition-colors"><X size={18} /></button>
+          </div>
         </div>
 
         {/* Tab-Leiste */}
@@ -180,7 +234,13 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
         ) : (
           /* Dokumente Tab */
           <div className="space-y-3">
-            <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.jpg,.png" className="hidden" onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0])} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.jpg,.png"
+              className="hidden"
+              onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0])}
+            />
             <button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
@@ -189,6 +249,7 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
               {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
               {uploading ? "Wird hochgeladen..." : "Dokument hochladen"}
             </button>
+            <p className="text-xs text-muted-foreground text-center">PDF, Word, Excel, Bilder</p>
 
             {loadingDoks ? (
               <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-primary" /></div>
@@ -201,7 +262,7 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
               <div className="space-y-2">
                 {dokumente.map(dok => (
                   <div key={dok.id} className="flex items-center gap-3 bg-accent rounded-xl p-3 border border-border">
-                    <FileText size={18} className="text-primary flex-shrink-0" />
+                    {getFileIcon(dok.dateiname)}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{dok.dateiname}</p>
                       <p className="text-xs text-muted-foreground">{formatDate(dok.created_at)}</p>

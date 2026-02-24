@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Map, BarChart3, Compass, GraduationCap, Bus, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Map, BarChart3, Compass, GraduationCap, Bus, RefreshCw, Search, MapPin } from "lucide-react";
 import { sendAction } from "@/lib/sendAction";
 import { useToast } from "@/hooks/use-toast";
 
@@ -35,6 +36,79 @@ const BEZIRKE = [
   { value: "1230", label: "23. Liesing" },
 ];
 
+/* ─── Address Context ─── */
+interface AddressData {
+  display: string;
+  lat: number;
+  lon: number;
+}
+
+const AddressContext = createContext<{
+  address: AddressData | null;
+  setAddress: (a: AddressData | null) => void;
+}>({ address: null, setAddress: () => {} });
+
+const useAddress = () => useContext(AddressContext);
+
+/* ─── OSM Autocomplete Search ─── */
+function AddressSearch() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const { setAddress } = useAddress();
+
+  const search = useCallback(async (q: string) => {
+    if (q.length < 3) { setResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + " Wien")}&limit=5&addressdetails=1`
+      );
+      const data = await res.json();
+      setResults(data);
+    } catch { setResults([]); }
+    setSearching(false);
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => search(query), 400);
+    return () => clearTimeout(t);
+  }, [query, search]);
+
+  const select = (r: any) => {
+    setAddress({ display: r.display_name, lat: parseFloat(r.lat), lon: parseFloat(r.lon) });
+    setQuery(r.display_name.split(",")[0]);
+    setResults([]);
+  };
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Adresse eingeben (z.B. Praterstraße 10)..."
+          className="pl-10 bg-card border-border rounded-xl"
+        />
+      </div>
+      {results.length > 0 && (
+        <div className="absolute z-50 top-full mt-1 w-full bg-card border border-border rounded-xl shadow-md-custom overflow-hidden">
+          {results.map((r: any, i: number) => (
+            <button
+              key={i}
+              onClick={() => select(r)}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors flex items-center gap-2"
+            >
+              <MapPin size={14} className="text-primary flex-shrink-0" />
+              <span className="truncate text-foreground">{r.display_name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface WebhookData {
   [key: string]: unknown;
@@ -66,6 +140,11 @@ function useWebhookData(actionId: string, params: Record<string, string> = {}) {
 
 /* ─── Tab 1: Karte ─── */
 function KarteTab() {
+  const { address } = useAddress();
+  const lat = address?.lat ?? 48.2082;
+  const lon = address?.lon ?? 16.3738;
+  const bbox = `${lon - 0.02}%2C${lat - 0.015}%2C${lon + 0.02}%2C${lat + 0.015}`;
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl overflow-hidden border border-border" style={{ height: "65vh" }}>
@@ -74,19 +153,24 @@ function KarteTab() {
           width="100%"
           height="100%"
           style={{ border: 0 }}
-          src="https://www.openstreetmap.org/export/embed.html?bbox=16.2%2C48.12%2C16.55%2C48.30&layer=mapnik&marker=48.2082%2C16.3738"
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lon}`}
           allowFullScreen
         />
       </div>
-      <p className="text-xs text-muted-foreground text-center">Kartenansicht: Wien Zentrum (OpenStreetMap)</p>
+      {address && (
+        <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
+          <MapPin size={12} className="text-primary" /> {address.display.split(",").slice(0, 2).join(",")}
+        </p>
+      )}
     </div>
   );
 }
 
 /* ─── Tab 2: Statistik ─── */
 function StatistikTab() {
+  const { address } = useAddress();
   const [bezirk, setBezirk] = useState("1020");
-  const { loading, refetch } = useWebhookData("get_district_stats", { bezirk });
+  const { loading, refetch } = useWebhookData("get_district_stats", { bezirk, ...(address ? { lat: String(address.lat), lon: String(address.lon) } : {}) });
 
   useEffect(() => { refetch(); }, [bezirk]);
 
@@ -103,37 +187,22 @@ function StatistikTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Select value={bezirk} onValueChange={setBezirk}>
-          <SelectTrigger className="w-64 bg-card">
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="w-64 bg-card"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {BEZIRKE.map((b) => (
-              <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
-            ))}
+            {BEZIRKE.map((b) => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Button variant="outline" size="icon" onClick={refetch} disabled={loading}>
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
-
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {loading
           ? Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i} className="card-radius">
-                <CardContent className="p-5">
-                  <Skeleton className="h-4 w-20 mb-2" />
-                  <Skeleton className="h-8 w-24" />
-                </CardContent>
-              </Card>
+              <Card key={i} className="card-radius"><CardContent className="p-5"><Skeleton className="h-4 w-20 mb-2" /><Skeleton className="h-8 w-24" /></CardContent></Card>
             ))
           : mockStats.map((s) => (
-              <Card key={s.label} className="card-radius shadow-card">
-                <CardContent className="p-5">
-                  <p className="text-xs text-muted-foreground mb-1">{s.label}</p>
-                  <p className="text-2xl font-bold text-foreground">{s.value}</p>
-                </CardContent>
-              </Card>
+              <Card key={s.label} className="card-radius shadow-card"><CardContent className="p-5"><p className="text-xs text-muted-foreground mb-1">{s.label}</p><p className="text-2xl font-bold text-foreground">{s.value}</p></CardContent></Card>
             ))}
       </div>
     </div>
@@ -171,8 +240,9 @@ function EntdeckenTab() {
 
 /* ─── Tab 4: Bildung ─── */
 function BildungTab() {
+  const { address } = useAddress();
   const [bezirk, setBezirk] = useState("1020");
-  const { loading, refetch } = useWebhookData("get_school_data", { bezirk });
+  const { loading, refetch } = useWebhookData("get_school_data", { bezirk, ...(address ? { lat: String(address.lat), lon: String(address.lon) } : {}) });
 
   useEffect(() => { refetch(); }, [bezirk]);
 
@@ -187,43 +257,23 @@ function BildungTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Select value={bezirk} onValueChange={setBezirk}>
-          <SelectTrigger className="w-64 bg-card">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {BEZIRKE.map((b) => (
-              <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
-            ))}
-          </SelectContent>
+          <SelectTrigger className="w-64 bg-card"><SelectValue /></SelectTrigger>
+          <SelectContent>{BEZIRKE.map((b) => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
         </Select>
         <Button variant="outline" size="icon" onClick={refetch} disabled={loading}>
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
-
       <div className="space-y-3">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i} className="card-radius">
-                <CardContent className="p-4 flex items-center gap-4">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="flex-1">
-                    <Skeleton className="h-4 w-40 mb-2" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                </CardContent>
-              </Card>
+              <Card key={i} className="card-radius"><CardContent className="p-4 flex items-center gap-4"><Skeleton className="h-10 w-10 rounded-full" /><div className="flex-1"><Skeleton className="h-4 w-40 mb-2" /><Skeleton className="h-3 w-24" /></div></CardContent></Card>
             ))
           : mockSchools.map((s) => (
               <Card key={s.name} className="card-radius shadow-card">
                 <CardContent className="p-4 flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <GraduationCap className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-foreground">{s.name}</p>
-                    <p className="text-xs text-muted-foreground">{s.type}</p>
-                  </div>
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><GraduationCap className="h-5 w-5 text-primary" /></div>
+                  <div className="flex-1"><p className="font-semibold text-foreground">{s.name}</p><p className="text-xs text-muted-foreground">{s.type}</p></div>
                   <Badge variant="outline">{s.distance}</Badge>
                 </CardContent>
               </Card>
@@ -235,8 +285,9 @@ function BildungTab() {
 
 /* ─── Tab 5: Mobilität ─── */
 function MobilitaetTab() {
+  const { address } = useAddress();
   const [bezirk, setBezirk] = useState("1020");
-  const { loading, refetch } = useWebhookData("get_transit_live", { bezirk });
+  const { loading, refetch } = useWebhookData("get_transit_live", { bezirk, ...(address ? { lat: String(address.lat), lon: String(address.lon) } : {}) });
 
   useEffect(() => { refetch(); }, [bezirk]);
 
@@ -251,43 +302,23 @@ function MobilitaetTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Select value={bezirk} onValueChange={setBezirk}>
-          <SelectTrigger className="w-64 bg-card">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {BEZIRKE.map((b) => (
-              <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
-            ))}
-          </SelectContent>
+          <SelectTrigger className="w-64 bg-card"><SelectValue /></SelectTrigger>
+          <SelectContent>{BEZIRKE.map((b) => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
         </Select>
         <Button variant="outline" size="icon" onClick={refetch} disabled={loading}>
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
-
       <div className="space-y-3">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i} className="card-radius">
-                <CardContent className="p-4 flex items-center gap-4">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="flex-1">
-                    <Skeleton className="h-4 w-32 mb-2" />
-                    <Skeleton className="h-3 w-20" />
-                  </div>
-                </CardContent>
-              </Card>
+              <Card key={i} className="card-radius"><CardContent className="p-4 flex items-center gap-4"><Skeleton className="h-10 w-10 rounded-full" /><div className="flex-1"><Skeleton className="h-4 w-32 mb-2" /><Skeleton className="h-3 w-20" /></div></CardContent></Card>
             ))
           : mockTransit.map((t, i) => (
               <Card key={i} className="card-radius shadow-card">
                 <CardContent className="p-4 flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center">
-                    <span className="text-primary-foreground font-bold text-xs">{t.line}</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-foreground">{t.destination}</p>
-                    <p className="text-xs text-muted-foreground">{t.type}</p>
-                  </div>
+                  <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center"><span className="text-primary-foreground font-bold text-xs">{t.line}</span></div>
+                  <div className="flex-1"><p className="font-semibold text-foreground">{t.destination}</p><p className="text-xs text-muted-foreground">{t.type}</p></div>
                   <Badge className="bg-primary text-primary-foreground">{t.wait}</Badge>
                 </CardContent>
               </Card>
@@ -299,41 +330,44 @@ function MobilitaetTab() {
 
 /* ─── Main Page ─── */
 export default function KiezCheck() {
+  const [address, setAddress] = useState<AddressData | null>(null);
+
   return (
-    <div className="min-h-screen">
-      {/* Hero Header */}
-      <div className="bg-[#0A0A0A] text-white px-6 py-10 rounded-b-3xl mb-6">
-        <h1 className="text-3xl font-bold mb-1">KiezCheck Wien</h1>
-        <p className="text-white/60 text-sm">Bezirksdaten · Infrastruktur · Echtzeit-ÖPNV</p>
-      </div>
+    <AddressContext.Provider value={{ address, setAddress }}>
+      <div className="min-h-screen">
+        {/* Hero Header */}
+        <div className="bg-[#0A0A0A] text-white px-6 py-10 rounded-b-3xl mb-6">
+          <h1 className="text-3xl font-bold mb-1">KiezCheck Wien</h1>
+          <p className="text-white/60 text-sm mb-5">Bezirksdaten · Infrastruktur · Echtzeit-ÖPNV</p>
+          <AddressSearch />
+          {address && (
+            <div className="mt-3 flex items-center gap-2">
+              <Badge className="bg-primary text-primary-foreground text-xs">
+                <MapPin size={11} className="mr-1" /> {address.display.split(",").slice(0, 2).join(",")}
+              </Badge>
+              <button onClick={() => setAddress(null)} className="text-white/40 hover:text-white/80 text-xs">✕ zurücksetzen</button>
+            </div>
+          )}
+        </div>
 
-      <div className="px-4 pb-10">
-        <Tabs defaultValue="karte" className="w-full">
-          <TabsList className="w-full justify-start gap-1 bg-muted/50 p-1 rounded-2xl mb-6 overflow-x-auto">
-            <TabsTrigger value="karte" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Map className="h-4 w-4" /> Karte
-            </TabsTrigger>
-            <TabsTrigger value="statistik" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <BarChart3 className="h-4 w-4" /> Statistik
-            </TabsTrigger>
-            <TabsTrigger value="entdecken" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Compass className="h-4 w-4" /> Entdecken
-            </TabsTrigger>
-            <TabsTrigger value="bildung" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <GraduationCap className="h-4 w-4" /> Bildung
-            </TabsTrigger>
-            <TabsTrigger value="mobilitaet" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Bus className="h-4 w-4" /> Mobilität
-            </TabsTrigger>
-          </TabsList>
+        <div className="px-4 pb-10">
+          <Tabs defaultValue="karte" className="w-full">
+            <TabsList className="w-full justify-start gap-1 bg-muted/50 p-1 rounded-2xl mb-6 overflow-x-auto">
+              <TabsTrigger value="karte" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Map className="h-4 w-4" /> Karte</TabsTrigger>
+              <TabsTrigger value="statistik" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><BarChart3 className="h-4 w-4" /> Statistik</TabsTrigger>
+              <TabsTrigger value="entdecken" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Compass className="h-4 w-4" /> Entdecken</TabsTrigger>
+              <TabsTrigger value="bildung" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><GraduationCap className="h-4 w-4" /> Bildung</TabsTrigger>
+              <TabsTrigger value="mobilitaet" className="rounded-xl gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Bus className="h-4 w-4" /> Mobilität</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="karte"><KarteTab /></TabsContent>
-          <TabsContent value="statistik"><StatistikTab /></TabsContent>
-          <TabsContent value="entdecken"><EntdeckenTab /></TabsContent>
-          <TabsContent value="bildung"><BildungTab /></TabsContent>
-          <TabsContent value="mobilitaet"><MobilitaetTab /></TabsContent>
-        </Tabs>
+            <TabsContent value="karte"><KarteTab /></TabsContent>
+            <TabsContent value="statistik"><StatistikTab /></TabsContent>
+            <TabsContent value="entdecken"><EntdeckenTab /></TabsContent>
+            <TabsContent value="bildung"><BildungTab /></TabsContent>
+            <TabsContent value="mobilitaet"><MobilitaetTab /></TabsContent>
+          </Tabs>
+        </div>
       </div>
-    </div>
+    </AddressContext.Provider>
   );
 }
