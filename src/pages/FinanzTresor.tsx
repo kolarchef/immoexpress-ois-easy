@@ -5,10 +5,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import {
   Shield, Lock, FileText, Upload, Download, Trash2, Loader2,
   User, Home, MapPin, Euro, Phone, Mail, StickyNote, FileSpreadsheet,
   File, Building, Save, ChevronRight, AlertTriangle, CircleCheck, Circle,
-  Plus, History
+  Plus, History, Send
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -41,13 +48,17 @@ const CHECKLIST_ITEMS = [
 ] as const;
 
 const STATUS_OPTIONS = [
-  { value: "nachfordern", label: "Infos nachfordern", color: "bg-yellow-100 text-yellow-700 border-yellow-400 hover:bg-yellow-200" },
-  { value: "abgeschlossen", label: "Abgeschlossen", color: "bg-green-100 text-green-700 border-green-400 hover:bg-green-200" },
-  { value: "storniert", label: "Storniert", color: "bg-red-100 text-red-700 border-red-400 hover:bg-red-200" },
+  { value: "uebertragen", label: "Übertragen", dotColor: "bg-blue-500" },
+  { value: "nachfordern", label: "Infos nachfordern", dotColor: "bg-yellow-500" },
+  { value: "abgeschlossen", label: "Abgeschlossen", dotColor: "bg-green-500" },
+  { value: "storniert", label: "Storniert", dotColor: "bg-red-500" },
 ];
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+function formatDateTime(d: string) {
+  return new Date(d).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 function formatCurrency(n: number | null) {
   if (!n) return "–";
@@ -77,6 +88,12 @@ export default function FinanzTresor() {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [showStornoInput, setShowStornoInput] = useState(false);
   const [stornoGrund, setStornoGrund] = useState("");
+  const [bankEmail, setBankEmail] = useState("");
+  const [showMailDialog, setShowMailDialog] = useState(false);
+  const [mailTo, setMailTo] = useState("");
+  const [mailSubject, setMailSubject] = useState("");
+  const [mailBody, setMailBody] = useState("");
+  const [sendingMail, setSendingMail] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Check admin role
@@ -99,7 +116,7 @@ export default function FinanzTresor() {
   };
 
   useEffect(() => {
-    if (!selected) { setObjekt(null); setNotizen([]); setUploads([]); setCrmDokumente([]); return; }
+    if (!selected) { setObjekt(null); setNotizen([]); setUploads([]); setCrmDokumente([]); setBankEmail(""); return; }
     if (selected.objekt_id) {
       supabase.from("objekte").select("*").eq("id", selected.objekt_id).single()
         .then(({ data }) => setObjekt(data as Objekt | null));
@@ -214,6 +231,33 @@ export default function FinanzTresor() {
     setStatusUpdating(false);
   };
 
+  const openMailDialog = () => {
+    if (!selected) return;
+    setMailTo(bankEmail);
+    setMailSubject(`Finanzierungsanfrage - ${selected.name}`);
+    setMailBody("");
+    setShowMailDialog(true);
+  };
+
+  const handleSendMail = async () => {
+    if (!selected || !user || !mailTo.trim() || !mailSubject.trim()) return;
+    setSendingMail(true);
+    // Archive as history entry in notizen
+    const archiveText = `📧 E-Mail an Bank gesendet\nAn: ${mailTo}\nBetreff: ${mailSubject}\n${mailBody ? `Nachricht: ${mailBody}` : ""}`;
+    const { error } = await supabase.from("finanz_tresor_notizen").insert({
+      kunde_id: selected.id, user_id: user.id, notiz: archiveText.trim()
+    });
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✓ E-Mail archiviert", description: "Der Inhalt wurde in der Status-Historie gespeichert." });
+      setShowMailDialog(false);
+      const { data } = await supabase.from("finanz_tresor_notizen").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false });
+      setNotizen((data as TresorNotiz[]) || []);
+    }
+    setSendingMail(false);
+  };
+
   if (isAdmin === null) {
     return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="animate-spin text-primary" size={32} /></div>;
   }
@@ -228,7 +272,6 @@ export default function FinanzTresor() {
     );
   }
 
-  const currentStatusOption = selected?.finance_status ? STATUS_OPTIONS.find(s => s.value === selected.finance_status) : null;
   const isLocked = selected?.finance_status === "uebertragen" || selected?.finance_status === "abgeschlossen";
 
   return (
@@ -259,7 +302,7 @@ export default function FinanzTresor() {
                 <p className="text-muted-foreground text-sm">Noch keine übertragenen Kunden.</p>
               </div>
             ) : kunden.map(k => {
-              const sOpt = k.finance_status ? [...STATUS_OPTIONS, { value: "uebertragen", label: "Übertragen", color: "bg-blue-100 text-blue-700 border-blue-400" }].find(s => s.value === k.finance_status) : null;
+              const sOpt = k.finance_status ? STATUS_OPTIONS.find(s => s.value === k.finance_status) : null;
               return (
                 <Card key={k.id} className="card-radius shadow-card cursor-pointer hover:shadow-card-hover transition-shadow" onClick={() => setSelected(k)}>
                   <CardContent className="p-4 flex items-center gap-4">
@@ -270,7 +313,10 @@ export default function FinanzTresor() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-bold text-foreground">{k.name}</p>
                         {sOpt && (
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sOpt.color}`}>{sOpt.label}</span>
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-card border border-border text-foreground">
+                            <span className={`w-2 h-2 rounded-full ${sOpt.dotColor}`} />
+                            {sOpt.label}
+                          </span>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">{k.typ} · {k.ort || "–"} · {k.budget || "–"}</p>
@@ -364,37 +410,34 @@ export default function FinanzTresor() {
               {/* ===== RIGHT MAIN AREA ===== */}
               <div className="flex-1 space-y-4">
 
-                {/* Card 1: FINANZIERUNGS-STATUS ÄNDERN */}
+                {/* Card 1: FINANZIERUNGS-STATUS ÄNDERN - Runde Buttons mit farbigen Punkten */}
                 <Card className="card-radius shadow-card">
                   <CardContent className="p-5">
                     <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-4">
                       Finanzierungs-Status ändern
                     </h4>
                     <div className="flex flex-wrap items-center gap-2">
-                      {STATUS_OPTIONS.map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => handleStatusChange(opt.value)}
-                          disabled={statusUpdating || selected.finance_status === opt.value}
-                          className={`px-4 py-2 rounded-full text-xs font-semibold border transition-all active:scale-95 disabled:opacity-50 ${
-                            selected.finance_status === opt.value
-                              ? opt.color + " ring-2 ring-offset-1 ring-primary/30"
-                              : "bg-card text-muted-foreground border-border hover:bg-accent"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-
-                      {/* An Finanzierung senden - prominent orange */}
-                      {selected.finance_status === "uebertragen" && (
-                        <span className="px-4 py-2 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-400 ring-2 ring-offset-1 ring-primary/30">
-                          Übertragen
-                        </span>
-                      )}
+                      {STATUS_OPTIONS.map(opt => {
+                        const isActive = selected.finance_status === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => handleStatusChange(opt.value)}
+                            disabled={statusUpdating || isActive}
+                            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold border transition-all active:scale-95 disabled:cursor-default ${
+                              isActive
+                                ? "bg-card border-border ring-2 ring-primary/30 ring-offset-1 text-foreground shadow-sm"
+                                : "bg-card text-muted-foreground border-border hover:bg-accent hover:text-foreground"
+                            }`}
+                          >
+                            <span className={`w-2.5 h-2.5 rounded-full ${opt.dotColor} ${isActive ? "ring-2 ring-offset-1 ring-current" : ""}`} />
+                            {opt.label}
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    {/* Storno Input */}
+                    {/* Storno Input - nur wenn Storniert angeklickt */}
                     {showStornoInput && (
                       <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4 animate-fade-in">
                         <p className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1.5">
@@ -424,7 +467,7 @@ export default function FinanzTresor() {
                       </div>
                     )}
 
-                    {/* Ablehnungsgrund anzeigen */}
+                    {/* Ablehnungsgrund NUR bei Status storniert */}
                     {selected.finance_status === "storniert" && selected.ablehnungsgrund_bank && !showStornoInput && (
                       <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4">
                         <p className="text-xs font-semibold text-red-700 mb-1">Ablehnungsgrund Bank:</p>
@@ -488,9 +531,9 @@ export default function FinanzTresor() {
                         {notizen.length === 0 ? (
                           <p className="text-xs text-muted-foreground">Noch keine Notizen.</p>
                         ) : notizen.map(n => (
-                          <div key={n.id} className="note-highlight">
-                            <p className="text-sm text-foreground">{n.notiz}</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">{formatDate(n.created_at)}</p>
+                          <div key={n.id} className={`note-highlight ${n.notiz.startsWith("📧") ? "border-l-4 border-l-primary/40" : ""}`}>
+                            <p className="text-sm text-foreground whitespace-pre-line">{n.notiz}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">{formatDateTime(n.created_at)}</p>
                           </div>
                         ))}
                       </div>
@@ -514,16 +557,42 @@ export default function FinanzTresor() {
                   </Card>
                 </div>
 
-                {/* Bottom Card: FINANZ-TRESOR Upload */}
+                {/* Bottom Card: FINANZ-TRESOR with Bank-Email + Upload */}
                 <Card className="card-radius shadow-card">
                   <CardContent className="p-5">
                     <div className="flex items-start gap-4">
                       <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <Lock size={22} className="text-primary" />
                       </div>
-                      <div className="flex-1">
-                        <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">Finanz-Tresor</h4>
-                        <p className="text-[10px] text-muted-foreground mb-3">Dokumente werden automatisch auch in der Kunden-Dokumentenliste sichtbar.</p>
+                      <div className="flex-1 space-y-4">
+                        <div>
+                          <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">Finanz-Tresor</h4>
+                          <p className="text-[10px] text-muted-foreground">Dokumente werden automatisch auch in der Kunden-Dokumentenliste sichtbar.</p>
+                        </div>
+
+                        {/* Bank-E-Mail Eingabe */}
+                        <div>
+                          <Label htmlFor="bank-email" className="text-xs font-semibold text-foreground mb-1 block">Bank-E-Mail</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="bank-email"
+                              type="email"
+                              placeholder="bank@beispiel.at"
+                              value={bankEmail}
+                              onChange={e => setBankEmail(e.target.value)}
+                              className="flex-1 rounded-xl"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={openMailDialog}
+                              disabled={!bankEmail.trim()}
+                              className="rounded-xl gap-1.5"
+                            >
+                              <Send size={13} /> Dokumente an Bank mailen
+                            </Button>
+                          </div>
+                        </div>
 
                         <input
                           ref={fileRef}
@@ -550,6 +619,58 @@ export default function FinanzTresor() {
           </div>
         )}
       </div>
+
+      {/* Mail Dialog */}
+      <Dialog open={showMailDialog} onOpenChange={setShowMailDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail size={18} className="text-primary" /> Dokumente an Bank senden
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="mail-to" className="text-xs font-semibold mb-1 block">Empfänger</Label>
+              <Input
+                id="mail-to"
+                type="email"
+                value={mailTo}
+                onChange={e => setMailTo(e.target.value)}
+                placeholder="bank@beispiel.at"
+              />
+            </div>
+            <div>
+              <Label htmlFor="mail-subject" className="text-xs font-semibold mb-1 block">Betreff</Label>
+              <Input
+                id="mail-subject"
+                value={mailSubject}
+                onChange={e => setMailSubject(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="mail-body" className="text-xs font-semibold mb-1 block">Nachricht</Label>
+              <Textarea
+                id="mail-body"
+                value={mailBody}
+                onChange={e => setMailBody(e.target.value)}
+                placeholder="Ihre Nachricht an die Bank..."
+                className="min-h-[120px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMailDialog(false)}>Abbrechen</Button>
+            <Button
+              onClick={handleSendMail}
+              disabled={!mailTo.trim() || !mailSubject.trim() || sendingMail}
+              className="gap-1.5"
+            >
+              {sendingMail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              Senden & archivieren
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
