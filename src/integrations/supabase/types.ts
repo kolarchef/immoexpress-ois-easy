@@ -658,6 +658,7 @@ export type Database = {
           checkliste: Json
           erstellt_am: string
           id: string
+          kunde_id: string | null
           kunde_name: string
           token: string
         }
@@ -666,6 +667,7 @@ export type Database = {
           checkliste?: Json
           erstellt_am?: string
           id?: string
+          kunde_id?: string | null
           kunde_name: string
           token?: string
         }
@@ -674,10 +676,19 @@ export type Database = {
           checkliste?: Json
           erstellt_am?: string
           id?: string
+          kunde_id?: string | null
           kunde_name?: string
           token?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "unterlagen_anfragen_kunde_id_fkey"
+            columns: ["kunde_id"]
+            isOneToOne: false
+            referencedRelation: "crm_kunden"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unterlagen_uploads: {
         Row: {

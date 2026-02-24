@@ -23,6 +23,7 @@ import Newsletter from "./pages/Newsletter";
 import ImmoZ from "./pages/ImmoZ";
 import Unterlagen from "./pages/Unterlagen";
 import KundenUpload from "./pages/KundenUpload";
+import FinanzUpload from "./pages/FinanzUpload";
 import Grundbuch from "./pages/Grundbuch";
 import Bewertung from "./pages/Bewertung";
 import Netzwerk from "./pages/Netzwerk";
@@ -47,6 +48,7 @@ const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<Auth />} />
     <Route path="/upload" element={<KundenUpload />} />
+    <Route path="/finanz-upload" element={<FinanzUpload />} />
     <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
       <Route path="/" element={<Index />} />
       <Route path="/launchpad" element={<Launchpad />} />
