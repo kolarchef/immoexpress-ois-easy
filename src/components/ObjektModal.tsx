@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { X, RefreshCw, Plus, Upload, Trash2, Sparkles, Save, Copy, FileText } from "lucide-react";
+import { X, RefreshCw, Plus, Upload, Trash2, Sparkles, Save, Copy, FileText, Wand2 } from "lucide-react";
+import MagicToolOverlay from "@/components/MagicToolOverlay";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -30,6 +31,8 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
     kaeufer_provision: "", verkaeufer_provision: "",
     interne_notizen: "", beschreibung: "",
   });
+  const [magicEditOpen, setMagicEditOpen] = useState(false);
+  const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);
 
   if (!open) return null;
 
@@ -308,6 +311,10 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
                   <button onClick={(e) => { e.stopPropagation(); removePhoto(i); }} className="absolute top-1 right-1 bg-foreground/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Trash2 size={12} />
                   </button>
+                  <button onClick={(e) => { e.stopPropagation(); setMagicEditPhoto(src); setMagicEditOpen(true); }}
+                    className="absolute bottom-1 right-1 bg-primary text-primary-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Wand2 size={10} />
+                  </button>
                 </div>
               ))}
               {previews.length < 20 && (
@@ -384,6 +391,11 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
           </button>
         </div>
       </div>
+      <MagicToolOverlay
+        open={magicEditOpen}
+        photoUrl={magicEditPhoto}
+        onClose={() => { setMagicEditOpen(false); setMagicEditPhoto(null); }}
+      />
     </div>
   );
 }
