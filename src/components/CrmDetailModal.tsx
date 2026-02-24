@@ -90,18 +90,16 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
 
         {/* Tab-Leiste */}
         <div className="flex gap-1 mb-4 bg-muted rounded-xl p-1">
-          <button
-            onClick={() => setDetailTab("info")}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${detailTab === "info" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            Info
-          </button>
-          <button
-            onClick={() => setDetailTab("dokumente")}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${detailTab === "dokumente" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            <FileText size={13} /> Dokumente
-          </button>
+          {(["info", "dokumente"] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setDetailTab(tab)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${detailTab === tab ? "bg-primary text-primary-foreground shadow-orange" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {tab === "dokumente" && <FileText size={13} />}
+              {tab === "info" ? "Info" : "Dokumente"}
+            </button>
+          ))}
         </div>
 
         {detailTab === "info" ? (
