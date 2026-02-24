@@ -58,6 +58,7 @@ export const ACTION_IDS = {
   GET_DISTRICT_STATS: "get_district_stats",
   GET_SCHOOL_DATA: "get_school_data",
   GET_TRANSIT_LIVE: "get_transit_live",
+  FINANCE_TRANSFER: "finance_transfer",
 } as const;
 
 // ─── Webhook Actions ─────────────────────────────────────────────────

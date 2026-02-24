@@ -100,6 +100,7 @@ export type Database = {
           dsgvo_einwilligung: boolean | null
           einzugsdatum: string | null
           email: string | null
+          finance_shared: boolean
           geburtsdatum: string | null
           id: string
           kaufdatum: string | null
@@ -122,6 +123,7 @@ export type Database = {
           dsgvo_einwilligung?: boolean | null
           einzugsdatum?: string | null
           email?: string | null
+          finance_shared?: boolean
           geburtsdatum?: string | null
           id?: string
           kaufdatum?: string | null
@@ -144,6 +146,7 @@ export type Database = {
           dsgvo_einwilligung?: boolean | null
           einzugsdatum?: string | null
           email?: string | null
+          finance_shared?: boolean
           geburtsdatum?: string | null
           id?: string
           kaufdatum?: string | null
