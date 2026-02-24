@@ -16,7 +16,7 @@ import {
   Shield, Lock, FileText, Upload, Download, Trash2, Loader2,
   User, Home, MapPin, Euro, Phone, Mail, StickyNote, FileSpreadsheet,
   File, Building, Save, ChevronRight, AlertTriangle, CircleCheck, Circle,
-  Plus, History, Send, MessageSquare, Paperclip, FolderOpen, Pencil
+  Plus, History, Send, MessageSquare, Paperclip, FolderOpen, Pencil, Link, Copy
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -41,6 +41,7 @@ type Objekt = {
 type TresorNotiz = { id: string; notiz: string; created_at: string; updated_at: string };
 type TresorUpload = { id: string; dateiname: string; storage_path: string; created_at: string };
 type CrmDok = { id: string; dateiname: string; storage_path: string; created_at: string };
+type KundenUploadDoc = { id: string; dateiname: string | null; dokument_typ: string; storage_path: string | null; erstellt_am: string };
 
 const CHECKLIST_ITEMS = [
   { key: "grundbuch", label: "Grundbuchauszug", pflicht: true, patterns: ["grundbuch"] },
@@ -107,6 +108,8 @@ export default function FinanzTresor() {
   const [akteIncludes, setAkteIncludes] = useState<Record<string, boolean>>({});
   // Sonstige Unterlagen uploads (separate from tresor uploads)
   const [sonstigeUploading, setSonstigeUploading] = useState(false);
+  const [kundenUploads, setKundenUploads] = useState<KundenUploadDoc[]>([]);
+  const [generatingLink, setGeneratingLink] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const kommFileRef = useRef<HTMLInputElement>(null);
   const bankAngebotRef = useRef<HTMLInputElement>(null);
@@ -132,7 +135,7 @@ export default function FinanzTresor() {
   };
 
   useEffect(() => {
-    if (!selected) { setObjekt(null); setNotizen([]); setUploads([]); setCrmDokumente([]); setBankEmail(""); setEditedDocNames({}); setAkteIncludes({}); return; }
+    if (!selected) { setObjekt(null); setNotizen([]); setUploads([]); setCrmDokumente([]); setBankEmail(""); setEditedDocNames({}); setAkteIncludes({}); setKundenUploads([]); return; }
     if (selected.objekt_id) {
       supabase.from("objekte").select("*").eq("id", selected.objekt_id).single()
         .then(({ data }) => setObjekt(data as Objekt | null));
@@ -144,14 +147,47 @@ export default function FinanzTresor() {
     supabase.from("crm_dokumente").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false })
       .then(({ data }) => {
         setCrmDokumente((data as CrmDok[]) || []);
-        // Initialize akte includes to true for all docs
         const includes: Record<string, boolean> = {};
         (data || []).forEach((d: any) => { includes[d.id] = true; });
         setAkteIncludes(prev => ({ ...includes, ...prev }));
       });
+    // Fetch kunden uploads from unterlagen_anfragen linked to this kunde
+    supabase.from("unterlagen_anfragen").select("id").eq("kunde_id", selected.id)
+      .then(({ data: anfragen }) => {
+        if (anfragen && anfragen.length > 0) {
+          const anfrageIds = anfragen.map(a => a.id);
+          supabase.from("unterlagen_uploads").select("*").in("anfrage_id", anfrageIds).order("erstellt_am", { ascending: false })
+            .then(({ data }) => setKundenUploads((data as KundenUploadDoc[]) || []));
+        } else {
+          setKundenUploads([]);
+        }
+      });
   }, [selected]);
 
+  // Merge CRM docs + kunden uploads for checklist detection
+  const allDocs: CrmDok[] = [
+    ...crmDokumente,
+    ...kundenUploads.filter(u => u.dateiname).map(u => ({
+      id: `ku-${u.id}`,
+      dateiname: u.dateiname || u.dokument_typ,
+      storage_path: u.storage_path || "",
+      created_at: u.erstellt_am,
+    })),
+  ];
+
   const detectedItems = CHECKLIST_ITEMS.reduce<Record<string, CrmDok | null>>((acc, item) => {
+    // Check by dokument_typ match from kunden uploads first
+    const kundenMatch = kundenUploads.find(u => u.dokument_typ === item.key);
+    if (kundenMatch) {
+      acc[item.key] = {
+        id: `ku-${kundenMatch.id}`,
+        dateiname: kundenMatch.dateiname || kundenMatch.dokument_typ,
+        storage_path: kundenMatch.storage_path || "",
+        created_at: kundenMatch.erstellt_am,
+      };
+      return acc;
+    }
+    // Then check CRM docs by filename pattern
     const found = crmDokumente.find(dok =>
       item.patterns.some(p => dok.dateiname.toLowerCase().includes(p))
     );
@@ -159,10 +195,18 @@ export default function FinanzTresor() {
     return acc;
   }, {});
 
-  // Sonstige = CRM docs that don't match any checklist pattern
-  const sonstigeDokumente = crmDokumente.filter(dok =>
-    !CHECKLIST_ITEMS.some(item => item.patterns.some(p => dok.dateiname.toLowerCase().includes(p)))
-  );
+  // Sonstige = docs that don't match any checklist pattern
+  const sonstigeDokumente = [
+    ...crmDokumente.filter(dok =>
+      !CHECKLIST_ITEMS.some(item => item.patterns.some(p => dok.dateiname.toLowerCase().includes(p)))
+    ),
+    ...kundenUploads.filter(u => u.dokument_typ === "sonstige" && u.dateiname).map(u => ({
+      id: `ku-${u.id}`,
+      dateiname: u.dateiname || "Sonstige",
+      storage_path: u.storage_path || "",
+      created_at: u.erstellt_am,
+    })),
+  ];
 
   const handleSaveNotiz = async () => {
     if (!newNotiz.trim() || !selected || !user) return;
@@ -370,6 +414,44 @@ export default function FinanzTresor() {
       title: "Bank-Akte wird generiert…",
       description: `${docNames.length} Dokument(e) werden in die Akte aufgenommen.`,
     });
+  };
+
+  const handleCopyUploadLink = async () => {
+    if (!selected) return;
+    setGeneratingLink(true);
+    try {
+      // Check if an anfrage already exists for this kunde
+      const { data: existing } = await supabase
+        .from("unterlagen_anfragen")
+        .select("token")
+        .eq("kunde_id", selected.id)
+        .order("erstellt_am", { ascending: false })
+        .limit(1);
+      
+      let linkToken: string;
+      if (existing && existing.length > 0) {
+        linkToken = existing[0].token;
+      } else {
+        const { data: newAnfrage, error } = await supabase
+          .from("unterlagen_anfragen")
+          .insert({
+            kunde_name: selected.name,
+            kunde_id: selected.id,
+            checkliste: CHECKLIST_ITEMS.map(i => i.key),
+          })
+          .select("token")
+          .single();
+        if (error) throw error;
+        linkToken = newAnfrage.token;
+      }
+      
+      const uploadUrl = `${window.location.origin}/finanz-upload?token=${linkToken}`;
+      await navigator.clipboard.writeText(uploadUrl);
+      toast({ title: "✓ Link kopiert!", description: "Der Upload-Link wurde in die Zwischenablage kopiert." });
+    } catch (err: any) {
+      toast({ title: "Fehler", description: err.message, variant: "destructive" });
+    }
+    setGeneratingLink(false);
   };
 
   // Render document row with editable name + checkbox
@@ -584,7 +666,26 @@ export default function FinanzTresor() {
                     </Button>
                   </div>
 
-                  {/* Verknüpftes Objekt - kompakt */}
+                  {/* Upload-Link für Kunden */}
+                  <div className="pt-3 border-t border-border">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                      <Link size={14} className="text-primary" /> Kunden-Upload
+                    </h4>
+                    <p className="text-[10px] text-muted-foreground mb-2">
+                      Link an den Kunden senden – Fotos & Dokumente werden automatisch zugeordnet.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full rounded-xl gap-1.5 text-xs"
+                      onClick={handleCopyUploadLink}
+                      disabled={generatingLink}
+                    >
+                      {generatingLink ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />}
+                      Upload-Link für Kunden kopieren
+                    </Button>
+                  </div>
+
                   {objekt && (
                     <div className="pt-3 border-t border-border">
                       <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-2">
