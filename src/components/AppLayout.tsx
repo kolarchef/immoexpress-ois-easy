@@ -1,7 +1,9 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle, Mic, MicOff, X, Send, Loader2 } from "lucide-react";
+import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle, Mic, MicOff, X, Send, Loader2, BarChart3 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffect, useState as useStateHook } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import MessengerDrawer from "@/components/MessengerDrawer";
 import AudioRecorder from "@/components/AudioRecorder";
 import logoImg from "@/assets/logo_immoexpress_zug.jpeg";
@@ -21,6 +23,14 @@ export default function AppLayout() {
   const [showMicPanel, setShowMicPanel] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [sendingNote, setSendingNote] = useState(false);
+  const [isAdmin, setIsAdmin] = useStateHook(false);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").then(({ data }) => {
+      setIsAdmin(!!data?.length);
+    });
+  }, [user]);
 
   const handleTranscript = (text: string) => {
     setLastTranscript(text);
@@ -68,7 +78,14 @@ export default function AppLayout() {
         <div className="hidden md:flex items-center gap-1 text-sm text-muted-foreground">
           <span>Willkommen,</span>
           <span className="font-semibold text-foreground">{displayName || "Makler"}</span>
-          <span className="text-xs ml-2 bg-primary-light text-primary px-2 py-0.5 rounded-full font-semibold">Senior Agent · Wien</span>
+          {isAdmin && (
+            <button
+              onClick={() => navigate("/team-performance")}
+              className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-primary/90 transition-all"
+            >
+              <BarChart3 size={14} /> TEAM-PERFORMANCE
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
