@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -16,7 +17,8 @@ import {
   Shield, Lock, FileText, Upload, Download, Trash2, Loader2,
   User, Home, MapPin, Euro, Phone, Mail, StickyNote, FileSpreadsheet,
   File, Building, Save, ChevronRight, AlertTriangle, CircleCheck, Circle,
-  Plus, History, Send, MessageSquare, Paperclip, FolderOpen, Pencil, Link, Copy
+  Plus, History, Send, MessageSquare, Paperclip, FolderOpen, Pencil, Link, Copy,
+  Archive, CircleDot, UserPlus
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -110,6 +112,15 @@ export default function FinanzTresor() {
   const [sonstigeUploading, setSonstigeUploading] = useState(false);
   const [kundenUploads, setKundenUploads] = useState<KundenUploadDoc[]>([]);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [showArchiv, setShowArchiv] = useState(false);
+  const [showNewKundeDialog, setShowNewKundeDialog] = useState(false);
+  const [newKundeName, setNewKundeName] = useState("");
+  const [newKundeEmail, setNewKundeEmail] = useState("");
+  const [newKundePhone, setNewKundePhone] = useState("");
+  const [newKundeBudget, setNewKundeBudget] = useState("");
+  const [creatingKunde, setCreatingKunde] = useState(false);
+  const [maklerProfiles, setMaklerProfiles] = useState<Record<string, string>>({});
+  const [bankEmailSentKunden, setBankEmailSentKunden] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
   const kommFileRef = useRef<HTMLInputElement>(null);
   const bankAngebotRef = useRef<HTMLInputElement>(null);
@@ -131,7 +142,33 @@ export default function FinanzTresor() {
   const loadKunden = () => {
     setLoading(true);
     supabase.from("crm_kunden").select("*").eq("finance_shared", true).order("updated_at", { ascending: false })
-      .then(({ data }) => { setKunden((data as Kunde[]) || []); setLoading(false); });
+      .then(({ data }) => {
+        const kundenData = (data as Kunde[]) || [];
+        setKunden(kundenData);
+        setLoading(false);
+        // Fetch makler profiles
+        const userIds = [...new Set(kundenData.map(k => k.user_id).filter(Boolean))] as string[];
+        if (userIds.length > 0) {
+          supabase.from("profiles").select("user_id, display_name").in("user_id", userIds)
+            .then(({ data: profiles }) => {
+              const map: Record<string, string> = {};
+              (profiles || []).forEach((p: any) => { map[p.user_id] = p.display_name || "Makler"; });
+              setMaklerProfiles(map);
+            });
+        }
+        // Fetch bank-email-sent status per kunde (check notizen for 📧)
+        const kundeIds = kundenData.map(k => k.id);
+        if (kundeIds.length > 0) {
+          supabase.from("finanz_tresor_notizen").select("kunde_id, notiz").in("kunde_id", kundeIds)
+            .then(({ data: allNotizen }) => {
+              const sent = new Set<string>();
+              (allNotizen || []).forEach((n: any) => {
+                if (n.notiz && n.notiz.includes("📧")) sent.add(n.kunde_id);
+              });
+              setBankEmailSentKunden(sent);
+            });
+        }
+      });
   };
 
   useEffect(() => {
@@ -486,6 +523,43 @@ export default function FinanzTresor() {
     );
   };
 
+  const handleCreateKunde = async () => {
+    if (!newKundeName.trim() || !user) return;
+    setCreatingKunde(true);
+    const { error } = await supabase.from("crm_kunden").insert({
+      name: newKundeName.trim(),
+      email: newKundeEmail.trim() || null,
+      phone: newKundePhone.trim() || null,
+      budget: newKundeBudget.trim() || null,
+      user_id: user.id,
+      finance_shared: true,
+      finance_status: null,
+    });
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✓ Kunde angelegt" });
+      setShowNewKundeDialog(false);
+      setNewKundeName(""); setNewKundeEmail(""); setNewKundePhone(""); setNewKundeBudget("");
+      loadKunden();
+    }
+    setCreatingKunde(false);
+  };
+
+  // Ampel color logic
+  const getAmpelColor = (k: Kunde): { color: string; label: string } => {
+    if (k.finance_status === "nachfordern") return { color: "text-yellow-500", label: "Infos nachfordern" };
+    if (k.finance_status === "uebertragen" || bankEmailSentKunden.has(k.id)) return { color: "text-blue-500", label: "Zu Bank gesendet" };
+    if (k.finance_status === "abgeschlossen") return { color: "text-green-500", label: "Abgeschlossen" };
+    if (k.finance_status === "storniert") return { color: "text-destructive", label: "Storniert" };
+    return { color: "text-muted-foreground", label: "Noch nicht gesendet" };
+  };
+
+  // Filter kunden for active vs archiv
+  const activeKunden = kunden.filter(k => !k.finance_status || k.finance_status === "uebertragen" || k.finance_status === "nachfordern");
+  const archivedErfolgreich = kunden.filter(k => k.finance_status === "abgeschlossen");
+  const archivedStorniert = kunden.filter(k => k.finance_status === "storniert");
+
   if (isAdmin === null) {
     return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="animate-spin text-primary" size={32} /></div>;
   }
@@ -502,21 +576,96 @@ export default function FinanzTresor() {
 
   const isLocked = selected?.finance_status === "uebertragen" || selected?.finance_status === "abgeschlossen";
 
+  const renderKundenCard = (k: Kunde) => {
+    const ampel = getAmpelColor(k);
+    const maklerName = k.user_id ? maklerProfiles[k.user_id] || "Makler" : "–";
+    return (
+      <Card key={k.id} className="card-radius shadow-card cursor-pointer hover:shadow-card-hover transition-shadow" onClick={() => { setSelected(k); setShowArchiv(false); }}>
+        <CardContent className="p-4 flex items-center gap-4">
+          <div className="flex flex-col items-center gap-1">
+            <CircleDot size={20} className={ampel.color} />
+            <span className="text-[9px] text-muted-foreground leading-none text-center max-w-[60px]">{ampel.label}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-bold text-foreground">{k.name}</p>
+            </div>
+            <p className="text-xs text-muted-foreground">{k.typ} · {k.ort || "–"} · {k.budget || "–"}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Makler: <span className="font-semibold text-foreground">{maklerName}</span></p>
+          </div>
+          <ChevronRight size={18} className="text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-surface">
       {/* Header */}
       <div className="bg-card border-b border-border px-6 py-6">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <Shield size={20} className="text-primary" />
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Shield size={20} className="text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">Finanzierungs-Tresor</h1>
+              <p className="text-muted-foreground text-xs">Verschlüsselte Kundenakten · Nur für Admins</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">Finanzierungs-Tresor</h1>
-            <p className="text-muted-foreground text-xs">Verschlüsselte Kundenakten · Nur für Admins</p>
-          </div>
+          {!selected && (
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="rounded-xl gap-1.5" onClick={() => setShowNewKundeDialog(true)}>
+                <UserPlus size={14} /> Neuen Kunden anlegen
+              </Button>
+              <Button
+                size="sm"
+                variant={showArchiv ? "default" : "outline"}
+                className="rounded-xl gap-1.5"
+                onClick={() => setShowArchiv(!showArchiv)}
+              >
+                <Archive size={14} /> {showArchiv ? "Aktive Fälle" : "Archiv öffnen"}
+              </Button>
+            </div>
+          )}
         </div>
-        <Badge className="mt-2 bg-primary/10 text-primary border-primary/20">{kunden.length} Akten</Badge>
+        <Badge className="mt-2 bg-primary/10 text-primary border-primary/20">
+          {showArchiv ? `${archivedErfolgreich.length + archivedStorniert.length} archiviert` : `${activeKunden.length} aktiv`}
+        </Badge>
       </div>
+
+      {/* New Kunde Dialog */}
+      <Dialog open={showNewKundeDialog} onOpenChange={setShowNewKundeDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Neuen Kunden anlegen</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Name *</Label>
+              <Input value={newKundeName} onChange={e => setNewKundeName(e.target.value)} placeholder="Max Mustermann" />
+            </div>
+            <div>
+              <Label className="text-xs">E-Mail</Label>
+              <Input value={newKundeEmail} onChange={e => setNewKundeEmail(e.target.value)} placeholder="max@example.com" />
+            </div>
+            <div>
+              <Label className="text-xs">Telefon</Label>
+              <Input value={newKundePhone} onChange={e => setNewKundePhone(e.target.value)} placeholder="+43 …" />
+            </div>
+            <div>
+              <Label className="text-xs">Budget</Label>
+              <Input value={newKundeBudget} onChange={e => setNewKundeBudget(e.target.value)} placeholder="€ 300.000" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleCreateKunde} disabled={!newKundeName.trim() || creatingKunde} className="rounded-xl gap-1.5">
+              {creatingKunde ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+              Anlegen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="p-4 md:p-6 pb-24">
         {!selected ? (
@@ -524,36 +673,34 @@ export default function FinanzTresor() {
           <div className="space-y-3 max-w-2xl mx-auto">
             {loading ? Array.from({ length: 3 }).map((_, i) => (
               <Card key={i} className="card-radius"><CardContent className="p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>
-            )) : kunden.length === 0 ? (
+            )) : showArchiv ? (
+              /* ARCHIV MODE */
+              <Tabs defaultValue="erfolgreich" className="w-full">
+                <TabsList className="w-full">
+                  <TabsTrigger value="erfolgreich" className="flex-1 gap-1.5">
+                    <CircleDot size={12} className="text-green-500" /> Erfolgreich Abgeschlossen ({archivedErfolgreich.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="storniert" className="flex-1 gap-1.5">
+                    <CircleDot size={12} className="text-destructive" /> Stornierte Fälle ({archivedStorniert.length})
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="erfolgreich" className="space-y-3 mt-3">
+                  {archivedErfolgreich.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground text-sm">Keine abgeschlossenen Fälle.</div>
+                  ) : archivedErfolgreich.map(renderKundenCard)}
+                </TabsContent>
+                <TabsContent value="storniert" className="space-y-3 mt-3">
+                  {archivedStorniert.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground text-sm">Keine stornierten Fälle.</div>
+                  ) : archivedStorniert.map(renderKundenCard)}
+                </TabsContent>
+              </Tabs>
+            ) : activeKunden.length === 0 ? (
               <div className="text-center py-16">
                 <Shield size={40} className="text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">Noch keine übertragenen Kunden.</p>
+                <p className="text-muted-foreground text-sm">Noch keine aktiven Kunden.</p>
               </div>
-            ) : kunden.map(k => {
-              const sOpt = k.finance_status ? STATUS_OPTIONS.find(s => s.value === k.finance_status) : null;
-              return (
-                <Card key={k.id} className="card-radius shadow-card cursor-pointer hover:shadow-card-hover transition-shadow" onClick={() => setSelected(k)}>
-                  <CardContent className="p-4 flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User size={18} className="text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-bold text-foreground">{k.name}</p>
-                        {sOpt && (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-card border border-border text-foreground">
-                            <span className={`w-2 h-2 rounded-full ${sOpt.dotColor}`} />
-                            {sOpt.label}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{k.typ} · {k.ort || "–"} · {k.budget || "–"}</p>
-                    </div>
-                    <ChevronRight size={18} className="text-muted-foreground" />
-                  </CardContent>
-                </Card>
-              );
-            })}
+            ) : activeKunden.map(renderKundenCard)}
           </div>
         ) : (
           /* ===== DASHBOARD TWO-COLUMN LAYOUT ===== */
