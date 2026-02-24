@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Search, Plus, Phone, Mail, MessageCircle, MapPin, Star, Filter, X, Calendar, Home, Key, FileText, Upload, Download, Trash2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import CrmDetailModal from "@/components/CrmDetailModal";
+import type { Tables } from "@/integrations/supabase/types";
+
+type Kunde = Tables<"crm_kunden">;
 
 const financeStatusConfig: Record<string, { color: string; label: string; dot: string }> = {
   uebertragen: { color: "bg-blue-100 text-blue-700", label: "Übertragen", dot: "bg-blue-500" },
@@ -11,51 +14,6 @@ const financeStatusConfig: Record<string, { color: string; label: string; dot: s
   abgeschlossen: { color: "bg-green-100 text-green-700", label: "Finanzierung ✓", dot: "bg-green-500" },
   storniert: { color: "bg-red-100 text-red-700", label: "Storniert", dot: "bg-red-500" },
 };
-
-const kunden = [
-  {
-    id: 1, name: "Maria Huber", email: "m.huber@email.at", phone: "+43 664 123 4567",
-    typ: "Käufer", ort: "Wien 1010", budget: "€650.000", status: "Aktiv", sterne: 5,
-    notiz: "Sucht 4-Zimmer-Wohnung, Alleinvermittlung bevorzugt",
-    geburtsdatum: "1982-03-15", kaufdatum: "2024-06-01", einzugsdatum: "2024-07-15",
-    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
-  },
-  {
-    id: 2, name: "Thomas Müller", email: "t.mueller@firma.at", phone: "+43 676 987 6543",
-    typ: "Verkäufer", ort: "Wien 1030", budget: "€420.000", status: "Aktiv", sterne: 4,
-    notiz: "Verkauf Eigentumswohnung, flexibel bei Übergabe",
-    geburtsdatum: "1975-11-28", kaufdatum: "2023-09-10", einzugsdatum: "2023-11-01",
-    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
-  },
-  {
-    id: 3, name: "Anna Schmidt", email: "a.schmidt@web.at", phone: "+43 699 555 1234",
-    typ: "Mieter", ort: "Graz", budget: "€1.800/Mon", status: "In Bearbeitung", sterne: 3,
-    notiz: "Sucht Bürofläche 120m², Nähe Graz-Hauptbahnhof",
-    geburtsdatum: "1990-07-04", kaufdatum: "2025-01-15", einzugsdatum: "2025-02-01",
-    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
-  },
-  {
-    id: 4, name: "Karl Bauer", email: "k.bauer@outlook.at", phone: "+43 660 321 7890",
-    typ: "Investor", ort: "Salzburg", budget: "€1.2M", status: "Aktiv", sterne: 5,
-    notiz: "Anlageimmobilien, Rendite min. 4%, Nebenkostenübersicht angefordert",
-    geburtsdatum: "1968-12-25", kaufdatum: "2022-04-20", einzugsdatum: "2022-06-01",
-    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
-  },
-  {
-    id: 5, name: "Sandra Lehner", email: "s.lehner@gmx.at", phone: "+43 650 444 8888",
-    typ: "Käufer", ort: "Linz", budget: "€280.000", status: "Neu", sterne: 4,
-    notiz: "Erstmals Kaufinteressentin, Finanzamt-Gebühren klären",
-    geburtsdatum: "1995-05-20", kaufdatum: "", einzugsdatum: "",
-    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
-  },
-  {
-    id: 6, name: "Peter Wimmer", email: "p.wimmer@aon.at", phone: "+43 664 777 2222",
-    typ: "Verkäufer", ort: "Wien 1180", budget: "€890.000", status: "Aktiv", sterne: 5,
-    notiz: "Einfamilienhaus, Alleinvermittlungsvertrag unterschrieben",
-    geburtsdatum: "1970-08-10", kaufdatum: "2021-12-01", einzugsdatum: "2022-02-15",
-    finance_shared: false, finance_status: "offen", ablehnungsgrund_bank: null,
-  },
-];
 
 const statusColors: Record<string, string> = {
   "Aktiv": "bg-green-100 text-green-700",
@@ -70,13 +28,11 @@ const typColors: Record<string, string> = {
   "Investor": "bg-amber-50 text-amber-600",
 };
 
-function formatDate(dateStr: string) {
+function formatDate(dateStr: string | null) {
   if (!dateStr) return "–";
   const d = new Date(dateStr);
   return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
-
-type Kunde = typeof kunden[0];
 
 export default function CRM() {
   const [search, setSearch] = useState("");
@@ -85,6 +41,9 @@ export default function CRM() {
   const [editDates, setEditDates] = useState(false);
   const [editedDates, setEditedDates] = useState({ geburtsdatum: "", kaufdatum: "", einzugsdatum: "" });
   const [detailTab, setDetailTab] = useState<"info" | "dokumente">("info");
+
+  const [kunden, setKunden] = useState<Kunde[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [newForm, setNewForm] = useState({
     vorname: "", nachname: "", phone: "", email: "", typ: "Käufer",
@@ -96,18 +55,64 @@ export default function CRM() {
   const [objekte, setObjekte] = useState<{ id: string; objektnummer: string | null; objektart: string | null; ort: string | null }[]>([]);
   const { user } = useAuth();
 
+  const loadKunden = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("crm_kunden")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      setKunden(data || []);
+    }
+    setLoading(false);
+  }, [user]);
+
   useEffect(() => {
     if (user) {
+      loadKunden();
       supabase.from("objekte").select("id, objektnummer, objektart, ort").then(({ data }) => {
         if (data) setObjekte(data);
       });
     }
-  }, [user]);
+  }, [user, loadKunden]);
+
+  const handleCreate = async () => {
+    if (!user) return;
+    const name = `${newForm.vorname} ${newForm.nachname}`.trim();
+    if (!name) {
+      toast({ title: "Name erforderlich", variant: "destructive" });
+      return;
+    }
+    const { error } = await supabase.from("crm_kunden").insert({
+      name,
+      phone: newForm.phone || null,
+      email: newForm.email || null,
+      typ: newForm.typ,
+      notiz: newForm.notiz || null,
+      geburtsdatum: newForm.geburtsdatum || null,
+      kaufdatum: newForm.kaufdatum || null,
+      einzugsdatum: newForm.einzugsdatum || null,
+      dsgvo_einwilligung: newForm.dsgvo,
+      objekt_id: newForm.objekt_id || null,
+      user_id: user.id,
+    });
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✓ Kunde angelegt", description: name });
+      setShowNew(false);
+      setNewForm({ vorname: "", nachname: "", phone: "", email: "", typ: "Käufer", notiz: "", zustaendigkeit: "Vertriebsteam Wien", geburtsdatum: "", kaufdatum: "", einzugsdatum: "", dsgvo: false, objekt_id: "" });
+      loadKunden();
+    }
+  };
 
   const filtered = kunden.filter(k =>
-    k.name.toLowerCase().includes(search.toLowerCase()) ||
-    k.ort.toLowerCase().includes(search.toLowerCase()) ||
-    k.typ.toLowerCase().includes(search.toLowerCase())
+    (k.name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (k.ort || "").toLowerCase().includes(search.toLowerCase()) ||
+    (k.typ || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -142,6 +147,21 @@ export default function CRM() {
         </button>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="animate-spin text-primary" size={28} />
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && kunden.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground">
+          <p className="text-lg font-semibold">Noch keine Kunden</p>
+          <p className="text-sm mt-1">Lege deinen ersten Kunden an, um zu starten.</p>
+        </div>
+      )}
+
       {/* Kunden-Karten */}
       <div className="space-y-3">
         {filtered.map((k) => {
@@ -150,14 +170,13 @@ export default function CRM() {
             <div key={k.id} className="bg-card rounded-2xl p-4 shadow-card border border-border hover:shadow-card-hover transition-all duration-200 cursor-pointer" onClick={() => setSelected(k)}>
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 shadow-orange-sm text-primary-foreground font-bold text-lg">
-                  {k.name.charAt(0)}
+                  {(k.name || "?").charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-bold text-foreground">{k.name}</h3>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${typColors[k.typ]}`}>{k.typ}</span>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColors[k.status]}`}>{k.status}</span>
-                    {/* Finance Status Ampel */}
+                    {k.typ && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${typColors[k.typ] || "bg-muted text-muted-foreground"}`}>{k.typ}</span>}
+                    {k.status && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColors[k.status] || "bg-muted text-muted-foreground"}`}>{k.status}</span>}
                     {fStatus && (
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${fStatus.color}`}>
                         <span className={`w-2 h-2 rounded-full ${fStatus.dot}`} />
@@ -167,20 +186,18 @@ export default function CRM() {
                   </div>
                   <div className="flex items-center gap-1 mt-1">
                     {Array.from({ length: 5 }).map((_, i) => (
-                      <Star key={i} size={12} className={i < k.sterne ? "text-primary fill-primary" : "text-muted"} />
+                      <Star key={i} size={12} className={i < (k.sterne ?? 0) ? "text-primary fill-primary" : "text-muted"} />
                     ))}
                   </div>
                   <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{k.ort}</span>
-                    <span className="text-xs font-semibold text-primary">{k.budget}</span>
+                    {k.ort && <span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={11} />{k.ort}</span>}
+                    {k.budget && <span className="text-xs font-semibold text-primary">{k.budget}</span>}
                   </div>
-                  {/* Ablehnungsgrund anzeigen */}
                   {k.finance_status === "storniert" && k.ablehnungsgrund_bank && (
                     <p className="text-xs text-red-600 mt-1.5 bg-red-50 px-2 py-1 rounded-lg">
                       ✗ Ablehnung: {k.ablehnungsgrund_bank}
                     </p>
                   )}
-                  {/* Datums-Chips */}
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     {k.geburtsdatum && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">
@@ -198,31 +215,37 @@ export default function CRM() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{k.notiz}</p>
+                  {k.notiz && <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{k.notiz}</p>}
                 </div>
               </div>
 
               {/* Schnellwahl-Buttons */}
               <div className="flex gap-2 mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
-                <a
-                  href={`https://wa.me/${k.phone.replace(/\s+/g, "")}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-green-500 text-white py-2 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors active:scale-95"
-                >
-                  <MessageCircle size={14} /> WhatsApp
-                </a>
-                <a
-                  href={`tel:${k.phone}`}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-primary-foreground py-2 rounded-xl text-xs font-semibold shadow-orange-sm hover:bg-primary-dark transition-colors active:scale-95"
-                >
-                  <Phone size={14} /> Anrufen
-                </a>
-                <a
-                  href={`mailto:${k.email}`}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-accent text-accent-foreground py-2 rounded-xl text-xs font-semibold border border-border hover:bg-secondary transition-colors active:scale-95"
-                >
-                  <Mail size={14} /> E-Mail
-                </a>
+                {k.phone && (
+                  <a
+                    href={`https://wa.me/${k.phone.replace(/\s+/g, "")}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-green-500 text-white py-2 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors active:scale-95"
+                  >
+                    <MessageCircle size={14} /> WhatsApp
+                  </a>
+                )}
+                {k.phone && (
+                  <a
+                    href={`tel:${k.phone}`}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-primary-foreground py-2 rounded-xl text-xs font-semibold shadow-orange-sm hover:bg-primary-dark transition-colors active:scale-95"
+                  >
+                    <Phone size={14} /> Anrufen
+                  </a>
+                )}
+                {k.email && (
+                  <a
+                    href={`mailto:${k.email}`}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-accent text-accent-foreground py-2 rounded-xl text-xs font-semibold border border-border hover:bg-secondary transition-colors active:scale-95"
+                  >
+                    <Mail size={14} /> E-Mail
+                  </a>
+                )}
               </div>
             </div>
           );
@@ -237,7 +260,7 @@ export default function CRM() {
           setEditDates={setEditDates}
           editedDates={editedDates}
           setEditedDates={setEditedDates}
-          onClose={() => { setSelected(null); setEditDates(false); setDetailTab("info"); }}
+          onClose={() => { setSelected(null); setEditDates(false); setDetailTab("info"); loadKunden(); }}
           detailTab={detailTab}
           setDetailTab={setDetailTab}
           user={user}
@@ -278,7 +301,7 @@ export default function CRM() {
                 </select>
               </div>
 
-              {/* Neue Datumsfelder */}
+              {/* Datumsfelder */}
               <div className="pt-2 border-t border-border">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5"><Calendar size={13} /> Wichtige Daten (Newsletter-Trigger)</p>
                 <div className="space-y-3">
@@ -321,7 +344,11 @@ export default function CRM() {
                 <input type="checkbox" checked={newForm.dsgvo} onChange={e => setNewForm({...newForm, dsgvo: e.target.checked})} className="mt-0.5 accent-primary" />
                 <span className="text-xs text-muted-foreground">Ich bestätige die Datenschutzerklärung und die Einwilligung zur werblichen Kontaktaufnahme gemäß DSGVO.</span>
               </label>
-              <button disabled={!newForm.dsgvo} className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-bold shadow-orange hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50">
+              <button
+                disabled={!newForm.dsgvo}
+                onClick={handleCreate}
+                className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-bold shadow-orange hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50"
+              >
                 Kunden anlegen &amp; zuweisen
               </button>
             </div>
