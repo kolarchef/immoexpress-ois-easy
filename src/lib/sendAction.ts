@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
  */
 export async function sendAction(
   actionId: string,
-  extra: Record<string, unknown> = {},
+  extra: Record<string, unknown> | object = {},
 ): Promise<{ ok: boolean; status?: number }> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false };

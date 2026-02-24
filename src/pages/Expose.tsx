@@ -6,8 +6,7 @@ import AudioRecorder from "@/components/AudioRecorder";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { getWebhookUrl } from "@/lib/getWebhookUrl";
-import { sendAction } from "@/lib/sendAction";
+import { sendPdfQuick, sendPdfClassic, sendPdfInvestment, sendVideoKi, sendNotizSpeichern, ACTION_IDS, type PdfWebhookParams } from "@/lib/webhookService";
 
 const bundeslaender = [
   "Wien – 1. Bezirk (Innere Stadt)", "Wien – 2. Bezirk (Leopoldstadt)", "Wien – 3. Bezirk (Landstraße)",
@@ -204,58 +203,27 @@ export default function Expose() {
     if (!user) { toast({ title: "Bitte einloggen", variant: "destructive" }); return; }
     setSendingWebhook(true);
     try {
-      // Load user's webhook URL from profile (with fallback)
-      const webhookUrl = await getWebhookUrl(user.id);
-
-      const payload = {
-        actionId: "expose_video_ki",
-        data: {
-          template: selectedTemplate,
-          video_format: videoFormat,
-          timestamp: new Date().toISOString(),
-          objekt: {
-            titel: form.titel,
-            objektnummer: form.objektnummer,
-            bezirk: form.bezirk,
-            plz: form.plz,
-            ort: form.ort,
-            strasse: form.strasse,
-            hnr: form.hnr,
-            objektart: form.objektart,
-            verkaufsart: form.verkaufsart,
-            kaufpreis: form.kaufpreis,
-            miete: form.miete,
-            flaeche: form.flaeche,
-            zimmer: form.zimmer,
-            provisionsstellung: form.provisionsstellung,
-          },
-          texte: {
-            ki_expose: aiText,
-            kurzbeschreibung,
-            beschreibung: form.beschreibung,
-            sprachnotizen,
-            notebook_lm: notebookLmText,
-          },
-          bilder_anzahl: images.length,
-          user_id: user.id,
+      const { ok, status } = await sendVideoKi({
+        template: selectedTemplate,
+        video_format: videoFormat,
+        objekt: {
+          titel: form.titel, objektnummer: form.objektnummer, bezirk: form.bezirk,
+          plz: form.plz, ort: form.ort, strasse: form.strasse, hnr: form.hnr,
+          objektart: form.objektart, verkaufsart: form.verkaufsart, kaufpreis: form.kaufpreis,
+          miete: form.miete, flaeche: form.flaeche, zimmer: form.zimmer,
+          provisionsstellung: form.provisionsstellung,
         },
-      };
-
-      const { data, error } = await supabase.functions.invoke("ki-tools", {
-        body: { action: "test-webhook", context: webhookUrl, messageText: JSON.stringify(payload) },
+        texte: {
+          ki_expose: aiText, kurzbeschreibung, beschreibung: form.beschreibung,
+          sprachnotizen, notebook_lm: notebookLmText,
+        },
+        image_urls: images.filter(Boolean),
+        bilder_anzahl: images.length,
       });
-
-      // Also send directly to webhook with full payload
-      const res = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
+      if (ok) {
         toast({ title: "✅ An Make.com gesendet", description: `Template: ${pdfTemplates.find(t => t.id === selectedTemplate)?.label}` });
       } else {
-        throw new Error(`Webhook Fehler: ${res.status}`);
+        throw new Error(`Webhook Fehler: ${status}`);
       }
     } catch (err: unknown) {
       toast({ title: "Webhook-Fehler", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
@@ -491,7 +459,7 @@ export default function Expose() {
         )}
         <button
           onClick={async () => {
-            const { ok } = await sendAction("notiz_speichern", { text: notebookLmText, quelle: "notebook_lm" });
+            const { ok } = await sendNotizSpeichern(notebookLmText, "notebook_lm");
             if (ok) toast({ title: "✅ Notiz gespeichert" });
             else toast({ title: "Fehler beim Speichern", variant: "destructive" });
           }}
@@ -587,8 +555,7 @@ export default function Expose() {
               key={t.id}
               onClick={async () => {
                 setSelectedTemplate(t.id);
-                // Send action with full object data to webhook
-                await sendAction(t.actionId, {
+                const pdfParams: PdfWebhookParams = {
                   objekt: {
                     titel: form.titel,
                     objektnummer: form.objektnummer,
@@ -616,7 +583,11 @@ export default function Expose() {
                   },
                   image_urls: images.filter(Boolean),
                   bilder_anzahl: images.length,
-                });
+                };
+                const sendFn = t.actionId === ACTION_IDS.PDF_QUICK ? sendPdfQuick
+                  : t.actionId === ACTION_IDS.PDF_INVESTMENT ? sendPdfInvestment
+                  : sendPdfClassic;
+                await sendFn(pdfParams);
               }}
               className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all text-center min-h-[180px] justify-center ${
                 selectedTemplate === t.id
