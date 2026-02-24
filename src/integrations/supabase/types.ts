@@ -173,6 +173,76 @@ export type Database = {
           },
         ]
       }
+      finanz_tresor_notizen: {
+        Row: {
+          created_at: string
+          id: string
+          kunde_id: string
+          notiz: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kunde_id: string
+          notiz?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kunde_id?: string
+          notiz?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finanz_tresor_notizen_kunde_id_fkey"
+            columns: ["kunde_id"]
+            isOneToOne: false
+            referencedRelation: "crm_kunden"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finanz_tresor_uploads: {
+        Row: {
+          created_at: string
+          dateiname: string
+          id: string
+          kunde_id: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dateiname: string
+          id?: string
+          kunde_id: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dateiname?: string
+          id?: string
+          kunde_id?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finanz_tresor_uploads_kunde_id_fkey"
+            columns: ["kunde_id"]
+            isOneToOne: false
+            referencedRelation: "crm_kunden"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       immoz_exporte: {
         Row: {
           anzahl: number | null
@@ -638,6 +708,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       zinshaeuser: {
         Row: {
           adresse: string
@@ -685,10 +776,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "makler"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -815,6 +912,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "makler"],
+    },
   },
 } as const
