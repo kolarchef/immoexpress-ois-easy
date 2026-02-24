@@ -56,9 +56,9 @@ const prioColor: Record<string, string> = {
 };
 
 const expertenTools = [
-  { label: "Service-Center", desc: "Checklisten & After-Sales", icon: Wrench, path: "/immo-concierge" },
+  { label: "ImmoExpress Concierge", desc: "Alle Daten & Checklisten", icon: Wrench, path: "/immo-concierge" },
   { label: "Provisions-Rechner", desc: "Brutto / Netto Kalkulation", icon: Calculator, path: "/provisions-rechner" },
-  { label: "Gesetzbuch", desc: "Mietrechtsgesetz & Richtwerte", icon: Scale, path: "/gesetzbuch" },
+  { label: "Gesetzbuch", desc: "Mietrecht & Richtwerte", icon: Scale, path: "/gesetzbuch" },
   { label: "Handbuch", desc: "Interne Wissensdatenbank", icon: FileQuestion, path: "/academy" },
 ];
 
@@ -166,18 +166,20 @@ export default function Launchpad() {
       {/* Experten-Tools */}
       <section>
         <h2 className="text-lg font-bold text-foreground mb-3">Experten-Tools</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {expertenTools.map(({ label, desc, icon: Icon, path }) => (
             <button
               key={path}
               onClick={() => navigate(path)}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-card shadow-card border border-border hover:shadow-card-hover transition-all group text-center"
+              className="flex items-center gap-4 p-4 rounded-2xl bg-card shadow-card border border-border hover:shadow-card-hover transition-all group text-left w-full"
             >
-              <div className="w-12 h-12 rounded-2xl bg-primary-light flex items-center justify-center transition-all group-hover:scale-105 text-primary">
+              <div className="w-12 h-12 rounded-2xl bg-primary-light flex items-center justify-center flex-shrink-0 transition-all group-hover:scale-105 text-primary">
                 <Icon size={22} />
               </div>
-              <span className="text-xs font-bold text-foreground uppercase tracking-wide leading-tight">{label}</span>
-              <span className="text-[10px] text-muted-foreground leading-tight">{desc}</span>
+              <div className="min-w-0">
+                <span className="text-sm font-bold text-foreground block leading-tight">{label}</span>
+                <span className="text-xs text-muted-foreground leading-tight">{desc}</span>
+              </div>
             </button>
           ))}
         </div>
