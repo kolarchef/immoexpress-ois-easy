@@ -13,7 +13,7 @@ const modules = [
   { label: "CRM KUNDEN", icon: Users, path: "/crm" },
   { label: "OBJEKTE", icon: Building2, path: "/objekte" },
   { label: "EXPOSÉ", icon: FileText, path: "/expose" },
-  { label: "STANDORT", icon: MapPin, path: "/standort" },
+  { label: "STANDORT", icon: MapPin, path: "/kiezcheck" },
   { label: "SOS RECHT", icon: ShieldAlert, path: "/sos-recht" },
   { label: "MEETINGS", icon: Video, path: "/kalender" },
   { label: "MAIL", icon: Mail, path: "/newsletter" },
