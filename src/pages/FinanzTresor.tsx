@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -15,7 +16,7 @@ import {
   Shield, Lock, FileText, Upload, Download, Trash2, Loader2,
   User, Home, MapPin, Euro, Phone, Mail, StickyNote, FileSpreadsheet,
   File, Building, Save, ChevronRight, AlertTriangle, CircleCheck, Circle,
-  Plus, History, Send, MessageSquare, Paperclip
+  Plus, History, Send, MessageSquare, Paperclip, FolderOpen, Pencil
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -100,9 +101,16 @@ export default function FinanzTresor() {
   const [sendingKomm, setSendingKomm] = useState(false);
   const [uploadingBankAngebot, setUploadingBankAngebot] = useState(false);
   const [kommAttachment, setKommAttachment] = useState<File | null>(null);
+  // Editable doc names: { docId: editedName }
+  const [editedDocNames, setEditedDocNames] = useState<Record<string, string>>({});
+  // "In Akte einschließen" checkboxes: { docId: boolean }
+  const [akteIncludes, setAkteIncludes] = useState<Record<string, boolean>>({});
+  // Sonstige Unterlagen uploads (separate from tresor uploads)
+  const [sonstigeUploading, setSonstigeUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const kommFileRef = useRef<HTMLInputElement>(null);
   const bankAngebotRef = useRef<HTMLInputElement>(null);
+  const sonstigeRef = useRef<HTMLInputElement>(null);
 
   // Check admin role
   useEffect(() => {
@@ -124,7 +132,7 @@ export default function FinanzTresor() {
   };
 
   useEffect(() => {
-    if (!selected) { setObjekt(null); setNotizen([]); setUploads([]); setCrmDokumente([]); setBankEmail(""); return; }
+    if (!selected) { setObjekt(null); setNotizen([]); setUploads([]); setCrmDokumente([]); setBankEmail(""); setEditedDocNames({}); setAkteIncludes({}); return; }
     if (selected.objekt_id) {
       supabase.from("objekte").select("*").eq("id", selected.objekt_id).single()
         .then(({ data }) => setObjekt(data as Objekt | null));
@@ -134,17 +142,27 @@ export default function FinanzTresor() {
     supabase.from("finanz_tresor_uploads").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false })
       .then(({ data }) => setUploads((data as TresorUpload[]) || []));
     supabase.from("crm_dokumente").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false })
-      .then(({ data }) => setCrmDokumente((data as CrmDok[]) || []));
+      .then(({ data }) => {
+        setCrmDokumente((data as CrmDok[]) || []);
+        // Initialize akte includes to true for all docs
+        const includes: Record<string, boolean> = {};
+        (data || []).forEach((d: any) => { includes[d.id] = true; });
+        setAkteIncludes(prev => ({ ...includes, ...prev }));
+      });
   }, [selected]);
 
-  // Checklist detection from CRM documents
-  const detectedItems = CHECKLIST_ITEMS.reduce<Record<string, string | null>>((acc, item) => {
+  const detectedItems = CHECKLIST_ITEMS.reduce<Record<string, CrmDok | null>>((acc, item) => {
     const found = crmDokumente.find(dok =>
       item.patterns.some(p => dok.dateiname.toLowerCase().includes(p))
     );
-    acc[item.key] = found ? found.dateiname : null;
+    acc[item.key] = found || null;
     return acc;
   }, {});
+
+  // Sonstige = CRM docs that don't match any checklist pattern
+  const sonstigeDokumente = crmDokumente.filter(dok =>
+    !CHECKLIST_ITEMS.some(item => item.patterns.some(p => dok.dateiname.toLowerCase().includes(p)))
+  );
 
   const handleSaveNotiz = async () => {
     if (!newNotiz.trim() || !selected || !user) return;
@@ -184,6 +202,9 @@ export default function FinanzTresor() {
       toast({ title: "✓ Hochgeladen", description: `${file.name} (auch in Kunden-Dokumenten sichtbar)` });
       const { data } = await supabase.from("finanz_tresor_uploads").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false });
       setUploads((data as TresorUpload[]) || []);
+      // Refresh CRM docs too
+      const { data: crmData } = await supabase.from("crm_dokumente").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false });
+      setCrmDokumente((crmData as CrmDok[]) || []);
     } catch (err: any) {
       toast({ title: "Fehler", description: err.message, variant: "destructive" });
     }
@@ -315,6 +336,74 @@ export default function FinanzTresor() {
     setUploadingBankAngebot(false);
   };
 
+  const handleUploadSonstige = async (file: File) => {
+    if (!selected || !user) return;
+    setSonstigeUploading(true);
+    try {
+      const kundeOwnerUserId = selected.user_id || user.id;
+      const crmPath = `crm/${selected.id}/${Date.now()}_${file.name}`;
+      await supabase.storage.from("kundenunterlagen").upload(crmPath, file);
+      await supabase.from("crm_dokumente").insert({
+        kunde_id: selected.id, user_id: kundeOwnerUserId, dateiname: file.name, storage_path: crmPath
+      });
+      toast({ title: "✓ Sonstige Unterlage hochgeladen", description: file.name });
+      const { data: crmData } = await supabase.from("crm_dokumente").select("*").eq("kunde_id", selected.id).order("created_at", { ascending: false });
+      setCrmDokumente((crmData as CrmDok[]) || []);
+    } catch (err: any) {
+      toast({ title: "Fehler", description: err.message, variant: "destructive" });
+    }
+    setSonstigeUploading(false);
+  };
+
+  const handleRenameDoc = (docId: string, newName: string) => {
+    setEditedDocNames(prev => ({ ...prev, [docId]: newName }));
+  };
+
+  const handleToggleAkte = (docId: string, checked: boolean) => {
+    setAkteIncludes(prev => ({ ...prev, [docId]: checked }));
+  };
+
+  const handleGenerateBankAkte = () => {
+    const includedDocs = crmDokumente.filter(d => akteIncludes[d.id] !== false);
+    const docNames = includedDocs.map(d => editedDocNames[d.id] || d.dateiname);
+    toast({
+      title: "Bank-Akte wird generiert…",
+      description: `${docNames.length} Dokument(e) werden in die Akte aufgenommen.`,
+    });
+  };
+
+  // Render document row with editable name + checkbox
+  const renderDocRow = (doc: CrmDok, showPflicht?: boolean) => {
+    const displayName = editedDocNames[doc.id] ?? doc.dateiname;
+    const included = akteIncludes[doc.id] !== false;
+    return (
+      <div key={doc.id} className="bg-card border border-border rounded-xl p-2.5 space-y-1.5">
+        <div className="flex items-center gap-2">
+          {getFileIcon(doc.dateiname)}
+          <Input
+            value={displayName}
+            onChange={e => handleRenameDoc(doc.id, e.target.value)}
+            className="h-7 text-xs rounded-lg flex-1 border-transparent hover:border-border focus:border-primary"
+          />
+          {showPflicht && (
+            <span className="text-[9px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Pflicht ✓</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 pl-6">
+          <Checkbox
+            id={`akte-${doc.id}`}
+            checked={included}
+            onCheckedChange={(checked) => handleToggleAkte(doc.id, !!checked)}
+          />
+          <label htmlFor={`akte-${doc.id}`} className="text-[10px] text-muted-foreground cursor-pointer select-none">
+            In Akte einschließen
+          </label>
+          <p className="text-[10px] text-muted-foreground ml-auto">{formatDate(doc.created_at)}</p>
+        </div>
+      </div>
+    );
+  };
+
   if (isAdmin === null) {
     return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="animate-spin text-primary" size={32} /></div>;
   }
@@ -391,7 +480,7 @@ export default function FinanzTresor() {
               ← Zurück zur Übersicht
             </button>
 
-            {/* Customer Header Bar */}
+            {/* Customer Header Bar with BANK-AKTE GENERIEREN button */}
             <Card className="card-radius shadow-card mb-4">
               <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -401,68 +490,103 @@ export default function FinanzTresor() {
                   <h3 className="font-bold text-lg text-foreground">{selected.name}</h3>
                   <p className="text-xs text-muted-foreground">{selected.typ} · {selected.status}</p>
                 </div>
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  {selected.email ? (
-                    <button onClick={handleEmailAutoFill} className="flex items-center gap-1 text-primary hover:underline font-semibold cursor-pointer">
-                      <Mail size={12} />{selected.email}
-                    </button>
-                  ) : (
-                    <span className="flex items-center gap-1"><Mail size={12} />–</span>
-                  )}
-                  {selected.phone ? (
-                    <a href={`tel:${selected.phone}`} className="flex items-center gap-1 text-primary hover:underline font-semibold">
-                      <Phone size={12} />{selected.phone}
-                    </a>
-                  ) : (
-                    <span className="flex items-center gap-1"><Phone size={12} />–</span>
-                  )}
-                  <span className="flex items-center gap-1"><MapPin size={12} />{selected.ort || "–"}</span>
-                  <span className="flex items-center gap-1 font-bold text-primary"><Euro size={12} />{selected.budget || "–"}</span>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+                  <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                    {selected.email ? (
+                      <button onClick={handleEmailAutoFill} className="flex items-center gap-1 text-primary hover:underline font-semibold cursor-pointer">
+                        <Mail size={12} />{selected.email}
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-1"><Mail size={12} />–</span>
+                    )}
+                    {selected.phone ? (
+                      <a href={`tel:${selected.phone}`} className="flex items-center gap-1 text-primary hover:underline font-semibold">
+                        <Phone size={12} />{selected.phone}
+                      </a>
+                    ) : (
+                      <span className="flex items-center gap-1"><Phone size={12} />–</span>
+                    )}
+                    <span className="flex items-center gap-1"><MapPin size={12} />{selected.ort || "–"}</span>
+                    <span className="flex items-center gap-1 font-bold text-primary"><Euro size={12} />{selected.budget || "–"}</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="rounded-xl gap-1.5 bg-primary text-primary-foreground shadow-orange font-bold text-xs uppercase tracking-wide"
+                    onClick={handleGenerateBankAkte}
+                  >
+                    <FileText size={14} /> Bank-Akte generieren
+                  </Button>
                 </div>
               </CardContent>
             </Card>
 
             <div className="flex flex-col lg:flex-row gap-4">
-              {/* ===== LEFT SIDEBAR: Pflichtdokumenten-Checkliste ===== */}
-              <div className="w-full lg:w-72 flex-shrink-0">
-                <div className="bg-muted rounded-2xl p-4 sticky top-4">
-                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-4">
-                    <CircleCheck size={14} className="text-primary" /> Pflichtdokumente
-                  </h4>
-                  <div className="space-y-2">
-                    {CHECKLIST_ITEMS.map(item => {
-                      const found = detectedItems[item.key];
-                      return (
-                        <div
-                          key={item.key}
-                          className={`flex items-center gap-2.5 p-2.5 rounded-xl transition-all ${
-                            found
-                              ? "bg-green-50 border border-green-200"
-                              : "bg-card border border-border"
-                          }`}
-                        >
-                          {found ? (
-                            <CircleCheck size={16} className="text-green-500 flex-shrink-0" />
-                          ) : (
+              {/* ===== LEFT SIDEBAR: Pflichtdokumenten-Checkliste + Sonstige ===== */}
+              <div className="w-full lg:w-80 flex-shrink-0">
+                <div className="bg-muted rounded-2xl p-4 sticky top-4 space-y-4">
+                  {/* PFLICHTDOKUMENTE */}
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                      <CircleCheck size={14} className="text-primary" /> Pflichtdokumente
+                    </h4>
+                    <div className="space-y-2">
+                      {CHECKLIST_ITEMS.map(item => {
+                        const foundDoc = detectedItems[item.key];
+                        if (foundDoc) {
+                          return renderDocRow(foundDoc, item.pflicht);
+                        }
+                        return (
+                          <div
+                            key={item.key}
+                            className="flex items-center gap-2.5 p-2.5 rounded-xl bg-card border border-border"
+                          >
                             <Circle size={16} className="text-muted-foreground flex-shrink-0" />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-xs font-medium ${found ? "text-foreground" : "text-muted-foreground"}`}>
-                              {item.label}
-                            </p>
-                            {found && <p className="text-[10px] text-green-600 truncate">✓ {found}</p>}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
+                            </div>
+                            {item.pflicht && (
+                              <span className="text-[9px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">Pflicht</span>
+                            )}
                           </div>
-                          {item.pflicht && !found && (
-                            <span className="text-[9px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">Pflicht</span>
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* SONSTIGE UNTERLAGEN */}
+                  <div className="pt-3 border-t border-border">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                      <FolderOpen size={14} className="text-primary" /> Sonstige Unterlagen
+                    </h4>
+                    <div className="space-y-2">
+                      {sonstigeDokumente.length === 0 ? (
+                        <p className="text-[10px] text-muted-foreground">Keine sonstigen Dokumente.</p>
+                      ) : (
+                        sonstigeDokumente.map(doc => renderDocRow(doc))
+                      )}
+                    </div>
+                    <input
+                      ref={sonstigeRef}
+                      type="file"
+                      accept=".pdf,.xls,.xlsx,.doc,.docx,.csv,.jpg,.png"
+                      className="hidden"
+                      onChange={e => e.target.files?.[0] && handleUploadSonstige(e.target.files[0])}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-2 rounded-xl gap-1.5 text-xs"
+                      onClick={() => sonstigeRef.current?.click()}
+                      disabled={sonstigeUploading}
+                    >
+                      {sonstigeUploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                      Sonstige hochladen
+                    </Button>
                   </div>
 
                   {/* Verknüpftes Objekt - kompakt */}
                   {objekt && (
-                    <div className="mt-4 pt-4 border-t border-border">
+                    <div className="pt-3 border-t border-border">
                       <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-2">
                         <Building size={12} /> Objekt
                       </h4>
@@ -479,7 +603,7 @@ export default function FinanzTresor() {
               {/* ===== RIGHT MAIN AREA ===== */}
               <div className="flex-1 space-y-4">
 
-                {/* VERKNÜPFTES OBJEKT Card */}
+                {/* VERKNÜPFTES OBJEKT Card - ohne Generator-Button */}
                 <Card className="card-radius shadow-card border-2 border-primary/20">
                   <CardContent className="p-5">
                     <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-4">
@@ -517,15 +641,6 @@ export default function FinanzTresor() {
                           >
                             <FileText size={13} /> Exposé-PDF öffnen
                           </Button>
-                          <Button
-                            size="sm"
-                            className="rounded-xl gap-1.5"
-                            onClick={() => {
-                              toast({ title: "Bank-Exposé wird generiert…", description: "Das PDF wird für den Bankversand vorbereitet." });
-                            }}
-                          >
-                            <FileText size={13} /> Bank-Exposé generieren
-                          </Button>
                         </div>
                       </div>
                     ) : (
@@ -537,7 +652,7 @@ export default function FinanzTresor() {
                   </CardContent>
                 </Card>
 
-                {/* Card 1: FINANZIERUNGS-STATUS ÄNDERN - Runde Buttons mit farbigen Punkten */}
+                {/* Card 1: FINANZIERUNGS-STATUS ÄNDERN */}
                 <Card className="card-radius shadow-card">
                   <CardContent className="p-5">
                     <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-4">
@@ -564,7 +679,6 @@ export default function FinanzTresor() {
                       })}
                     </div>
 
-                    {/* Storno Input - nur wenn Storniert angeklickt */}
                     {showStornoInput && (
                       <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4 animate-fade-in">
                         <p className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1.5">
@@ -594,7 +708,6 @@ export default function FinanzTresor() {
                       </div>
                     )}
 
-                    {/* Ablehnungsgrund NUR bei Status storniert */}
                     {selected.finance_status === "storniert" && selected.ablehnungsgrund_bank && !showStornoInput && (
                       <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4">
                         <p className="text-xs font-semibold text-red-700 mb-1">Ablehnungsgrund Bank:</p>
@@ -604,9 +717,8 @@ export default function FinanzTresor() {
                   </CardContent>
                 </Card>
 
-                {/* Card Row: Status-Historie + Interne Notiz (Two Columns) */}
+                {/* Card Row: Status-Historie + Interne Notiz */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Left: Status-Historie / Lock Info */}
                   <Card className="card-radius shadow-card">
                     <CardContent className="p-5">
                       <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
@@ -624,7 +736,6 @@ export default function FinanzTresor() {
                           <p className="text-sm text-foreground">{selected.notiz}</p>
                         </div>
                       )}
-                      {/* Nachrichten-Log (chronologisch aus Notizen) */}
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground mb-2">Nachrichten-Log</p>
                         {notizen.filter(n => n.notiz.startsWith("💬") || n.notiz.startsWith("📧")).length === 0 ? (
@@ -643,7 +754,6 @@ export default function FinanzTresor() {
                     </CardContent>
                   </Card>
 
-                  {/* Right: Interne Notiz */}
                   <Card className="card-radius shadow-card">
                     <CardContent className="p-5">
                       <h4 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
