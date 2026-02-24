@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download, ExternalLink } from "lucide-react";
+import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download, ExternalLink, Wand2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ObjektModal from "@/components/ObjektModal";
@@ -324,7 +324,7 @@ export default function Objektverwaltung() {
       {/* Status-Filter Pills */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 mb-5">
         <button onClick={() => setStatusFilter("alle")}
-          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${statusFilter === "alle" ? "bg-foreground text-background" : "bg-card text-muted-foreground border border-border hover:bg-accent"}`}>
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${statusFilter === "alle" ? "bg-primary text-primary-foreground shadow-orange" : "bg-card text-muted-foreground border border-border hover:bg-accent"}`}>
           Alle
         </button>
         {statusOptions.map(s => (
@@ -558,11 +558,11 @@ export default function Objektverwaltung() {
                           }))}
                         />
                       </div>
-                      <textarea className={`${inputCls} resize-none bg-amber-50/50 dark:bg-amber-900/10`} rows={2} value={editForm.interne_notizen} onChange={e => setEditForm({ ...editForm, interne_notizen: e.target.value })} />
+                      <textarea className={`${inputCls} resize-none`} rows={4} style={{ minHeight: "300px" }} value={editForm.interne_notizen} onChange={e => setEditForm({ ...editForm, interne_notizen: e.target.value })} />
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => setEditing(false)} className="flex-1 border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-accent">Abbrechen</button>
-                      <button onClick={() => saveEdit(false)} disabled={savingEdit} className="flex-1 bg-foreground text-background rounded-xl py-2.5 text-sm font-bold flex items-center justify-center gap-2">
+                      <button onClick={() => saveEdit(false)} disabled={savingEdit} className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold flex items-center justify-center gap-2 shadow-orange">
                         {savingEdit ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />} Intern speichern
                       </button>
                     </div>
@@ -613,7 +613,7 @@ export default function Objektverwaltung() {
 
                 <button onClick={() => setShowExposePreview(true)}
                   className="w-full bg-primary text-primary-foreground rounded-xl py-2.5 font-semibold text-sm shadow-orange hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2 mb-3">
-                  <Eye size={14} /> Expos\u00e9 Vorschau & Senden
+                  <Eye size={14} /> Exposé Vorschau & Senden
                 </button>
 
                 {/* One-Click Share Bundle */}
@@ -673,11 +673,17 @@ export default function Objektverwaltung() {
               <div className="space-y-4">
                 {/* Large photo area – min 60vh */}
                 {photos.length > 0 ? (
-                  <div className="rounded-2xl overflow-hidden border border-border" style={{ minHeight: "60vh" }}>
-                    <img src={photos[0]} alt="Titelbild" className="w-full h-full object-cover" style={{ minHeight: "60vh" }} />
+                  <div className="relative rounded-2xl overflow-hidden border border-border" style={{ height: "65vh" }}>
+                    <img src={photos[0]} alt="Titelbild" className="w-full h-full object-cover" style={{ height: "65vh" }} />
+                    <button
+                      onClick={() => window.open(photos[0], "_blank")}
+                      className="absolute bottom-4 right-4 bg-primary text-primary-foreground rounded-xl px-4 py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 flex items-center gap-2"
+                    >
+                      <Wand2 size={16} /> Magic Edit
+                    </button>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-surface" style={{ minHeight: "60vh" }}>
+                  <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-card" style={{ height: "65vh" }}>
                     <Film size={40} className="text-muted-foreground mb-3" />
                     <p className="text-sm text-muted-foreground">Keine Fotos vorhanden – lade Fotos hoch für einen Video-Rundgang.</p>
                   </div>
@@ -712,7 +718,7 @@ export default function Objektverwaltung() {
                       }
                     }}
                     disabled={videoLoading || photos.length === 0}
-                    className="w-full bg-foreground text-background rounded-xl py-3 text-sm font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full bg-primary text-primary-foreground rounded-xl py-3 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {videoLoading ? <><Loader2 size={16} className="animate-spin" /> Video wird erstellt…</> : <><Film size={16} /> KI Video Rundgang</>}
                   </button>

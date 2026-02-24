@@ -481,8 +481,8 @@ export default function Expose() {
         </div>
         <p className="text-xs text-muted-foreground">Füge strukturierte Analyse-Outputs aus NotebookLM ein – für Video-Skripte und detaillierte Berichte.</p>
         <textarea
-          className="w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-          rows={8}
+          className="w-full bg-card border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          style={{ minHeight: "300px" }}
           placeholder="NotebookLM-Output hier einfügen (Marktdaten, Infrastruktur-Analyse, Mietpreisentwicklung…)"
           value={notebookLmText} onChange={(e) => setNotebookLmText(e.target.value)}
         />
@@ -496,9 +496,9 @@ export default function Expose() {
             else toast({ title: "Fehler beim Speichern", variant: "destructive" });
           }}
           disabled={!notebookLmText.trim()}
-          className="w-full bg-foreground text-background rounded-xl py-2.5 text-sm font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          <Save size={14} /> Notiz speichern
+          <Save size={14} /> Notiz & Analyse speichern
         </button>
       </div>
 
@@ -585,11 +585,42 @@ export default function Expose() {
           ].map(t => (
             <button
               key={t.id}
-              onClick={() => setSelectedTemplate(t.id)}
+              onClick={async () => {
+                setSelectedTemplate(t.id);
+                // Send action with full object data to webhook
+                await sendAction(t.actionId, {
+                  objekt: {
+                    titel: form.titel,
+                    objektnummer: form.objektnummer,
+                    bezirk: form.bezirk,
+                    plz: form.plz,
+                    ort: form.ort,
+                    strasse: form.strasse,
+                    hnr: form.hnr,
+                    objektart: form.objektart,
+                    verkaufsart: form.verkaufsart,
+                    kaufpreis: form.kaufpreis,
+                    miete: form.miete,
+                    flaeche: form.flaeche,
+                    zimmer: form.zimmer,
+                    provisionsstellung: form.provisionsstellung,
+                    kaeufer_provision: form.kaeufer_provision,
+                    verkaeufer_provision: form.verkaeufer_provision,
+                  },
+                  texte: {
+                    ki_expose: aiText,
+                    kurzbeschreibung,
+                    beschreibung: form.beschreibung,
+                    sprachnotizen,
+                    notebook_lm: notebookLmText,
+                  },
+                  bilder_anzahl: images.length,
+                });
+              }}
               className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all text-center min-h-[180px] justify-center ${
                 selectedTemplate === t.id
                   ? "border-primary bg-primary/5 shadow-orange"
-                  : "border-border bg-surface hover:bg-accent"
+                  : "border-border bg-card hover:bg-accent"
               }`}
             >
               <span className="text-3xl">{t.icon}</span>
@@ -625,7 +656,7 @@ export default function Expose() {
           </button>
 
           <button onClick={handleVideoWebhook} disabled={!formValid || sendingWebhook}
-            className="bg-foreground text-background rounded-2xl py-3.5 text-sm font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+            className="bg-primary text-primary-foreground rounded-2xl py-3.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
             {sendingWebhook ? <><RefreshCw size={16} className="animate-spin" /> Senden…</> : <><Send size={16} /> KI Video Rundgang</>}
           </button>
         </div>
