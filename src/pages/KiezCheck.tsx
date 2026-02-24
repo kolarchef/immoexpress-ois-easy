@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +8,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Map, BarChart3, Compass, GraduationCap, Bus, RefreshCw } from "lucide-react";
 import { sendAction } from "@/lib/sendAction";
 import { useToast } from "@/hooks/use-toast";
-import "leaflet/dist/leaflet.css";
-
-const VIENNA_CENTER: [number, number] = [48.2082, 16.3738];
 
 const BEZIRKE = [
   { value: "1010", label: "1. Innere Stadt" },
@@ -39,19 +35,6 @@ const BEZIRKE = [
   { value: "1230", label: "23. Liesing" },
 ];
 
-// Heatmap-Punkte (simuliert, werden durch Webhook-Daten ersetzt)
-const HEATMAP_POINTS: { lat: number; lng: number; intensity: number }[] = [
-  { lat: 48.2082, lng: 16.3738, intensity: 0.9 },
-  { lat: 48.215, lng: 16.36, intensity: 0.7 },
-  { lat: 48.195, lng: 16.39, intensity: 0.8 },
-  { lat: 48.22, lng: 16.35, intensity: 0.5 },
-  { lat: 48.19, lng: 16.41, intensity: 0.6 },
-  { lat: 48.21, lng: 16.32, intensity: 0.4 },
-  { lat: 48.23, lng: 16.38, intensity: 0.75 },
-  { lat: 48.185, lng: 16.34, intensity: 0.65 },
-  { lat: 48.205, lng: 16.42, intensity: 0.55 },
-  { lat: 48.225, lng: 16.4, intensity: 0.85 },
-];
 
 interface WebhookData {
   [key: string]: unknown;
@@ -86,29 +69,16 @@ function KarteTab() {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl overflow-hidden border border-border" style={{ height: "65vh" }}>
-        <MapContainer center={VIENNA_CENTER} zoom={12} style={{ height: "100%", width: "100%" }} scrollWheelZoom>
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {HEATMAP_POINTS.map((p, i) => (
-            <CircleMarker
-              key={i}
-              center={[p.lat, p.lng]}
-              radius={20 + p.intensity * 30}
-              pathOptions={{
-                color: "hsl(24, 100%, 50%)",
-                fillColor: "hsl(24, 100%, 50%)",
-                fillOpacity: p.intensity * 0.45,
-                weight: 1,
-              }}
-            >
-              <Popup>Intensität: {Math.round(p.intensity * 100)}%</Popup>
-            </CircleMarker>
-          ))}
-        </MapContainer>
+        <iframe
+          title="Wien Karte"
+          width="100%"
+          height="100%"
+          style={{ border: 0 }}
+          src="https://www.openstreetmap.org/export/embed.html?bbox=16.2%2C48.12%2C16.55%2C48.30&layer=mapnik&marker=48.2082%2C16.3738"
+          allowFullScreen
+        />
       </div>
-      <p className="text-xs text-muted-foreground text-center">Orange-Heatmap: Immobilienaktivität in Wien</p>
+      <p className="text-xs text-muted-foreground text-center">Kartenansicht: Wien Zentrum (OpenStreetMap)</p>
     </div>
   );
 }
