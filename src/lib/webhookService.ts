@@ -59,6 +59,7 @@ export const ACTION_IDS = {
   GET_SCHOOL_DATA: "get_school_data",
   GET_TRANSIT_LIVE: "get_transit_live",
   FINANCE_TRANSFER: "finance_transfer",
+  IMMOZ_SYNC: "immoz_sync",
 } as const;
 
 // ─── Webhook Actions ─────────────────────────────────────────────────

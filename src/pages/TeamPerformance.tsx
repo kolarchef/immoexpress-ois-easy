@@ -4,10 +4,11 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
-import { TrendingUp, Users, DollarSign, FileCheck, Home, Download, Upload, Trophy } from "lucide-react";
+import { TrendingUp, Users, DollarSign, FileCheck, Home, Download, Upload, Trophy, RefreshCw, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
+import { sendAction } from "@/lib/sendAction";
 
 type Kunde = {
   id: string;
@@ -36,7 +37,8 @@ export default function TeamPerformance() {
   const [activeTab, setActiveTab] = useState("gesamt");
   const [archivFiles, setArchivFiles] = useState<{ name: string; url: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const [immozSyncing, setImmozSyncing] = useState(false);
+  const [lastImmozSync, setLastImmozSync] = useState<string | null>(null);
   useEffect(() => {
     const load = async () => {
       const [{ data: k }, { data: p }, { data: r }] = await Promise.all([
@@ -50,6 +52,31 @@ export default function TeamPerformance() {
     };
     load();
   }, []);
+
+  // Last ImmoZ sync
+  useEffect(() => {
+    supabase.from("immoz_exporte").select("erstellt_am").order("erstellt_am", { ascending: false }).limit(1).then(({ data }) => {
+      if (data?.[0]) setLastImmozSync(data[0].erstellt_am);
+    });
+  }, []);
+
+  const handleImmozSync = async () => {
+    setImmozSyncing(true);
+    try {
+      const res = await sendAction("immoz_sync", { typ: "manuell" });
+      if (res.ok) {
+        const now = new Date().toISOString();
+        setLastImmozSync(now);
+        toast({ title: "✓ ImmoZ-Abgleich gestartet", description: "Die Daten werden im Hintergrund synchronisiert." });
+      } else {
+        toast({ title: "Sync-Fehler", description: "Verbindung zu ImmoZ konnte nicht hergestellt werden.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Sync-Fehler", description: "Bitte prüfe deine Webhook-Konfiguration.", variant: "destructive" });
+    } finally {
+      setImmozSyncing(false);
+    }
+  };
 
   // Objekt-Kaufpreise
   const [objektPreise, setObjektPreise] = useState<Record<string, number>>({});
@@ -297,6 +324,29 @@ export default function TeamPerformance() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* ImmoZ Hybrid-Sync */}
+      <Card className="p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <ArrowLeftRight size={20} className="text-primary" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-foreground">ImmoZ Hybrid-Sync</h2>
+              <p className="text-xs text-muted-foreground">
+                Letzter Abgleich: {lastImmozSync
+                  ? new Date(lastImmozSync).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                  : "– noch kein Abgleich –"}
+              </p>
+            </div>
+          </div>
+          <Button onClick={handleImmozSync} disabled={immozSyncing} className="gap-2">
+            <RefreshCw size={16} className={immozSyncing ? "animate-spin" : ""} />
+            {immozSyncing ? "Wird abgeglichen…" : "Daten von ImmoZ jetzt abgleichen"}
+          </Button>
+        </div>
+      </Card>
 
       {/* PDF Export & Archiv */}
       <div className="grid md:grid-cols-2 gap-4">
