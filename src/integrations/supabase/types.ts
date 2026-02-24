@@ -58,6 +58,41 @@ export type Database = {
           },
         ]
       }
+      crm_dokumente: {
+        Row: {
+          created_at: string
+          dateiname: string
+          id: string
+          kunde_id: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dateiname: string
+          id?: string
+          kunde_id: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dateiname?: string
+          id?: string
+          kunde_id?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_dokumente_kunde_id_fkey"
+            columns: ["kunde_id"]
+            isOneToOne: false
+            referencedRelation: "crm_kunden"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_kunden: {
         Row: {
           budget: string | null
