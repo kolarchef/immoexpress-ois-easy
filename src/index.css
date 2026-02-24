@@ -5,54 +5,54 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 220 20% 12%;
+    --foreground: 0 0% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 12%;
+    --card-foreground: 0 0% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 12%;
+    --popover-foreground: 0 0% 15%;
 
-    --primary: 25 95% 53%;
+    --primary: 24 100% 50%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 30 100% 97%;
-    --secondary-foreground: 25 95% 40%;
+    --secondary-foreground: 24 100% 40%;
 
-    --muted: 220 15% 96%;
-    --muted-foreground: 220 10% 50%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
 
-    --accent: 30 100% 95%;
-    --accent-foreground: 25 95% 40%;
+    --accent: 30 100% 96%;
+    --accent-foreground: 24 100% 40%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 91%;
-    --input: 220 15% 91%;
-    --ring: 25 95% 53%;
+    --border: 0 0% 91%;
+    --input: 0 0% 91%;
+    --ring: 24 100% 50%;
 
     --radius: 1rem;
 
     /* ImmoExpress custom tokens */
-    --orange: 25 95% 53%;
-    --orange-light: 30 100% 95%;
+    --orange: 24 100% 50%;
+    --orange-light: 30 100% 96%;
     --orange-dark: 20 90% 42%;
-    --surface: 220 20% 98%;
+    --surface: 0 0% 100%;
     --surface-card: 0 0% 100%;
 
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 220 20% 12%;
-    --sidebar-primary: 25 95% 53%;
+    --sidebar-foreground: 0 0% 15%;
+    --sidebar-primary: 24 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 30 100% 95%;
-    --sidebar-accent-foreground: 25 95% 40%;
-    --sidebar-border: 220 15% 91%;
-    --sidebar-ring: 25 95% 53%;
+    --sidebar-accent: 30 100% 96%;
+    --sidebar-accent-foreground: 24 100% 40%;
+    --sidebar-border: 0 0% 91%;
+    --sidebar-ring: 24 100% 50%;
 
-    --shadow-card: 0 2px 16px 0 hsl(220 20% 12% / 0.07);
-    --shadow-md: 0 4px 24px 0 hsl(220 20% 12% / 0.10);
-    --shadow-orange: 0 4px 20px 0 hsl(25 95% 53% / 0.25);
+    --shadow-card: 0 2px 16px 0 hsl(0 0% 0% / 0.05);
+    --shadow-md: 0 4px 24px 0 hsl(0 0% 0% / 0.08);
+    --shadow-orange: 0 4px 20px 0 hsl(24 100% 50% / 0.25);
   }
 }
 
