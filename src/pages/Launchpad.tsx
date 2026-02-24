@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   MapPin, Clock,
@@ -6,10 +6,15 @@ import {
   FileText, Mail, ArrowLeftRight,
   Video, Clipboard, FolderPlus,
   Search as SearchIcon, ShoppingCart, CheckSquare,
-  FileSearch, Calculator, Handshake, Vault
+  FileSearch, Calculator, Handshake, Vault,
+  Megaphone, BookOpen, Scale, Wrench, FileQuestion
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
-const modules = [
+type Module = { label: string; icon: any; path: string; adminOnly?: boolean };
+
+const modules: Module[] = [
   { label: "CRM KUNDEN", icon: Users, path: "/crm" },
   { label: "OBJEKTE", icon: Building2, path: "/objekte" },
   { label: "EXPOSÉ", icon: FileText, path: "/expose" },
@@ -26,7 +31,9 @@ const modules = [
   { label: "GRUNDBUCH", icon: FileSearch, path: "/grundbuch" },
   { label: "BEWERTUNG", icon: Calculator, path: "/bewertung" },
   { label: "NETZWERK", icon: Handshake, path: "/netzwerk" },
-  { label: "FINANZ-TRESOR", icon: Vault, path: "/finanz-tresor" },
+  { label: "FINANZ-TRESOR", icon: Vault, path: "/finanz-tresor", adminOnly: true },
+  { label: "TEAM", icon: Users, path: "/team-performance", adminOnly: true },
+  { label: "WERBUNG", icon: Megaphone, path: "/werbung", adminOnly: true },
 ];
 
 const todos = [
@@ -48,9 +55,27 @@ const prioColor: Record<string, string> = {
   niedrig: "text-muted-foreground",
 };
 
+const expertenTools = [
+  { label: "Service-Center", desc: "Checklisten & After-Sales", icon: Wrench, path: "/immo-concierge" },
+  { label: "Provisions-Rechner", desc: "Brutto / Netto Kalkulation", icon: Calculator, path: "/provisions-rechner" },
+  { label: "Gesetzbuch", desc: "Mietrechtsgesetz & Richtwerte", icon: Scale, path: "/gesetzbuch" },
+  { label: "Handbuch", desc: "Interne Wissensdatenbank", icon: FileQuestion, path: "/academy" },
+];
+
 export default function Launchpad() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [todoList, setTodoList] = useState(todos);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").then(({ data }) => {
+      setIsAdmin(!!data?.length);
+    });
+  }, [user]);
+
+  const visibleModules = modules.filter(m => !m.adminOnly || isAdmin);
 
   const toggleTodo = (id: number) =>
     setTodoList((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
@@ -119,11 +144,11 @@ export default function Launchpad() {
         </div>
       </section>
 
-      {/* Werkzeuge – 16 Module */}
+      {/* Module Grid */}
       <section>
-        <h2 className="text-lg font-bold text-foreground mb-3">Werkzeuge</h2>
+        <h2 className="text-lg font-bold text-foreground mb-3">Module</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {modules.map(({ label, icon: Icon, path }) => (
+          {visibleModules.map(({ label, icon: Icon, path }) => (
             <button
               key={path}
               onClick={() => navigate(path)}
@@ -133,6 +158,26 @@ export default function Launchpad() {
                 <Icon size={22} />
               </div>
               <span className="text-xs font-bold text-foreground uppercase tracking-wide text-center leading-tight">{label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Experten-Tools */}
+      <section>
+        <h2 className="text-lg font-bold text-foreground mb-3">Experten-Tools</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {expertenTools.map(({ label, desc, icon: Icon, path }) => (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-card shadow-card border border-border hover:shadow-card-hover transition-all group text-center"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-primary-light flex items-center justify-center transition-all group-hover:scale-105 text-primary">
+                <Icon size={22} />
+              </div>
+              <span className="text-xs font-bold text-foreground uppercase tracking-wide leading-tight">{label}</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">{desc}</span>
             </button>
           ))}
         </div>
