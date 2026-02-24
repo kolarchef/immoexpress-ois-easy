@@ -10,6 +10,9 @@ import { toast } from "@/hooks/use-toast";
 import VideoSlideshow from "@/components/VideoSlideshow";
 import ObjektStatistiken from "@/components/ObjektStatistiken";
 import AudioRecorder from "@/components/AudioRecorder";
+import { sendAction } from "@/lib/sendAction";
+import { Progress } from "@/components/ui/progress";
+import { Loader2 } from "lucide-react";
 
 type Objekt = {
   id: string;
@@ -87,6 +90,8 @@ export default function Objektverwaltung() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [savingEdit, setSavingEdit] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const load = async () => {
     if (!user) return;
@@ -665,8 +670,80 @@ export default function Objektverwaltung() {
                 </div>
               </>
             ) : detailTab === "medien" ? (
-              <div>
+              <div className="space-y-4">
+                {/* Large photo area – min 60vh */}
                 {photos.length > 0 ? (
+                  <div className="rounded-2xl overflow-hidden border border-border" style={{ minHeight: "60vh" }}>
+                    <img src={photos[0]} alt="Titelbild" className="w-full h-full object-cover" style={{ minHeight: "60vh" }} />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-surface" style={{ minHeight: "60vh" }}>
+                    <Film size={40} className="text-muted-foreground mb-3" />
+                    <p className="text-sm text-muted-foreground">Keine Fotos vorhanden – lade Fotos hoch für einen Video-Rundgang.</p>
+                  </div>
+                )}
+
+                {/* Thumbnails */}
+                {photos.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {photos.map((url, i) => (
+                      <img key={i} src={url} alt={`Foto ${i+1}`} className="w-20 h-14 rounded-xl object-cover flex-shrink-0 border border-border" />
+                    ))}
+                  </div>
+                )}
+
+                {/* KI Action Buttons with fixed actionIds */}
+                <div className="space-y-2.5">
+                  <button
+                    onClick={async () => {
+                      setVideoLoading(true);
+                      try {
+                        const { ok, status } = await sendAction("expose_video_ki", {
+                          objekt_id: detailObj.id,
+                          objekt: { titel: detailObj.kurzinfo || detailObj.objektart, objektnummer: detailObj.objektnummer, ort: detailObj.ort, plz: detailObj.plz },
+                          bilder_anzahl: photos.length,
+                        });
+                        if (ok) toast({ title: "✅ Video-Auftrag gesendet" });
+                        else throw new Error(`Fehler: ${status}`);
+                      } catch (err: unknown) {
+                        toast({ title: "Fehler", description: err instanceof Error ? err.message : "Unbekannt", variant: "destructive" });
+                      } finally {
+                        setVideoLoading(false);
+                      }
+                    }}
+                    disabled={videoLoading || photos.length === 0}
+                    className="w-full bg-foreground text-background rounded-xl py-3 text-sm font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {videoLoading ? <><Loader2 size={16} className="animate-spin" /> Video wird erstellt…</> : <><Film size={16} /> KI Video Rundgang</>}
+                  </button>
+                  {videoLoading && <Progress value={45} className="h-1.5 rounded-full" />}
+
+                  <button
+                    onClick={async () => {
+                      setPdfLoading(true);
+                      try {
+                        const { ok, status } = await sendAction("expose_pdf_gen", {
+                          objekt_id: detailObj.id,
+                          objekt: { titel: detailObj.kurzinfo || detailObj.objektart, objektnummer: detailObj.objektnummer },
+                        });
+                        if (ok) toast({ title: "✅ PDF wird generiert" });
+                        else throw new Error(`Fehler: ${status}`);
+                      } catch (err: unknown) {
+                        toast({ title: "Fehler", description: err instanceof Error ? err.message : "Unbekannt", variant: "destructive" });
+                      } finally {
+                        setPdfLoading(false);
+                      }
+                    }}
+                    disabled={pdfLoading}
+                    className="w-full bg-primary text-primary-foreground rounded-xl py-3 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {pdfLoading ? <><Loader2 size={16} className="animate-spin" /> PDF wird erstellt…</> : <><FileText size={16} /> PDF generieren</>}
+                  </button>
+                  {pdfLoading && <Progress value={60} className="h-1.5 rounded-full" />}
+                </div>
+
+                {/* Video slideshow (if photos exist) */}
+                {photos.length > 0 && (
                   <VideoSlideshow
                     images={photos}
                     titel={detailObj.kurzinfo || detailObj.objektart || "Immobilie"}
@@ -675,18 +752,13 @@ export default function Objektverwaltung() {
                     zimmer={detailObj.zimmer?.toString() || ""}
                     beschreibung={detailObj.beschreibung || ""}
                     onShare={(type) => {
-                  const addr = [detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ");
+                      const addr = [detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ");
                       const shareText = `🏠 *${detailObj.kurzinfo || detailObj.objektart}*\n📍 ${addr}\n💰 ${detailObj.kaufpreis ? `€${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "Preis auf Anfrage"}\n📐 ${detailObj.flaeche_m2 || "–"} m² · ${detailObj.zimmer || "–"} Zimmer\n\n👉 https://immoexpress.at/objekt/${detailObj.id}`;
                       if (type === "whatsapp") window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank");
                       else window.open(`mailto:?subject=${encodeURIComponent(detailObj.kurzinfo || "Immobilie")}&body=${encodeURIComponent(shareText)}`);
                       if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "video", kanal: type });
                     }}
                   />
-                ) : (
-                  <div className="text-center py-8">
-                    <Film size={32} className="text-muted-foreground mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground">Keine Fotos vorhanden \u2013 lade Fotos hoch f\u00fcr einen Video-Rundgang.</p>
-                  </div>
                 )}
               </div>
             ) : detailTab === "statistiken" ? (

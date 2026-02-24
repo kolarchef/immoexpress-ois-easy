@@ -6,7 +6,7 @@ import MessengerDrawer from "@/components/MessengerDrawer";
 import AudioRecorder from "@/components/AudioRecorder";
 import logoImg from "@/assets/logo_immoexpress_zug.jpeg";
 import { toast } from "@/hooks/use-toast";
-import { getWebhookUrl } from "@/lib/getWebhookUrl";
+import { sendAction } from "@/lib/sendAction";
 
 const bottomNav = [
   { path: "/", icon: LayoutDashboard, label: "Home" },
@@ -40,16 +40,11 @@ export default function AppLayout() {
     }
     setSendingNote(true);
     try {
-      const webhookUrl = await getWebhookUrl(user.id);
-      const res = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "notiz_speichern", payload: { text: lastTranscript, timestamp: new Date().toISOString() } }),
-      });
-      if (res.ok) {
+      const { ok, status } = await sendAction("notiz_speichern", { text: lastTranscript });
+      if (ok) {
         toast({ title: "✅ Notiz gesendet", description: "Sprachnotiz wurde an Make.com übermittelt." });
       } else {
-        throw new Error(`Webhook Fehler: ${res.status}`);
+        throw new Error(`Webhook Fehler: ${status}`);
       }
     } catch (err: unknown) {
       toast({ title: "Senden fehlgeschlagen", description: err instanceof Error ? err.message : "Unbekannter Fehler", variant: "destructive" });
