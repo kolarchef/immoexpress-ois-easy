@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Calendar, Home, Key, FileText, Upload, Download, Trash2, Loader2, Send, CheckCircle, FileSpreadsheet, File } from "lucide-react";
+import { X, Calendar, Home, Key, FileText, Upload, Download, Trash2, Loader2, Send, CheckCircle, FileSpreadsheet, File, ClipboardCheck, CircleCheck, Circle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { sendAction } from "@/lib/sendAction";
+
+const CHECKLIST_ITEMS = [
+  { key: "grundbuch", label: "Grundbuchauszug", pflicht: true },
+  { key: "gehalt", label: "Gehaltszettel (letzte 3 Monate)", pflicht: true },
+  { key: "ausweis", label: "Lichtbildausweis", pflicht: true },
+  { key: "objektdaten", label: "Objektdaten-Blatt", pflicht: true },
+] as const;
 
 function formatDate(dateStr: string) {
   if (!dateStr) return "–";
@@ -39,6 +46,10 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
   const [financeShared, setFinanceShared] = useState(selected.finance_shared ?? false);
   const [sendingFinance, setSendingFinance] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+  const allPflichtChecked = CHECKLIST_ITEMS.filter(i => i.pflicht).every(i => checkedItems[i.key]);
 
   useEffect(() => {
     if (detailTab === "dokumente" && selected) loadDokumente();
@@ -121,7 +132,10 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
           <div className="flex items-center gap-2">
             {/* Finance Button */}
             <button
-              onClick={handleSendFinance}
+              onClick={() => {
+                if (financeShared) return;
+                setShowChecklist(true);
+              }}
               disabled={financeShared || sendingFinance}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
                 financeShared
@@ -141,6 +155,59 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
             <button onClick={onClose} className="p-2 rounded-xl hover:bg-accent transition-colors"><X size={18} /></button>
           </div>
         </div>
+
+        {/* Finanzierungs-Checkliste Overlay */}
+        {showChecklist && (
+          <div className="mb-4 bg-accent border border-border rounded-2xl p-4 animate-fade-in">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <ClipboardCheck size={15} className="text-primary" /> Vor-Sende-Checkliste
+              </h3>
+              <button onClick={() => setShowChecklist(false)} className="text-muted-foreground hover:text-foreground">
+                <X size={14} />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">Bitte bestätigen Sie, dass folgende Unterlagen vorliegen:</p>
+            <div className="space-y-2">
+              {CHECKLIST_ITEMS.map(item => (
+                <button
+                  key={item.key}
+                  onClick={() => setCheckedItems(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                  className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left ${
+                    checkedItems[item.key]
+                      ? "border-green-500/50 bg-green-500/10"
+                      : "border-border bg-card hover:bg-muted"
+                  }`}
+                >
+                  {checkedItems[item.key] ? (
+                    <CircleCheck size={18} className="text-green-500 flex-shrink-0" />
+                  ) : (
+                    <Circle size={18} className="text-muted-foreground flex-shrink-0" />
+                  )}
+                  <span className={`text-sm ${checkedItems[item.key] ? "text-foreground font-semibold" : "text-muted-foreground"}`}>
+                    {item.label}
+                  </span>
+                  {item.pflicht && <span className="ml-auto text-[10px] text-destructive font-bold">Pflicht</span>}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                setShowChecklist(false);
+                handleSendFinance();
+              }}
+              disabled={!allPflichtChecked || sendingFinance}
+              className={`w-full mt-3 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                allPflichtChecked
+                  ? "bg-green-600 text-white hover:bg-green-700 shadow-lg"
+                  : "bg-muted text-muted-foreground cursor-not-allowed"
+              }`}
+            >
+              {sendingFinance ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+              {allPflichtChecked ? "Jetzt an Finanzierung senden" : "Alle Pflichtfelder bestätigen"}
+            </button>
+          </div>
+        )}
 
         {/* Tab-Leiste */}
         <div className="flex gap-1 mb-4 bg-muted rounded-xl p-1">
