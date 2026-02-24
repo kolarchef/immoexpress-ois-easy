@@ -95,12 +95,14 @@ export type Database = {
       }
       crm_kunden: {
         Row: {
+          ablehnungsgrund_bank: string | null
           budget: string | null
           created_at: string
           dsgvo_einwilligung: boolean | null
           einzugsdatum: string | null
           email: string | null
           finance_shared: boolean
+          finance_status: string | null
           geburtsdatum: string | null
           id: string
           kaufdatum: string | null
@@ -118,12 +120,14 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          ablehnungsgrund_bank?: string | null
           budget?: string | null
           created_at?: string
           dsgvo_einwilligung?: boolean | null
           einzugsdatum?: string | null
           email?: string | null
           finance_shared?: boolean
+          finance_status?: string | null
           geburtsdatum?: string | null
           id?: string
           kaufdatum?: string | null
@@ -141,12 +145,14 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          ablehnungsgrund_bank?: string | null
           budget?: string | null
           created_at?: string
           dsgvo_einwilligung?: boolean | null
           einzugsdatum?: string | null
           email?: string | null
           finance_shared?: boolean
+          finance_status?: string | null
           geburtsdatum?: string | null
           id?: string
           kaufdatum?: string | null
