@@ -342,7 +342,12 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
                   </div>
                 )}
               </div>
-              <div className="pt-2 border-t border-border"><span className="text-muted-foreground block mb-1">Notizen</span><p className="text-foreground">{selected.notiz}</p></div>
+              {selected.notiz && (
+                <div className="pt-2 border-t border-border">
+                  <span className="text-muted-foreground block mb-1 text-xs font-semibold uppercase">Notizen</span>
+                  <div className="note-highlight"><p className="text-foreground text-sm">{selected.notiz}</p></div>
+                </div>
+              )}
             </div>
             <div className="flex gap-2 mt-4">
               <a href={`tel:${selected.phone}`} className="flex-1 bg-primary text-primary-foreground py-2.5 rounded-xl text-sm font-semibold text-center shadow-orange hover:bg-primary-dark transition-colors">Anrufen</a>

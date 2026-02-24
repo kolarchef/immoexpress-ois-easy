@@ -372,16 +372,16 @@ export default function FinanzTresor() {
             </Card>
 
             {/* Admin: Interne Notizen */}
-            <Card className="card-radius shadow-card border-amber-500/20">
+            <Card className="card-radius shadow-card">
               <CardContent className="p-5">
-                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                  <Lock size={13} className="text-amber-500" /> Interne Finanzierungs-Notizen
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                  <Lock size={13} className="text-primary" /> Interne Finanzierungs-Notizen
                 </h4>
                 <div className="space-y-2 mb-3">
                   {notizen.length === 0 ? (
                     <p className="text-xs text-muted-foreground">Noch keine Notizen.</p>
                   ) : notizen.map(n => (
-                    <div key={n.id} className="bg-accent rounded-xl p-3 border border-border">
+                    <div key={n.id} className="note-highlight">
                       <p className="text-sm text-foreground">{n.notiz}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">{formatDate(n.created_at)}</p>
                     </div>
@@ -406,10 +406,10 @@ export default function FinanzTresor() {
             </Card>
 
             {/* Admin: Bank-Angebote */}
-            <Card className="card-radius shadow-card border-amber-500/20">
+            <Card className="card-radius shadow-card">
               <CardContent className="p-5">
-                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                  <Lock size={13} className="text-amber-500" /> Bank-Angebote
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                  <Lock size={13} className="text-primary" /> Bank-Angebote
                 </h4>
                 <p className="text-[10px] text-muted-foreground mb-3">Dokumente werden automatisch auch in der Kunden-Dokumentenliste sichtbar.</p>
                 <input

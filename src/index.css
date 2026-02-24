@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 220 14% 96%;
     --foreground: 0 0% 15%;
 
     --card: 0 0% 100%;
@@ -19,7 +19,7 @@
     --secondary: 30 100% 97%;
     --secondary-foreground: 24 100% 40%;
 
-    --muted: 0 0% 96%;
+    --muted: 220 14% 93%;
     --muted-foreground: 0 0% 45%;
 
     --accent: 30 100% 96%;
@@ -28,18 +28,22 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 91%;
-    --input: 0 0% 91%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
     --ring: 24 100% 50%;
 
-    --radius: 1rem;
+    --radius: 0.75rem;
 
     /* ImmoExpress custom tokens */
     --orange: 24 100% 50%;
     --orange-light: 30 100% 96%;
     --orange-dark: 20 90% 42%;
-    --surface: 0 0% 100%;
+    --surface: 220 14% 96%;
     --surface-card: 0 0% 100%;
+
+    /* Notes highlight */
+    --note-border: 24 100% 50%;
+    --note-bg: 30 100% 98%;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 0 0% 15%;
@@ -91,5 +95,12 @@
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+  .note-highlight {
+    background: hsl(var(--note-bg));
+    border: 1.5px solid hsl(var(--note-border) / 0.35);
+    border-left: 3px solid hsl(var(--note-border));
+    border-radius: 12px;
+    padding: 1rem;
   }
 }
