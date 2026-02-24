@@ -18,6 +18,7 @@ type Kunde = {
   objekt_id: string | null;
   finance_status: string | null;
   ablehnungsgrund_bank: string | null;
+  user_id: string | null;
 };
 
 type Objekt = {
@@ -132,10 +133,12 @@ export default function FinanzTresor() {
       if (dbErr) throw dbErr;
 
       // BACKFLOW: Also insert into crm_dokumente so the Makler sees it
+      // Use the customer's user_id (the Makler who owns the customer) so RLS allows them to see it
+      const kundeOwnerUserId = selected.user_id || user.id;
       const crmPath = `crm/${selected.id}/${Date.now()}_${file.name}`;
       await supabase.storage.from("kundenunterlagen").upload(crmPath, file);
       await supabase.from("crm_dokumente").insert({
-        kunde_id: selected.id, user_id: user.id, dateiname: file.name, storage_path: crmPath
+        kunde_id: selected.id, user_id: kundeOwnerUserId, dateiname: file.name, storage_path: crmPath
       });
 
       toast({ title: "✓ Hochgeladen", description: `${file.name} (auch in Kunden-Dokumenten sichtbar)` });
