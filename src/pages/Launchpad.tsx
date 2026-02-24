@@ -6,7 +6,7 @@ import {
   FileText, Mail, ArrowLeftRight,
   Video, Clipboard, FolderPlus,
   Search as SearchIcon, ShoppingCart, CheckSquare,
-  FileSearch, Calculator, Handshake
+  FileSearch, Calculator, Handshake, Vault
 } from "lucide-react";
 
 const modules = [
@@ -26,6 +26,7 @@ const modules = [
   { label: "GRUNDBUCH", icon: FileSearch, path: "/grundbuch" },
   { label: "BEWERTUNG", icon: Calculator, path: "/bewertung" },
   { label: "NETZWERK", icon: Handshake, path: "/netzwerk" },
+  { label: "FINANZ-TRESOR", icon: Vault, path: "/finanz-tresor" },
 ];
 
 const todos = [
