@@ -5,10 +5,10 @@ import { toast } from "@/hooks/use-toast";
 import { sendAction } from "@/lib/sendAction";
 
 const CHECKLIST_ITEMS = [
-  { key: "grundbuch", label: "Grundbuchauszug", pflicht: true },
-  { key: "gehalt", label: "Gehaltszettel (letzte 3 Monate)", pflicht: true },
-  { key: "ausweis", label: "Lichtbildausweis", pflicht: true },
-  { key: "objektdaten", label: "Objektdaten-Blatt", pflicht: true },
+  { key: "grundbuch", label: "Grundbuchauszug", pflicht: true, patterns: ["grundbuch"] },
+  { key: "gehalt", label: "Gehaltszettel (3 Monate)", pflicht: true, patterns: ["gehalt", "lohn", "einkommens"] },
+  { key: "ausweis", label: "Lichtbildausweis", pflicht: true, patterns: ["ausweis", "reisepass", "führerschein", "personalausweis"] },
+  { key: "objektdaten", label: "Objektdaten-Blatt", pflicht: false, patterns: ["objektdaten", "objektblatt"] },
 ] as const;
 
 function formatDate(dateStr: string) {
@@ -48,8 +48,16 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [showChecklist, setShowChecklist] = useState(false);
-  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
-  const allPflichtChecked = CHECKLIST_ITEMS.filter(i => i.pflicht).every(i => checkedItems[i.key]);
+
+  // Auto-detect which required documents are already uploaded
+  const detectedItems = CHECKLIST_ITEMS.reduce<Record<string, string | null>>((acc, item) => {
+    const found = dokumente.find(dok =>
+      item.patterns.some(p => dok.dateiname.toLowerCase().includes(p))
+    );
+    acc[item.key] = found ? found.dateiname : null;
+    return acc;
+  }, {});
+  const allPflichtChecked = CHECKLIST_ITEMS.filter(i => i.pflicht).every(i => detectedItems[i.key]);
 
   useEffect(() => {
     if (detailTab === "dokumente" && selected) loadDokumente();
@@ -134,7 +142,8 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
             <button
               onClick={() => {
                 if (financeShared) return;
-                setShowChecklist(true);
+                // Load docs first to ensure detection is current
+                loadDokumente().then(() => setShowChecklist(true));
               }}
               disabled={financeShared || sendingFinance}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
@@ -167,29 +176,39 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
                 <X size={14} />
               </button>
             </div>
-            <p className="text-xs text-muted-foreground mb-3">Bitte bestätigen Sie, dass folgende Unterlagen vorliegen:</p>
+            <p className="text-xs text-muted-foreground mb-3">Automatische Prüfung der hochgeladenen Dokumente:</p>
             <div className="space-y-2">
-              {CHECKLIST_ITEMS.map(item => (
-                <button
-                  key={item.key}
-                  onClick={() => setCheckedItems(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                  className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left ${
-                    checkedItems[item.key]
-                      ? "border-green-500/50 bg-green-500/10"
-                      : "border-border bg-card hover:bg-muted"
-                  }`}
-                >
-                  {checkedItems[item.key] ? (
-                    <CircleCheck size={18} className="text-green-500 flex-shrink-0" />
-                  ) : (
-                    <Circle size={18} className="text-muted-foreground flex-shrink-0" />
-                  )}
-                  <span className={`text-sm ${checkedItems[item.key] ? "text-foreground font-semibold" : "text-muted-foreground"}`}>
-                    {item.label}
-                  </span>
-                  {item.pflicht && <span className="ml-auto text-[10px] text-destructive font-bold">Pflicht</span>}
-                </button>
-              ))}
+              {CHECKLIST_ITEMS.map(item => {
+                const found = detectedItems[item.key];
+                return (
+                  <div
+                    key={item.key}
+                    className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left ${
+                      found
+                        ? "border-green-500/50 bg-green-500/10"
+                        : "border-destructive/30 bg-destructive/5"
+                    }`}
+                  >
+                    {found ? (
+                      <CircleCheck size={18} className="text-green-500 flex-shrink-0" />
+                    ) : (
+                      <Circle size={18} className="text-destructive flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-sm ${found ? "text-foreground font-semibold" : "text-muted-foreground"}`}>
+                        {item.label}
+                      </span>
+                      {found && (
+                        <p className="text-[10px] text-green-600 truncate">✓ {found}</p>
+                      )}
+                      {!found && (
+                        <p className="text-[10px] text-destructive">Nicht gefunden – bitte im Tab „Dokumente" hochladen</p>
+                      )}
+                    </div>
+                    {item.pflicht && <span className={`ml-auto text-[10px] font-bold ${found ? "text-green-600" : "text-destructive"}`}>{found ? "OK" : "Pflicht"}</span>}
+                  </div>
+                );
+              })}
             </div>
             <button
               onClick={() => {
@@ -204,7 +223,7 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
               }`}
             >
               {sendingFinance ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-              {allPflichtChecked ? "Jetzt an Finanzierung senden" : "Alle Pflichtfelder bestätigen"}
+              {allPflichtChecked ? "Jetzt an Finanzierung senden" : "Pflicht-Dokumente fehlen"}
             </button>
           </div>
         )}
