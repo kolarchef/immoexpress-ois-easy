@@ -83,7 +83,7 @@ export default function AppLayout() {
               onClick={() => navigate("/team-performance")}
               className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-primary/90 transition-all"
             >
-              <BarChart3 size={14} /> TEAM-PERFORMANCE
+              <BarChart3 size={14} /> BUSINESS-COCKPIT
             </button>
           )}
         </div>
