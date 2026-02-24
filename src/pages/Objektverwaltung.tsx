@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download, ExternalLink, Wand2, Crop, Expand, Check, BookOpen } from "lucide-react";
+import MagicToolOverlay from "@/components/MagicToolOverlay";
+import PdfTemplateSelector, { type PdfTemplate } from "@/components/PdfTemplateSelector";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ObjektModal from "@/components/ObjektModal";
@@ -93,14 +95,12 @@ export default function Objektverwaltung() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
 
-  // Magic Tools state (ported from Kamera)
+  // Magic Tools state
   const [magicEditOpen, setMagicEditOpen] = useState(false);
   const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);
-  const [magicPrompt, setMagicPrompt] = useState("");
-  const [magicEditing, setMagicEditing] = useState(false);
-  const [smartCropping, setSmartCropping] = useState(false);
-  const [outpainting, setOutpainting] = useState(false);
-  const [editedImage, setEditedImage] = useState<string | null>(null);
+
+  // PDF template state for edit mode
+  const [selectedPdfTemplate, setSelectedPdfTemplate] = useState<PdfTemplate>("expose-style");
 
   // NotebookLM state for edit mode
   const [notebookLmText, setNotebookLmText] = useState("");
@@ -288,90 +288,9 @@ export default function Objektverwaltung() {
     setSavingEdit(false);
   };
 
-  // === Magic Tools functions (ported from Kamera) ===
-  const handleMagicEdit = async () => {
-    if (!magicEditPhoto) return;
-    setMagicEditing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("ki-tools", {
-        body: {
-          action: "magic-edit",
-          imageDataUrls: [magicEditPhoto],
-          context: magicPrompt || "Entferne störende Objekte, verbessere das Foto für ein professionelles Immobilien-Exposé.",
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.editedImage) {
-        setEditedImage(data.editedImage);
-        toast({ title: "✨ Magic Edit fertig" });
-      } else {
-        toast({ title: "Kein bearbeitetes Bild erhalten", variant: "destructive" });
-      }
-    } catch (err) {
-      toast({ title: "Magic Edit fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
-    } finally {
-      setMagicEditing(false);
-    }
-  };
-
-  const handleSmartCrop = async () => {
-    if (!magicEditPhoto) return;
-    setSmartCropping(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("ki-tools", {
-        body: { action: "smart-crop", imageDataUrls: [magicEditPhoto] },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.editedImage) {
-        setEditedImage(data.editedImage);
-        toast({ title: "✅ Smart Crop fertig" });
-      }
-    } catch (err) {
-      toast({ title: "Smart Crop fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
-    } finally {
-      setSmartCropping(false);
-    }
-  };
-
-  const handleOutpainting = async () => {
-    if (!magicEditPhoto) return;
-    setOutpainting(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("ki-tools", {
-        body: {
-          action: "outpainting",
-          imageDataUrls: [magicEditPhoto],
-          context: "Erweitere dieses Immobilienfoto zu einer beeindruckenden Weitwinkel-Aufnahme.",
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.editedImage) {
-        setEditedImage(data.editedImage);
-        toast({ title: "🖼️ Outpainting fertig" });
-      }
-    } catch (err) {
-      toast({ title: "Outpainting fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
-    } finally {
-      setOutpainting(false);
-    }
-  };
-
-  const applyEditedImage = () => {
-    if (editedImage) {
-      setMagicEditPhoto(editedImage);
-      setEditedImage(null);
-      toast({ title: "✓ Bearbeitetes Bild übernommen" });
-    }
-  };
-
   const openMagicEdit = (photoUrl: string) => {
     setMagicEditPhoto(photoUrl);
     setMagicEditOpen(true);
-    setEditedImage(null);
-    setMagicPrompt("");
   };
 
   const filtered = objekte.filter(o => {
@@ -693,6 +612,41 @@ export default function Objektverwaltung() {
                       </button>
                     </div>
 
+                    {/* Magic Tool in Edit Mode */}
+                    {photos.length > 0 && (
+                      <div className="border border-border rounded-xl p-4 bg-accent/30 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Wand2 size={16} className="text-primary" />
+                          <label className={labelCls}>Magic Tool – Bild optimieren</label>
+                        </div>
+                        <div
+                          className="relative rounded-2xl overflow-hidden border border-border cursor-pointer"
+                          style={{ height: "40vh" }}
+                          onClick={() => openMagicEdit(photos[0])}
+                        >
+                          <img src={photos[0]} alt="Titelbild" className="w-full h-full object-cover" />
+                          <button className="absolute bottom-3 right-3 bg-primary text-primary-foreground rounded-xl px-3 py-2 text-xs font-bold shadow-orange flex items-center gap-1.5">
+                            <Wand2 size={14} /> Magic Edit
+                          </button>
+                        </div>
+                        {photos.length > 1 && (
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {photos.slice(1, 6).map((url, i) => (
+                              <img key={i} src={url} alt={`Foto ${i+2}`}
+                                className="w-16 h-12 rounded-lg object-cover flex-shrink-0 border border-border cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                                onClick={() => openMagicEdit(url)} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* PDF Template Selector in Edit Mode */}
+                    <PdfTemplateSelector
+                      selected={selectedPdfTemplate}
+                      onChange={setSelectedPdfTemplate}
+                    />
+
                     <div className="flex gap-2">
                       <button onClick={() => setEditing(false)} className="flex-1 border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-accent">Abbrechen</button>
                       <button onClick={() => saveEdit(false)} disabled={savingEdit} className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold flex items-center justify-center gap-2 shadow-orange">
@@ -934,80 +888,12 @@ export default function Objektverwaltung() {
         </div>
       )}
 
-      {/* ===== MAGIC EDIT FULLSCREEN OVERLAY ===== */}
-      {magicEditOpen && magicEditPhoto && (
-        <div className="fixed inset-0 z-[60] bg-background/95 backdrop-blur-sm flex flex-col animate-fade-in" onClick={() => setMagicEditOpen(false)}>
-          <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full p-4" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Wand2 size={18} className="text-primary" /> Magic Tools
-              </h2>
-              <button onClick={() => setMagicEditOpen(false)} className="p-2 rounded-xl hover:bg-accent"><X size={18} /></button>
-            </div>
-
-            {/* Large Image */}
-            <div className="relative rounded-2xl overflow-hidden border border-border flex-1 min-h-0">
-              <img
-                src={editedImage || magicEditPhoto}
-                alt="Bearbeitung"
-                className="w-full h-full object-contain bg-card"
-              />
-            </div>
-
-            {/* Magic Tools Toolbar */}
-            <div className="mt-3 space-y-3">
-              <input
-                className="w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="z.B. Entferne den Müll, verbessere die Beleuchtung…"
-                value={magicPrompt}
-                onChange={(e) => setMagicPrompt(e.target.value)}
-              />
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={handleMagicEdit}
-                  disabled={magicEditing}
-                  className="flex items-center justify-center gap-1.5 bg-primary text-primary-foreground rounded-xl py-2.5 text-xs font-bold shadow-orange hover:opacity-90 transition-all disabled:opacity-50"
-                >
-                  {magicEditing ? <><RefreshCw size={12} className="animate-spin" /> …</> : <><Wand2 size={12} /> Magic Edit</>}
-                </button>
-                <button
-                  onClick={handleSmartCrop}
-                  disabled={smartCropping}
-                  className="flex items-center justify-center gap-1.5 bg-accent text-foreground border border-border rounded-xl py-2.5 text-xs font-bold hover:bg-secondary transition-all disabled:opacity-50"
-                >
-                  {smartCropping ? <><RefreshCw size={12} className="animate-spin" /> …</> : <><Crop size={12} /> Crop 9:16</>}
-                </button>
-                <button
-                  onClick={handleOutpainting}
-                  disabled={outpainting}
-                  className="flex items-center justify-center gap-1.5 bg-accent text-foreground border border-border rounded-xl py-2.5 text-xs font-bold hover:bg-secondary transition-all disabled:opacity-50"
-                >
-                  {outpainting ? <><RefreshCw size={12} className="animate-spin" /> …</> : <><Expand size={12} /> Outpaint</>}
-                </button>
-              </div>
-
-              {editedImage && (
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={applyEditedImage}
-                    className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold hover:opacity-90 transition-all"
-                  >
-                    <Check size={14} /> Übernehmen
-                  </button>
-                  <button
-                    onClick={() => setEditedImage(null)}
-                    className="flex items-center justify-center gap-2 bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-bold hover:bg-secondary transition-all"
-                  >
-                    <X size={14} /> Verwerfen
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+      <MagicToolOverlay
+        open={magicEditOpen}
+        photoUrl={magicEditPhoto}
+        onClose={() => { setMagicEditOpen(false); setMagicEditPhoto(null); }}
+        onApply={(url) => { /* could save edited photo back */ }}
+      />
       <ObjektModal open={showModal} onClose={() => setShowModal(false)} onSaved={load} />
 
       {detailObj && (

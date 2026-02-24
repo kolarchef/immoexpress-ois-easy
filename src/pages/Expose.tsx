@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus, Eye, Sparkles, Save, Mic, BookOpen, LayoutTemplate, Send } from "lucide-react";
+import MagicToolOverlay from "@/components/MagicToolOverlay";
 import ObjektModal from "@/components/ObjektModal";
 import ExposePreviewModal from "@/components/ExposePreviewModal";
 import AudioRecorder from "@/components/AudioRecorder";
@@ -59,6 +60,8 @@ export default function Expose() {
   const [notebookLmText, setNotebookLmText] = useState("");
   const [sprachnotizen, setSprachnotizen] = useState("");
   const [sendingWebhook, setSendingWebhook] = useState(false);
+  const [magicEditOpen, setMagicEditOpen] = useState(false);
+  const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);
   const [videoFormat, setVideoFormat] = useState<"16:9" | "9:16">("16:9");
   const [form, setForm] = useState({
     titel: "", objektnummer: "", bezirk: "", plz: "", ort: "", strasse: "", hnr: "",
@@ -379,6 +382,12 @@ export default function Expose() {
                   >
                     <X size={12} />
                   </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMagicEditPhoto(img); setMagicEditOpen(true); }}
+                    className="absolute bottom-1 right-1 bg-primary text-primary-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Wand2 size={10} />
+                  </button>
                   {i === titleImageIndex && <span className="absolute bottom-1 left-1 text-[9px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full font-semibold">Titelbild</span>}
                   {imageDescriptions[i] && (
                     <div className="absolute bottom-0 left-0 right-0 bg-foreground/70 text-background text-[9px] px-1.5 py-1 leading-tight">
@@ -645,6 +654,11 @@ export default function Expose() {
         onClose={() => setShowPreview(false)}
         data={{ ...form, aiText, kurzbeschreibung, images, sprachnotizen, notebookLmText }}
         template={selectedTemplate}
+      />
+      <MagicToolOverlay
+        open={magicEditOpen}
+        photoUrl={magicEditPhoto}
+        onClose={() => { setMagicEditOpen(false); setMagicEditPhoto(null); }}
       />
     </div>
   );
