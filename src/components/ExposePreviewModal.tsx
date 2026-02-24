@@ -153,23 +153,23 @@ ${data.kurzbeschreibung ? `<div class="text-block"><strong>KURZBESCHREIBUNG:</st
   const investmentHtml = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"/><title>Investment – ${data.titel}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:28px;color:#1a1a1a;font-size:11px}
-.header{border-bottom:2px solid #1a1a2e;padding-bottom:10px;margin-bottom:16px;display:flex;justify-content:space-between}
-.logo{font-size:16px;font-weight:bold;color:#1a1a2e}
-h1{font-size:15px;margin-bottom:4px;color:#1a1a2e}
+.header{border-bottom:2px solid #E8541A;padding-bottom:10px;margin-bottom:16px;display:flex;justify-content:space-between}
+.logo{font-size:16px;font-weight:bold;color:#E8541A}
+h1{font-size:15px;margin-bottom:4px;color:#E8541A}
 .sub{font-size:10px;color:#666;margin-bottom:16px}
 table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px}
-th{background:#1a1a2e;color:white;text-align:left;padding:8px 10px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px}
+th{background:#E8541A;color:white;text-align:left;padding:8px 10px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px}
 td{padding:7px 10px;border-bottom:1px solid #eee}
-tr:nth-child(even){background:#f9f9f9}
+tr:nth-child(even){background:#fff8f5}
 .highlight{color:#E8541A;font-weight:700}
 .section{margin-bottom:18px}
-.section h3{font-size:12px;color:#1a1a2e;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px}
+.section h3{font-size:12px;color:#E8541A;border-bottom:1px solid #fdd;padding-bottom:4px;margin-bottom:8px}
 .metric-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
-.metric{background:#f5f5f5;border-radius:6px;padding:10px;text-align:center}
+.metric{background:#fff8f5;border-radius:6px;padding:10px;text-align:center;border:1px solid #fdd}
 .metric label{font-size:8px;text-transform:uppercase;color:#888;display:block;margin-bottom:3px}
-.metric .val{font-size:18px;font-weight:900;color:#1a1a2e}
+.metric .val{font-size:18px;font-weight:900;color:#E8541A}
 .metric .val.green{color:#16a34a}
-.notebook-box{background:#f0f4ff;border-left:4px solid #3b82f6;border-radius:6px;padding:12px;font-size:10px;line-height:1.6;margin-bottom:14px;white-space:pre-wrap}
+.notebook-box{background:#fff8f5;border-left:4px solid #E8541A;border-radius:6px;padding:12px;font-size:10px;line-height:1.6;margin-bottom:14px;white-space:pre-wrap}
 .disclaimer{border-top:1px solid #ddd;padding-top:10px;font-size:8px;color:#999;margin-top:16px}
 </style></head><body>
 <div class="header"><div><div class="logo">ImmoExpress · Investment Report</div><div style="font-size:8px;color:#888;margin-top:2px">Vertraulich · Nur für qualifizierte Investoren</div></div><div style="text-align:right;font-size:9px;color:#888">Datum: ${dateStr}<br/>Ref: ${data.objektnummer || "–"}</div></div>
@@ -237,7 +237,7 @@ ${data.aiText ? `<div class="section"><h3>KI-Analyse</h3><div style="background:
     const orange = [232, 84, 26] as [number, number, number];
     const dark = [26, 26, 46] as [number, number, number];
     const isInvestment = template === "investment";
-    const accentColor = isInvestment ? dark : orange;
+    const accentColor = orange;
 
     // Header line
     doc.setDrawColor(...accentColor);
@@ -383,7 +383,7 @@ ${data.aiText ? `<div class="section"><h3>KI-Analyse</h3><div style="background:
               <button onClick={onClose} className="border border-border rounded-xl py-2.5 px-4 text-sm font-semibold hover:bg-accent transition-all">
                 Zurück
               </button>
-              <button onClick={downloadPdf} className="flex-1 bg-foreground text-background rounded-xl py-2.5 text-sm font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2">
+              <button onClick={downloadPdf} className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all flex items-center justify-center gap-2">
                 <Download size={14} /> PDF herunterladen
               </button>
               <button onClick={confirmAndSend} className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all flex items-center justify-center gap-2">

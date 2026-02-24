@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download, ExternalLink, Wand2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download, ExternalLink, Wand2, Crop, Expand, Check, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ObjektModal from "@/components/ObjektModal";
@@ -93,6 +93,18 @@ export default function Objektverwaltung() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // Magic Tools state (ported from Kamera)
+  const [magicEditOpen, setMagicEditOpen] = useState(false);
+  const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);
+  const [magicPrompt, setMagicPrompt] = useState("");
+  const [magicEditing, setMagicEditing] = useState(false);
+  const [smartCropping, setSmartCropping] = useState(false);
+  const [outpainting, setOutpainting] = useState(false);
+  const [editedImage, setEditedImage] = useState<string | null>(null);
+
+  // NotebookLM state for edit mode
+  const [notebookLmText, setNotebookLmText] = useState("");
+
   const load = async () => {
     if (!user) return;
     const { data } = await supabase.from("objekte").select("*").order("created_at", { ascending: false });
@@ -158,7 +170,7 @@ export default function Objektverwaltung() {
     await supabase.from("objekt_historie").insert({
       objekt_id: objId, user_id: user.id, feld: "status", alter_wert: oldStatus, neuer_wert: newStatus,
     });
-    toast({ title: `Status \u2192 ${newStatus.toUpperCase()}` });
+    toast({ title: `Status → ${newStatus.toUpperCase()}` });
     load();
     if (detailId === objId) loadHistorie(objId);
   };
@@ -173,9 +185,9 @@ export default function Objektverwaltung() {
     await supabase.from("objekt_historie").delete().eq("objekt_id", objId);
     const { error } = await supabase.from("objekte").delete().eq("id", objId);
     if (error) {
-      toast({ title: "\u274C Fehler beim L\u00f6schen", description: error.message, variant: "destructive" });
+      toast({ title: "❌ Fehler beim Löschen", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "\u2705 Objekt endg\u00fcltig gel\u00f6scht" });
+      toast({ title: "✅ Objekt endgültig gelöscht" });
       setDetailId(null);
       load();
     }
@@ -202,6 +214,7 @@ export default function Objektverwaltung() {
       kaeufer_provision: obj.kaeufer_provision?.toString() || "",
       verkaeufer_provision: obj.verkaeufer_provision?.toString() || "",
     });
+    setNotebookLmText("");
   };
 
   const saveEdit = async (exportToImmoZ?: boolean) => {
@@ -250,7 +263,7 @@ export default function Objektverwaltung() {
     if (Object.keys(update).length > 0) {
       const { error } = await supabase.from("objekte").update(update).eq("id", detailId);
       if (error) {
-        toast({ title: "\u274C Fehler beim Speichern", description: error.message, variant: "destructive" });
+        toast({ title: "❌ Fehler beim Speichern", description: error.message, variant: "destructive" });
         setSavingEdit(false);
         return;
       }
@@ -262,17 +275,103 @@ export default function Objektverwaltung() {
           objekte_ids: [detailId], anzahl: 1, status: "Erfolgreich",
           dateiname: `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`,
         });
-        toast({ title: "\u2705 Gespeichert & an ImmoZ \u00fcbertragen" });
+        toast({ title: "✅ Gespeichert & an ImmoZ übertragen" });
       } else {
-        toast({ title: `\u2705 ${changes.length} \u00c4nderung(en) gespeichert` });
+        toast({ title: `✅ ${changes.length} Änderung(en) gespeichert` });
       }
       load();
       loadHistorie(detailId);
     } else {
-      toast({ title: "Keine \u00c4nderungen erkannt" });
+      toast({ title: "Keine Änderungen erkannt" });
     }
     setEditing(false);
     setSavingEdit(false);
+  };
+
+  // === Magic Tools functions (ported from Kamera) ===
+  const handleMagicEdit = async () => {
+    if (!magicEditPhoto) return;
+    setMagicEditing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: {
+          action: "magic-edit",
+          imageDataUrls: [magicEditPhoto],
+          context: magicPrompt || "Entferne störende Objekte, verbessere das Foto für ein professionelles Immobilien-Exposé.",
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.editedImage) {
+        setEditedImage(data.editedImage);
+        toast({ title: "✨ Magic Edit fertig" });
+      } else {
+        toast({ title: "Kein bearbeitetes Bild erhalten", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Magic Edit fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setMagicEditing(false);
+    }
+  };
+
+  const handleSmartCrop = async () => {
+    if (!magicEditPhoto) return;
+    setSmartCropping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: { action: "smart-crop", imageDataUrls: [magicEditPhoto] },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.editedImage) {
+        setEditedImage(data.editedImage);
+        toast({ title: "✅ Smart Crop fertig" });
+      }
+    } catch (err) {
+      toast({ title: "Smart Crop fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setSmartCropping(false);
+    }
+  };
+
+  const handleOutpainting = async () => {
+    if (!magicEditPhoto) return;
+    setOutpainting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ki-tools", {
+        body: {
+          action: "outpainting",
+          imageDataUrls: [magicEditPhoto],
+          context: "Erweitere dieses Immobilienfoto zu einer beeindruckenden Weitwinkel-Aufnahme.",
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.editedImage) {
+        setEditedImage(data.editedImage);
+        toast({ title: "🖼️ Outpainting fertig" });
+      }
+    } catch (err) {
+      toast({ title: "Outpainting fehlgeschlagen", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
+    } finally {
+      setOutpainting(false);
+    }
+  };
+
+  const applyEditedImage = () => {
+    if (editedImage) {
+      setMagicEditPhoto(editedImage);
+      setEditedImage(null);
+      toast({ title: "✓ Bearbeitetes Bild übernommen" });
+    }
+  };
+
+  const openMagicEdit = (photoUrl: string) => {
+    setMagicEditPhoto(photoUrl);
+    setMagicEditOpen(true);
+    setEditedImage(null);
+    setMagicPrompt("");
   };
 
   const filtered = objekte.filter(o => {
@@ -299,7 +398,7 @@ export default function Objektverwaltung() {
           <h1 className="text-2xl font-bold text-foreground">Objektverwaltung</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{objekte.length} Objekte</p>
         </div>
-        <button onClick={() => { setEditObjekt(null); setShowModal(true); }} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl font-semibold text-sm shadow-orange hover:bg-primary-dark transition-all active:scale-95">
+        <button onClick={() => { setEditObjekt(null); setShowModal(true); }} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl font-semibold text-sm shadow-orange hover:opacity-90 transition-all active:scale-95">
           <Plus size={16} /> Neues Objekt
         </button>
       </div>
@@ -307,7 +406,7 @@ export default function Objektverwaltung() {
       {/* Search */}
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Adresse, PLZ oder Objektnummer\u2026"
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Adresse, PLZ oder Objektnummer…"
           className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground placeholder:text-muted-foreground" />
       </div>
 
@@ -353,7 +452,7 @@ export default function Objektverwaltung() {
           const entwurf = isEntwurf(obj);
           return (
             <div key={obj.id} onClick={() => openDetail(obj.id)}
-              className="bg-card rounded-2xl shadow-card border border-border overflow-hidden hover:shadow-card-hover transition-all cursor-pointer">
+              className="bg-card rounded-2xl shadow-card border border-border overflow-hidden hover:shadow-md-custom transition-all cursor-pointer">
               {objPhotos[obj.id] ? (
                 <div className="relative h-44 w-full">
                   <img src={objPhotos[obj.id]} alt="" className="w-full h-full object-cover" />
@@ -383,7 +482,7 @@ export default function Objektverwaltung() {
                       <span className="text-[10px] text-white/70 flex items-center gap-0.5"><Clock size={9} /> {daysSince(obj.created_at)}d</span>
                     </div>
                   </div>
-                  {obj.kaufpreis && <span className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-lg shadow">\u20AC{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
+                  {obj.kaufpreis && <span className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-lg shadow">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
                 </div>
               ) : (
                 <div className="p-4">
@@ -419,8 +518,8 @@ export default function Objektverwaltung() {
               <div className="flex items-center gap-3 text-xs text-muted-foreground px-4 py-2.5 border-t border-border">
                 {obj.objektart && <span><MapPin size={11} className="inline mr-0.5" />{obj.objektart}</span>}
                 {obj.zimmer && <span><BedDouble size={11} className="inline mr-0.5" />{obj.zimmer} Zi.</span>}
-                {obj.flaeche_m2 && <span><Maximize2 size={11} className="inline mr-0.5" />{obj.flaeche_m2}m\u00B2</span>}
-                {!objPhotos[obj.id] && obj.kaufpreis && <span className="font-bold text-primary">\u20AC{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
+                {obj.flaeche_m2 && <span><Maximize2 size={11} className="inline mr-0.5" />{obj.flaeche_m2}m²</span>}
+                {!objPhotos[obj.id] && obj.kaufpreis && <span className="font-bold text-primary">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
               </div>
             </div>
           );
@@ -444,15 +543,15 @@ export default function Objektverwaltung() {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Objekt endg\u00fcltig l\u00f6schen?</AlertDialogTitle>
+                      <AlertDialogTitle>Objekt endgültig löschen?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Diese Aktion kann nicht r\u00fcckg\u00e4ngig gemacht werden. Das Objekt "{detailObj.strasse ? `${detailObj.strasse} ${detailObj.hnr || ""}` : detailObj.objektart}" wird mit allen Fotos und der Historie unwiderruflich gel\u00f6scht.
+                        Diese Aktion kann nicht rückgängig gemacht werden. Das Objekt "{detailObj.strasse ? `${detailObj.strasse} ${detailObj.hnr || ""}` : detailObj.objektart}" wird mit allen Fotos und der Historie unwiderruflich gelöscht.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Abbrechen</AlertDialogCancel>
                       <AlertDialogAction onClick={() => deleteObjekt(detailObj.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                        Endg\u00fcltig l\u00f6schen
+                        Endgültig löschen
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -479,10 +578,10 @@ export default function Objektverwaltung() {
               </div>
             )}
 
-            {/* Tabs: Info / Medien / Stats / Historie */}
+            {/* Tabs */}
             <div className="flex gap-1.5 mb-4 overflow-x-auto scrollbar-hide">
               <button onClick={() => setDetailTab("info")} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${detailTab === "info" ? "bg-primary text-primary-foreground border-primary" : "bg-accent text-foreground border-border"}`}>
-                {"📋"} Info
+                📋 Info
               </button>
               <button onClick={() => setDetailTab("medien")} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${detailTab === "medien" ? "bg-primary text-primary-foreground border-primary" : "bg-accent text-foreground border-border"}`}>
                 <Film size={12} className="inline mr-1" /> Medien
@@ -503,15 +602,15 @@ export default function Objektverwaltung() {
                       <label className={labelCls}>Status</label>
                       <select className={inputCls} value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })}>
                         {statusOptions.map(s => <option key={s.value} value={s.value}>{s.emoji} {s.label}</option>)}
-                        <option value="entwurf">{"\u{1F4DD}"} Entwurf</option>
+                        <option value="entwurf">📝 Entwurf</option>
                       </select>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={labelCls}>Objektart</label>
                         <select className={inputCls} value={editForm.objektart} onChange={e => setEditForm({ ...editForm, objektart: e.target.value })}>
-                          <option value="">Ausw\u00e4hlen\u2026</option>
-                          {["Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Doppelhaush\u00e4lfte", "Reihenhaus", "Grundst\u00fcck", "B\u00fcro/Gewerbefl\u00e4che", "Zinshaus", "Dachgeschosswohnung", "Penthouse"].map(o => <option key={o}>{o}</option>)}
+                          <option value="">Auswählen…</option>
+                          {["Eigentumswohnung", "Mietwohnung", "Einfamilienhaus", "Doppelhaushälfte", "Reihenhaus", "Grundstück", "Büro/Gewerbefläche", "Zinshaus", "Dachgeschosswohnung", "Penthouse"].map(o => <option key={o}>{o}</option>)}
                         </select>
                       </div>
                       <div>
@@ -524,7 +623,7 @@ export default function Objektverwaltung() {
                     <div className="grid grid-cols-4 gap-2">
                       <div><label className={labelCls}>PLZ</label><input className={inputCls} value={editForm.plz} onChange={e => setEditForm({ ...editForm, plz: e.target.value })} /></div>
                       <div><label className={labelCls}>Ort</label><input className={inputCls} value={editForm.ort} onChange={e => setEditForm({ ...editForm, ort: e.target.value })} /></div>
-                      <div><label className={labelCls}>Stra\u00dfe</label><input className={inputCls} value={editForm.strasse} onChange={e => setEditForm({ ...editForm, strasse: e.target.value })} /></div>
+                      <div><label className={labelCls}>Straße</label><input className={inputCls} value={editForm.strasse} onChange={e => setEditForm({ ...editForm, strasse: e.target.value })} /></div>
                       <div><label className={labelCls}>HNR</label><input className={inputCls} value={editForm.hnr} onChange={e => setEditForm({ ...editForm, hnr: e.target.value })} /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -532,13 +631,13 @@ export default function Objektverwaltung() {
                       <div><label className={labelCls}>Stock</label><input className={inputCls} value={editForm.stock} onChange={e => setEditForm({ ...editForm, stock: e.target.value })} /></div>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
-                      <div><label className={labelCls}>Fl\u00e4che m\u00B2</label><input type="number" className={inputCls} value={editForm.flaeche_m2} onChange={e => setEditForm({ ...editForm, flaeche_m2: e.target.value })} /></div>
+                      <div><label className={labelCls}>Fläche m²</label><input type="number" className={inputCls} value={editForm.flaeche_m2} onChange={e => setEditForm({ ...editForm, flaeche_m2: e.target.value })} /></div>
                       <div><label className={labelCls}>Zimmer</label><input type="number" className={inputCls} value={editForm.zimmer} onChange={e => setEditForm({ ...editForm, zimmer: e.target.value })} /></div>
-                      <div><label className={labelCls}>Kaufpreis \u20AC</label><input type="number" className={inputCls} value={editForm.kaufpreis} onChange={e => setEditForm({ ...editForm, kaufpreis: e.target.value })} /></div>
+                      <div><label className={labelCls}>Kaufpreis €</label><input type="number" className={inputCls} value={editForm.kaufpreis} onChange={e => setEditForm({ ...editForm, kaufpreis: e.target.value })} /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div><label className={labelCls}>K\u00e4ufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.kaeufer_provision} onChange={e => setEditForm({ ...editForm, kaeufer_provision: e.target.value })} /></div>
-                      <div><label className={labelCls}>Verk\u00e4ufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.verkaeufer_provision} onChange={e => setEditForm({ ...editForm, verkaeufer_provision: e.target.value })} /></div>
+                      <div><label className={labelCls}>Käufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.kaeufer_provision} onChange={e => setEditForm({ ...editForm, kaeufer_provision: e.target.value })} /></div>
+                      <div><label className={labelCls}>Verkäufer-Prov. %</label><input type="number" step="0.1" className={inputCls} value={editForm.verkaeufer_provision} onChange={e => setEditForm({ ...editForm, verkaeufer_provision: e.target.value })} /></div>
                     </div>
                     <div>
                       <label className={labelCls}>Kurzinfo</label>
@@ -550,7 +649,7 @@ export default function Objektverwaltung() {
                     </div>
                     <div>
                       <div className="flex items-center justify-between">
-                        <label className={labelCls}>{"\u{1F512}"} Interne Notizen</label>
+                        <label className={labelCls}>🔒 Interne Notizen</label>
                         <AudioRecorder
                           onTranscript={(text) => setEditForm(prev => ({
                             ...prev,
@@ -560,6 +659,40 @@ export default function Objektverwaltung() {
                       </div>
                       <textarea className={`${inputCls} resize-none`} rows={4} style={{ minHeight: "300px" }} value={editForm.interne_notizen} onChange={e => setEditForm({ ...editForm, interne_notizen: e.target.value })} />
                     </div>
+
+                    {/* NotebookLM in edit mode */}
+                    <div className="border border-border rounded-xl p-4 bg-accent/30 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <BookOpen size={16} className="text-primary" />
+                        <label className={labelCls}>NotebookLM-Analyse</label>
+                      </div>
+                      <textarea
+                        className={`${inputCls} resize-none`}
+                        style={{ minHeight: "300px" }}
+                        placeholder="NotebookLM-Output hier einfügen (Marktdaten, Infrastruktur-Analyse, Mietpreisentwicklung…)"
+                        value={notebookLmText}
+                        onChange={e => setNotebookLmText(e.target.value)}
+                      />
+                      {notebookLmText && (
+                        <p className="text-xs text-primary font-semibold">✓ {notebookLmText.length} Zeichen</p>
+                      )}
+                      <button
+                        onClick={async () => {
+                          const { ok } = await sendAction("notiz_speichern", {
+                            text: notebookLmText,
+                            objekt_id: detailObj.id,
+                            quelle: "notebook_lm_objekt",
+                          });
+                          if (ok) toast({ title: "✅ Notiz & Analyse gespeichert" });
+                          else toast({ title: "Fehler beim Speichern", variant: "destructive" });
+                        }}
+                        disabled={!notebookLmText.trim()}
+                        className="w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        <Save size={14} /> Notiz & Analyse speichern
+                      </button>
+                    </div>
+
                     <div className="flex gap-2">
                       <button onClick={() => setEditing(false)} className="flex-1 border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-accent">Abbrechen</button>
                       <button onClick={() => saveEdit(false)} disabled={savingEdit} className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold flex items-center justify-center gap-2 shadow-orange">
@@ -567,22 +700,22 @@ export default function Objektverwaltung() {
                       </button>
                     </div>
                     <button onClick={() => saveEdit(true)} disabled={savingEdit} className="w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange flex items-center justify-center gap-2">
-                      <Copy size={14} /> Speichern & an ImmoZ \u00fcbertragen
+                      <Copy size={14} /> Speichern & an ImmoZ übertragen
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-2 text-sm mb-4">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Objektnummer</span><span className="font-semibold">{detailObj.objektnummer || "\u2013"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Objektnummer</span><span className="font-semibold">{detailObj.objektnummer || "–"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Art</span><span className="font-semibold">{detailObj.objektart}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Vermarktung</span><span className="font-semibold">{detailObj.verkaufsart || "Kauf"}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Adresse</span><span className="font-semibold">{[detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ") || "\u2013"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Adresse</span><span className="font-semibold">{[detailObj.strasse, detailObj.hnr, detailObj.plz, detailObj.ort].filter(Boolean).join(", ") || "–"}</span></div>
                     {detailObj.top && <div className="flex justify-between"><span className="text-muted-foreground">Top</span><span className="font-semibold">{detailObj.top}</span></div>}
                     {detailObj.stock && <div className="flex justify-between"><span className="text-muted-foreground">Stock</span><span className="font-semibold">{detailObj.stock}</span></div>}
-                    <div className="flex justify-between"><span className="text-muted-foreground">Fl\u00e4che</span><span className="font-semibold">{detailObj.flaeche_m2 ? `${detailObj.flaeche_m2} m\u00B2` : "\u2013"}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Zimmer</span><span className="font-semibold">{detailObj.zimmer || "\u2013"}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Preis</span><span className="font-bold text-primary">{detailObj.kaufpreis ? `\u20AC${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "auf Anfrage"}</span></div>
-                    {detailObj.kaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">K\u00e4ufer-Provision</span><span className="font-semibold">{detailObj.kaeufer_provision}%</span></div>}
-                    {detailObj.verkaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Verk\u00e4ufer-Provision</span><span className="font-semibold">{detailObj.verkaeufer_provision}%</span></div>}
+                    <div className="flex justify-between"><span className="text-muted-foreground">Fläche</span><span className="font-semibold">{detailObj.flaeche_m2 ? `${detailObj.flaeche_m2} m²` : "–"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Zimmer</span><span className="font-semibold">{detailObj.zimmer || "–"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Preis</span><span className="font-bold text-primary">{detailObj.kaufpreis ? `€${Number(detailObj.kaufpreis).toLocaleString("de-AT")}` : "auf Anfrage"}</span></div>
+                    {detailObj.kaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Käufer-Provision</span><span className="font-semibold">{detailObj.kaeufer_provision}%</span></div>}
+                    {detailObj.verkaeufer_provision && <div className="flex justify-between"><span className="text-muted-foreground">Verkäufer-Provision</span><span className="font-semibold">{detailObj.verkaeufer_provision}%</span></div>}
                     {/* Homepage Link */}
                     <div className="flex justify-between items-center pt-2 border-t border-border">
                       <span className="text-muted-foreground text-xs">Homepage</span>
@@ -604,7 +737,7 @@ export default function Objektverwaltung() {
                     )}
                     {detailObj.interne_notizen && (
                       <div className="pt-2 border-t border-border">
-                        <span className="text-xs font-bold text-amber-600">{"\u{1F512}"} Interne Notizen</span>
+                        <span className="text-xs font-bold text-primary">🔒 Interne Notizen</span>
                         <p className="text-xs text-muted-foreground mt-1">{detailObj.interne_notizen}</p>
                       </div>
                     )}
@@ -671,12 +804,15 @@ export default function Objektverwaltung() {
               </>
             ) : detailTab === "medien" ? (
               <div className="space-y-4">
-                {/* Large photo area – min 60vh */}
+                {/* Large photo area – 65vh with click-to-edit */}
                 {photos.length > 0 ? (
-                  <div className="relative rounded-2xl overflow-hidden border border-border" style={{ height: "65vh" }}>
-                    <img src={photos[0]} alt="Titelbild" className="w-full h-full object-cover" style={{ height: "65vh" }} />
+                  <div
+                    className="relative rounded-2xl overflow-hidden border border-border cursor-pointer"
+                    style={{ height: "65vh" }}
+                    onClick={() => openMagicEdit(photos[0])}
+                  >
+                    <img src={photos[0]} alt="Titelbild" className="w-full h-full object-cover" />
                     <button
-                      onClick={() => window.open(photos[0], "_blank")}
                       className="absolute bottom-4 right-4 bg-primary text-primary-foreground rounded-xl px-4 py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 flex items-center gap-2"
                     >
                       <Wand2 size={16} /> Magic Edit
@@ -689,11 +825,17 @@ export default function Objektverwaltung() {
                   </div>
                 )}
 
-                {/* Thumbnails */}
+                {/* Thumbnails – click to open Magic Edit */}
                 {photos.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {photos.map((url, i) => (
-                      <img key={i} src={url} alt={`Foto ${i+1}`} className="w-20 h-14 rounded-xl object-cover flex-shrink-0 border border-border" />
+                      <img
+                        key={i}
+                        src={url}
+                        alt={`Foto ${i+1}`}
+                        className="w-20 h-14 rounded-xl object-cover flex-shrink-0 border border-border cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                        onClick={() => openMagicEdit(url)}
+                      />
                     ))}
                   </div>
                 )}
@@ -748,7 +890,7 @@ export default function Objektverwaltung() {
                   {pdfLoading && <Progress value={60} className="h-1.5 rounded-full" />}
                 </div>
 
-                {/* Video slideshow (if photos exist) */}
+                {/* Video slideshow */}
                 {photos.length > 0 && (
                   <VideoSlideshow
                     images={photos}
@@ -772,7 +914,7 @@ export default function Objektverwaltung() {
             ) : (
               <div className="space-y-2">
                 {historie.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-6">Noch keine \u00c4nderungen aufgezeichnet.</p>
+                  <p className="text-xs text-muted-foreground text-center py-6">Noch keine Änderungen aufgezeichnet.</p>
                 ) : historie.map(h => (
                   <div key={h.id} className="p-3 bg-accent rounded-xl border border-border">
                     <div className="flex items-center justify-between mb-1">
@@ -780,14 +922,88 @@ export default function Objektverwaltung() {
                       <span className="text-[10px] text-muted-foreground">{new Date(h.created_at).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-destructive line-through">{h.alter_wert || "\u2013"}</span>
-                      <span className="text-muted-foreground">\u2192</span>
-                      <span className="text-green-600 font-semibold">{h.neuer_wert || "\u2013"}</span>
+                      <span className="text-destructive line-through">{h.alter_wert || "–"}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="text-green-600 font-semibold">{h.neuer_wert || "–"}</span>
                     </div>
                   </div>
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== MAGIC EDIT FULLSCREEN OVERLAY ===== */}
+      {magicEditOpen && magicEditPhoto && (
+        <div className="fixed inset-0 z-[60] bg-background/95 backdrop-blur-sm flex flex-col animate-fade-in" onClick={() => setMagicEditOpen(false)}>
+          <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full p-4" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Wand2 size={18} className="text-primary" /> Magic Tools
+              </h2>
+              <button onClick={() => setMagicEditOpen(false)} className="p-2 rounded-xl hover:bg-accent"><X size={18} /></button>
+            </div>
+
+            {/* Large Image */}
+            <div className="relative rounded-2xl overflow-hidden border border-border flex-1 min-h-0">
+              <img
+                src={editedImage || magicEditPhoto}
+                alt="Bearbeitung"
+                className="w-full h-full object-contain bg-card"
+              />
+            </div>
+
+            {/* Magic Tools Toolbar */}
+            <div className="mt-3 space-y-3">
+              <input
+                className="w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="z.B. Entferne den Müll, verbessere die Beleuchtung…"
+                value={magicPrompt}
+                onChange={(e) => setMagicPrompt(e.target.value)}
+              />
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={handleMagicEdit}
+                  disabled={magicEditing}
+                  className="flex items-center justify-center gap-1.5 bg-primary text-primary-foreground rounded-xl py-2.5 text-xs font-bold shadow-orange hover:opacity-90 transition-all disabled:opacity-50"
+                >
+                  {magicEditing ? <><RefreshCw size={12} className="animate-spin" /> …</> : <><Wand2 size={12} /> Magic Edit</>}
+                </button>
+                <button
+                  onClick={handleSmartCrop}
+                  disabled={smartCropping}
+                  className="flex items-center justify-center gap-1.5 bg-accent text-foreground border border-border rounded-xl py-2.5 text-xs font-bold hover:bg-secondary transition-all disabled:opacity-50"
+                >
+                  {smartCropping ? <><RefreshCw size={12} className="animate-spin" /> …</> : <><Crop size={12} /> Crop 9:16</>}
+                </button>
+                <button
+                  onClick={handleOutpainting}
+                  disabled={outpainting}
+                  className="flex items-center justify-center gap-1.5 bg-accent text-foreground border border-border rounded-xl py-2.5 text-xs font-bold hover:bg-secondary transition-all disabled:opacity-50"
+                >
+                  {outpainting ? <><RefreshCw size={12} className="animate-spin" /> …</> : <><Expand size={12} /> Outpaint</>}
+                </button>
+              </div>
+
+              {editedImage && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={applyEditedImage}
+                    className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold hover:opacity-90 transition-all"
+                  >
+                    <Check size={14} /> Übernehmen
+                  </button>
+                  <button
+                    onClick={() => setEditedImage(null)}
+                    className="flex items-center justify-center gap-2 bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-bold hover:bg-secondary transition-all"
+                  >
+                    <X size={14} /> Verwerfen
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -808,7 +1024,7 @@ export default function Objektverwaltung() {
             flaeche: detailObj.flaeche_m2?.toString() || "",
             zimmer: detailObj.zimmer?.toString() || "",
             kaufpreis: detailObj.kaufpreis?.toString() || "",
-            provisionsstellung: "K\u00e4ufer",
+            provisionsstellung: "Käufer",
             plz: detailObj.plz || "",
             strasse: detailObj.strasse || "",
             hnr: detailObj.hnr || "",
