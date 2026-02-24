@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Map, BarChart3, Compass, GraduationCap, Bus, RefreshCw, Search, MapPin } from "lucide-react";
+import { Map, BarChart3, Compass, GraduationCap, Bus, RefreshCw, Search, MapPin, Loader2 } from "lucide-react";
 import { sendAction } from "@/lib/sendAction";
 import { useToast } from "@/hooks/use-toast";
 
@@ -83,24 +83,25 @@ function AddressSearch() {
 
   return (
     <div className="relative">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="relative group">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
         <Input
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Adresse eingeben (z.B. Praterstraße 10)..."
-          className="pl-10 bg-card border-border rounded-xl"
+          className="pl-12 pr-4 py-6 text-base bg-card border-2 border-primary/30 rounded-2xl shadow-lg focus:border-primary focus:ring-primary/20 placeholder:text-muted-foreground/60"
         />
+        {searching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />}
       </div>
       {results.length > 0 && (
-        <div className="absolute z-50 top-full mt-1 w-full bg-card border border-border rounded-xl shadow-md-custom overflow-hidden">
+        <div className="absolute z-50 top-full mt-2 w-full bg-card border-2 border-primary/20 rounded-2xl shadow-xl overflow-hidden">
           {results.map((r: any, i: number) => (
             <button
               key={i}
               onClick={() => select(r)}
-              className="w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors flex items-center gap-2"
+              className="w-full text-left px-5 py-3 text-sm hover:bg-primary/10 transition-colors flex items-center gap-3 border-b border-border last:border-0"
             >
-              <MapPin size={14} className="text-primary flex-shrink-0" />
+              <MapPin size={15} className="text-primary flex-shrink-0" />
               <span className="truncate text-foreground">{r.display_name}</span>
             </button>
           ))}
