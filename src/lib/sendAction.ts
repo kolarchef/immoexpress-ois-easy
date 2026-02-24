@@ -17,8 +17,8 @@ export async function sendAction(
   const webhookUrl = await getWebhookUrl(user.id);
 
   const body = {
-    action: actionId,
-    payload: {
+    actionId,
+    data: {
       user_id: user.id,
       timestamp: new Date().toISOString(),
       ...extra,

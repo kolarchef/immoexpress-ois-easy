@@ -208,8 +208,8 @@ export default function Expose() {
       const webhookUrl = await getWebhookUrl(user.id);
 
       const payload = {
-        action: "expose_video_ki",
-        payload: {
+        actionId: "expose_video_ki",
+        data: {
           template: selectedTemplate,
           video_format: videoFormat,
           timestamp: new Date().toISOString(),
@@ -614,6 +614,7 @@ export default function Expose() {
                     sprachnotizen,
                     notebook_lm: notebookLmText,
                   },
+                  image_urls: images.filter(Boolean),
                   bilder_anzahl: images.length,
                 });
               }}
