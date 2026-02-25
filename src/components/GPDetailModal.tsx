@@ -33,6 +33,7 @@ type Partner = {
   hausnummer?: string | null;
   plz?: string | null;
   ort?: string | null;
+  gp_number?: string | null;
 };
 
 type PerformanceData = {
@@ -78,7 +79,7 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
   const { user } = useAuth();
   const [form, setForm] = useState({
     name: "", email: "", phone: "", geburtsdatum: "", provisionssatz: "", lernerfolg: "",
-    strasse: "", hausnummer: "", plz: "", ort: "",
+    strasse: "", hausnummer: "", plz: "", ort: "", gp_number: "",
   });
   const [newPassword, setNewPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -111,6 +112,7 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
       hausnummer: partner.hausnummer || "",
       plz: partner.plz || "",
       ort: partner.ort || "",
+      gp_number: partner.gp_number || "",
     });
     setStatusVal(partner.status);
     setNewPassword("");
@@ -203,6 +205,7 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
       hausnummer: form.hausnummer || null,
       plz: form.plz || null,
       ort: form.ort || null,
+      gp_number: form.gp_number || null,
     } as any).eq("id", partner.id);
     setSaving(false);
     if (error) { toast({ title: "Fehler", description: error.message, variant: "destructive" }); return; }
@@ -318,10 +321,14 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
                     <User size={14} className="text-primary" /> Stammdaten
                   </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
+                   <div className="grid grid-cols-2 gap-3">
+                    <div>
                       <Label className="flex items-center gap-1"><User size={12} /> Name</Label>
                       <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="flex items-center gap-1 text-xs font-bold">GP-Nr.</Label>
+                      <Input value={form.gp_number} onChange={e => setForm(f => ({ ...f, gp_number: e.target.value }))} placeholder="z.B. 001" className="mt-1 font-mono" />
                     </div>
                     <div>
                       <Label className="flex items-center gap-1"><Calendar size={12} /> Geburtsdatum</Label>

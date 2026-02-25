@@ -32,6 +32,7 @@ type Partner = {
   hausnummer: string | null;
   plz: string | null;
   ort: string | null;
+  gp_number: string | null;
 };
 
 const statusLabels: Record<string, string> = {
@@ -57,7 +58,7 @@ export default function Team() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", status: "makler", join_date: new Date().toISOString().slice(0, 10) });
 
   const fetchPartners = async () => {
-    const { data } = await supabase.from("geschaeftspartner").select("*").order("name");
+    const { data } = await supabase.from("geschaeftspartner").select("*").order("gp_number", { ascending: true, nullsFirst: false });
     setPartners((data as Partner[]) || []);
     setLoading(false);
   };
@@ -102,6 +103,7 @@ export default function Team() {
     <Table>
       <TableHeader>
         <TableRow>
+         <TableHead>GP-Nr.</TableHead>
           <TableHead>Name</TableHead>
           <TableHead>E-Mail</TableHead>
           <TableHead>Telefon</TableHead>
@@ -112,10 +114,11 @@ export default function Team() {
       </TableHeader>
       <TableBody>
         {list.length === 0 && (
-          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Keine Einträge</TableCell></TableRow>
+          <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Keine Einträge</TableCell></TableRow>
         )}
         {list.map(p => (
           <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setSelectedPartner(p); setDetailOpen(true); }}>
+            <TableCell className="font-mono text-xs text-muted-foreground">{p.gp_number || "–"}</TableCell>
             <TableCell className="font-medium">{p.name}</TableCell>
             <TableCell>{p.email || "–"}</TableCell>
             <TableCell>{p.phone || "–"}</TableCell>

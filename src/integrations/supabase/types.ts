@@ -291,6 +291,7 @@ export type Database = {
           created_by: string
           email: string | null
           geburtsdatum: string | null
+          gp_number: string | null
           hausnummer: string | null
           id: string
           join_date: string
@@ -312,6 +313,7 @@ export type Database = {
           created_by: string
           email?: string | null
           geburtsdatum?: string | null
+          gp_number?: string | null
           hausnummer?: string | null
           id?: string
           join_date?: string
@@ -333,6 +335,7 @@ export type Database = {
           created_by?: string
           email?: string | null
           geburtsdatum?: string | null
+          gp_number?: string | null
           hausnummer?: string | null
           id?: string
           join_date?: string
