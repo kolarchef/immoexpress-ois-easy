@@ -28,6 +28,10 @@ type Partner = {
   geburtsdatum: string | null;
   provisionssatz: number | null;
   lernerfolg: string | null;
+  strasse: string | null;
+  hausnummer: string | null;
+  plz: string | null;
+  ort: string | null;
 };
 
 const statusLabels: Record<string, string> = {
