@@ -58,6 +58,42 @@ export type Database = {
           },
         ]
       }
+      bestellungen: {
+        Row: {
+          abgeschlossen_am: string | null
+          bestellt_am: string | null
+          created_at: string
+          id: string
+          menge: number
+          produkt: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          abgeschlossen_am?: string | null
+          bestellt_am?: string | null
+          created_at?: string
+          id?: string
+          menge?: number
+          produkt: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          abgeschlossen_am?: string | null
+          bestellt_am?: string | null
+          created_at?: string
+          id?: string
+          menge?: number
+          produkt?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       crm_dokumente: {
         Row: {
           created_at: string
