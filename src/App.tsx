@@ -36,6 +36,7 @@ import Profil from "./pages/Profil";
 import TeamPerformance from "./pages/TeamPerformance";
 import Team from "./pages/Team";
 import BestellAdmin from "./pages/BestellAdmin";
+import RechtDisclaimer from "./pages/RechtDisclaimer";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ const AppRoutes = () => (
     <Route path="/auth" element={<Auth />} />
     <Route path="/upload" element={<KundenUpload />} />
     <Route path="/finanz-upload" element={<FinanzUpload />} />
+    <Route path="/recht-disclaimer" element={<RechtDisclaimer />} />
     <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
       <Route path="/" element={<Index />} />
       <Route path="/launchpad" element={<Launchpad />} />
