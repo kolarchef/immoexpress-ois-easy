@@ -291,15 +291,19 @@ export type Database = {
           created_by: string
           email: string | null
           geburtsdatum: string | null
+          hausnummer: string | null
           id: string
           join_date: string
           leave_date: string | null
           lernerfolg: string | null
           name: string
           notiz: string | null
+          ort: string | null
           phone: string | null
+          plz: string | null
           provisionssatz: number | null
           status: string
+          strasse: string | null
           updated_at: string
           user_id: string | null
         }
@@ -308,15 +312,19 @@ export type Database = {
           created_by: string
           email?: string | null
           geburtsdatum?: string | null
+          hausnummer?: string | null
           id?: string
           join_date?: string
           leave_date?: string | null
           lernerfolg?: string | null
           name: string
           notiz?: string | null
+          ort?: string | null
           phone?: string | null
+          plz?: string | null
           provisionssatz?: number | null
           status?: string
+          strasse?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -325,15 +333,19 @@ export type Database = {
           created_by?: string
           email?: string | null
           geburtsdatum?: string | null
+          hausnummer?: string | null
           id?: string
           join_date?: string
           leave_date?: string | null
           lernerfolg?: string | null
           name?: string
           notiz?: string | null
+          ort?: string | null
           phone?: string | null
+          plz?: string | null
           provisionssatz?: number | null
           status?: string
+          strasse?: string | null
           updated_at?: string
           user_id?: string | null
         }
