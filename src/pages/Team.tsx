@@ -97,12 +97,6 @@ export default function Team() {
     fetchPartners();
   };
 
-  const tiles = [
-    { label: "Neuen GP anlegen", icon: UserPlus, color: "text-primary", action: () => setDialogOpen(true) },
-    { label: "Makler", icon: Users, color: "text-green-600", count: counts.makler, sub: "aktiv" },
-    { label: "Trainees", icon: GraduationCap, color: "text-blue-600", count: counts.trainee, sub: "in Ausbildung" },
-    { label: "Ehemalige", icon: UserX, color: "text-muted-foreground", count: counts.ehemalig, sub: "archiviert" },
-  ];
 
   const PartnerTable = ({ list }: { list: Partner[] }) => (
     <Table>
@@ -150,19 +144,43 @@ export default function Team() {
         <h1 className="text-xl font-bold text-foreground">Team-Dashboard</h1>
       </div>
 
-      {/* Kacheln */}
+      {/* KPI-Zähler */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {tiles.map(t => (
-          <Card key={t.label} className={`cursor-pointer hover:shadow-md transition-all ${t.action ? "border-primary/30" : ""}`} onClick={t.action}>
-            <CardContent className="p-4 flex flex-col items-center gap-2 text-center">
-              <t.icon size={24} className={t.color} />
-              <span className="text-xs font-bold uppercase tracking-wide">{t.label}</span>
-              {t.count !== undefined && (
-                <span className="text-lg font-bold">{t.count} <span className="text-xs font-normal text-muted-foreground">{t.sub}</span></span>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-5 text-center">
+            <Users size={28} className="mx-auto text-primary mb-2" />
+            <p className="text-3xl font-extrabold text-foreground">{counts.total}</p>
+            <p className="text-xs text-muted-foreground mt-1">Gesamt-GPs</p>
+          </CardContent>
+        </Card>
+        <Card className="border-green-200 bg-green-50/50">
+          <CardContent className="p-5 text-center">
+            <Users size={28} className="mx-auto text-green-600 mb-2" />
+            <p className="text-3xl font-extrabold text-foreground">{counts.makler}</p>
+            <p className="text-xs text-muted-foreground mt-1">Aktive Makler</p>
+          </CardContent>
+        </Card>
+        <Card className="border-blue-200 bg-blue-50/50">
+          <CardContent className="p-5 text-center">
+            <GraduationCap size={28} className="mx-auto text-blue-600 mb-2" />
+            <p className="text-3xl font-extrabold text-foreground">{counts.trainee}</p>
+            <p className="text-xs text-muted-foreground mt-1">Trainees in Ausbildung</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border bg-muted/30">
+          <CardContent className="p-5 text-center">
+            <UserX size={28} className="mx-auto text-muted-foreground mb-2" />
+            <p className="text-3xl font-extrabold text-foreground">{counts.ehemalig}</p>
+            <p className="text-xs text-muted-foreground mt-1">Ehemalige</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Neuen GP anlegen */}
+      <div className="flex justify-end">
+        <Button onClick={() => setDialogOpen(true)} size="sm">
+          <Plus size={16} className="mr-1" /> Neuen GP anlegen
+        </Button>
       </div>
 
       {/* Tabs */}
