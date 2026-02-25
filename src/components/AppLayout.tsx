@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle, Mic, MicOff, X, Send, Loader2, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle, Mic, MicOff, X, Send, Loader2, BarChart3, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState as useStateHook } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +13,7 @@ import { sendAction } from "@/lib/sendAction";
 const bottomNav = [
   { path: "/", icon: LayoutDashboard, label: "Home" },
   { path: "/suche", icon: Search, label: "Suche" },
-  { path: "/kalender", icon: CheckSquare, label: "Aufgaben" },
+  { path: "/rechtsarchiv", icon: ShieldCheck, label: "§ Archiv", special: true },
   { path: "/kamera", icon: Camera, label: "Kamera" },
 ];
 
@@ -142,7 +142,7 @@ export default function AppLayout() {
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border shadow-md-custom">
         <div className="flex items-center justify-around px-2 py-1.5 max-w-2xl mx-auto">
-          {bottomNav.map(({ path, icon: Icon, label }) => (
+          {bottomNav.map(({ path, icon: Icon, label, special }) => (
             <NavLink
               key={path}
               to={path}
@@ -154,10 +154,16 @@ export default function AppLayout() {
             >
               {({ isActive }) => (
                 <>
-                  <div className={`p-1.5 rounded-xl transition-all ${isActive ? "bg-primary-light" : ""}`}>
-                    <Icon size={20} className={isActive ? "text-primary" : "text-muted-foreground"} />
-                  </div>
-                  <span className={`text-[10px] font-semibold truncate ${isActive ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
+                  {special ? (
+                    <div className="w-8 h-8 rounded-lg bg-destructive flex items-center justify-center shadow-sm">
+                      <Icon size={18} className="text-white" />
+                    </div>
+                  ) : (
+                    <div className={`p-1.5 rounded-xl transition-all ${isActive ? "bg-primary-light" : ""}`}>
+                      <Icon size={20} className={isActive ? "text-primary" : "text-muted-foreground"} />
+                    </div>
+                  )}
+                  <span className={`text-[10px] font-semibold truncate ${special ? "text-destructive" : isActive ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
                 </>
               )}
             </NavLink>

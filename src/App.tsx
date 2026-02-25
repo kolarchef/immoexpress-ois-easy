@@ -38,6 +38,7 @@ import Team from "./pages/Team";
 import BestellAdmin from "./pages/BestellAdmin";
 import AuditLogs from "./pages/AuditLogs";
 import RechtDisclaimer from "./pages/RechtDisclaimer";
+import Rechtsarchiv from "./pages/Rechtsarchiv";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -87,6 +88,7 @@ const AppRoutes = () => (
       <Route path="/bestell-admin" element={<BestellAdmin />} />
       <Route path="/admin/audit-logs" element={<AuditLogs />} />
       <Route path="/admin/sos-audit" element={<AuditLogs />} />
+      <Route path="/rechtsarchiv" element={<Rechtsarchiv />} />
     </Route>
     <Route path="*" element={<NotFound />} />
   </Routes>
