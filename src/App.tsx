@@ -53,6 +53,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<Auth />} />
+    <Route path="/login" element={<Auth />} />
     <Route path="/upload" element={<KundenUpload />} />
     <Route path="/finanz-upload" element={<FinanzUpload />} />
     <Route path="/recht-disclaimer" element={<RechtDisclaimer />} />
