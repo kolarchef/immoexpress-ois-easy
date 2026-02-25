@@ -36,6 +36,7 @@ import Profil from "./pages/Profil";
 import TeamPerformance from "./pages/TeamPerformance";
 import Team from "./pages/Team";
 import BestellAdmin from "./pages/BestellAdmin";
+import AuditLogs from "./pages/AuditLogs";
 import RechtDisclaimer from "./pages/RechtDisclaimer";
 import NotFound from "./pages/NotFound";
 
@@ -84,6 +85,7 @@ const AppRoutes = () => (
       <Route path="/team-performance" element={<TeamPerformance />} />
       <Route path="/team" element={<Team />} />
       <Route path="/bestell-admin" element={<BestellAdmin />} />
+      <Route path="/admin/audit-logs" element={<AuditLogs />} />
     </Route>
     <Route path="*" element={<NotFound />} />
   </Routes>
