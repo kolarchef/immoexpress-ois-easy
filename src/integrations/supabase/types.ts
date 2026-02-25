@@ -381,6 +381,112 @@ export type Database = {
         }
         Relationships: []
       }
+      meeting_files: {
+        Row: {
+          created_at: string
+          dateiname: string
+          id: string
+          meeting_id: string
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          dateiname: string
+          id?: string
+          meeting_id: string
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          dateiname?: string
+          id?: string
+          meeting_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_files_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_responses: {
+        Row: {
+          created_at: string
+          id: string
+          meeting_id: string
+          notiz: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meeting_id: string
+          notiz?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meeting_id?: string
+          notiz?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_responses_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetings: {
+        Row: {
+          beschreibung: string | null
+          created_at: string
+          created_by: string
+          datum: string
+          id: string
+          titel: string
+          uhrzeit: string
+          updated_at: string
+          zielgruppe: string
+        }
+        Insert: {
+          beschreibung?: string | null
+          created_at?: string
+          created_by: string
+          datum: string
+          id?: string
+          titel: string
+          uhrzeit?: string
+          updated_at?: string
+          zielgruppe?: string
+        }
+        Update: {
+          beschreibung?: string | null
+          created_at?: string
+          created_by?: string
+          datum?: string
+          id?: string
+          titel?: string
+          uhrzeit?: string
+          updated_at?: string
+          zielgruppe?: string
+        }
+        Relationships: []
+      }
       nachrichten: {
         Row: {
           created_at: string
