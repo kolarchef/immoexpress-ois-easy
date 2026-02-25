@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import {
   User, Calendar, Phone, Mail, Percent, KeyRound, TrendingUp,
   Home, Banknote, GraduationCap, Save, Eye, EyeOff, MapPin,
-  Upload, ShoppingCart, Package, CheckCircle2
+  Upload, ShoppingCart, Package, CheckCircle2, Pencil
 } from "lucide-react";
 
 type Partner = {
@@ -67,6 +67,8 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
   const [pwLoading, setPwLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [perf, setPerf] = useState<PerformanceData>({ umsatz: 0, objektCount: 0, finanzCount: 0 });
+  const [perfEditing, setPerfEditing] = useState(false);
+  const [perfForm, setPerfForm] = useState<PerformanceData>({ umsatz: 0, objektCount: 0, finanzCount: 0 });
   const [statusVal, setStatusVal] = useState("makler");
   const [bestellungen, setBestellungen] = useState<Bestellung[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -88,6 +90,7 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
     });
     setStatusVal(partner.status);
     setNewPassword("");
+    setPerfEditing(false);
     loadPerformance(partner);
     loadBestellungen(partner);
     loadUploadedFiles(partner);
@@ -104,7 +107,9 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
     const verkauft = objekte.filter(o => o.status === "verkauft");
     const umsatz = verkauft.reduce((s, o) => s + (Number(o.kaufpreis) || 0), 0);
     const finanzCount = kunden.filter(k => k.finance_status === "genehmigt").length;
-    setPerf({ umsatz, objektCount: objekte.length, finanzCount });
+    const data = { umsatz, objektCount: objekte.length, finanzCount };
+    setPerf(data);
+    setPerfForm(data);
   };
 
   const loadBestellungen = async (p: Partner) => {
@@ -192,6 +197,12 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
     loadBestellungen(partner);
   };
 
+  const handlePerfSave = () => {
+    setPerf({ ...perfForm });
+    setPerfEditing(false);
+    toast({ title: "Performance-Daten manuell überschrieben" });
+  };
+
   if (!partner) return null;
 
   const isTrainee = statusVal === "trainee";
@@ -206,7 +217,7 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[80vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User size={20} className="text-primary" />
@@ -222,135 +233,192 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
             {isTrainee && <TabsTrigger value="ausbildung">Ausbildung</TabsTrigger>}
           </TabsList>
 
-          {/* TAB 1: Übersicht */}
-          <TabsContent value="uebersicht" className="space-y-5 mt-4">
-            {/* Stammdaten */}
-            <section className="space-y-3">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                <User size={14} className="text-primary" /> Stammdaten
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <Label className="flex items-center gap-1"><User size={12} /> Name</Label>
-                  <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="flex items-center gap-1"><Calendar size={12} /> Geburtsdatum</Label>
-                  <Input type="date" value={form.geburtsdatum} onChange={e => setForm(f => ({ ...f, geburtsdatum: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="flex items-center gap-1"><Percent size={12} /> Provisionssatz %</Label>
-                  <Input type="number" step="0.1" value={form.provisionssatz} onChange={e => setForm(f => ({ ...f, provisionssatz: e.target.value }))} placeholder="z.B. 3.0" className="mt-1" />
-                </div>
-                <div>
-                  <Label className="flex items-center gap-1"><Phone size={12} /> Telefon</Label>
-                  <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="flex items-center gap-1"><Mail size={12} /> E-Mail</Label>
-                  <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="mt-1" />
-                </div>
-              </div>
-              {/* Adresse */}
-              <h4 className="text-xs font-semibold text-muted-foreground flex items-center gap-1 pt-2">
-                <MapPin size={12} /> Adresse
-              </h4>
-              <div className="grid grid-cols-4 gap-3">
-                <div className="col-span-2">
-                  <Label>Straße</Label>
-                  <Input value={form.strasse} onChange={e => setForm(f => ({ ...f, strasse: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label>Hausnr.</Label>
-                  <Input value={form.hausnummer} onChange={e => setForm(f => ({ ...f, hausnummer: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label>PLZ</Label>
-                  <Input value={form.plz} onChange={e => setForm(f => ({ ...f, plz: e.target.value }))} className="mt-1" />
-                </div>
-                <div className="col-span-2">
-                  <Label>Ort</Label>
-                  <Input value={form.ort} onChange={e => setForm(f => ({ ...f, ort: e.target.value }))} className="mt-1" />
-                </div>
-              </div>
-            </section>
-
-            {/* Performance Widget */}
-            <section className="bg-muted/50 rounded-xl p-4 space-y-2">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                <TrendingUp size={14} className="text-primary" /> Performance
-              </h3>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center">
-                  <Banknote size={18} className="mx-auto text-primary mb-1" />
-                  <p className="text-lg font-bold">{perf.umsatz.toLocaleString("de-AT")} €</p>
-                  <p className="text-[10px] text-muted-foreground">Umsatz (verkauft)</p>
-                </div>
-                <div className="text-center">
-                  <Home size={18} className="mx-auto text-primary mb-1" />
-                  <p className="text-lg font-bold">{perf.objektCount}</p>
-                  <p className="text-[10px] text-muted-foreground">Objekte gesamt</p>
-                </div>
-                <div className="text-center">
-                  <TrendingUp size={18} className="mx-auto text-primary mb-1" />
-                  <p className="text-lg font-bold">{perf.finanzCount}</p>
-                  <p className="text-[10px] text-muted-foreground">Finanz. genehmigt</p>
-                </div>
-              </div>
-            </section>
-
-            {/* Admin-Einstellungen */}
-            <section className="border-t border-border pt-4 space-y-4">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                <KeyRound size={14} className="text-destructive" /> Admin-Einstellungen
-              </h3>
-
-              {/* Rolle ändern */}
-              <div>
-                <Label className="text-xs">Rolle ändern</Label>
-                <Select value={statusVal} onValueChange={handleStatusChange}>
-                  <SelectTrigger className="w-48 mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="makler">Makler</SelectItem>
-                    <SelectItem value="trainee">Trainee</SelectItem>
-                    <SelectItem value="ehemalig">Ehemalig</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Passwort zurücksetzen */}
-              {partner.user_id && (
-                <div>
-                  <Label className="text-xs">Passwort überschreiben</Label>
-                  <div className="flex gap-2 mt-1">
-                    <div className="relative flex-1">
-                      <Input
-                        type={showPw ? "text" : "password"}
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                        placeholder="Neues Passwort (min. 6 Zeichen)"
-                      />
-                      <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
-                        {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
+          {/* TAB 1: Übersicht – 2 Spalten */}
+          <TabsContent value="uebersicht" className="mt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Linke Spalte: Stammdaten */}
+              <div className="space-y-4">
+                <section className="space-y-3">
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                    <User size={14} className="text-primary" /> Stammdaten
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <Label className="flex items-center gap-1"><User size={12} /> Name</Label>
+                      <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="mt-1" />
                     </div>
-                    <Button variant="destructive" size="sm" onClick={handlePasswordReset} disabled={pwLoading}>
-                      {pwLoading ? "..." : "Setzen"}
-                    </Button>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">Das Passwort wird sofort überschrieben.</p>
-                </div>
-              )}
-            </section>
+                    <div>
+                      <Label className="flex items-center gap-1"><Calendar size={12} /> Geburtsdatum</Label>
+                      <Input type="date" value={form.geburtsdatum} onChange={e => setForm(f => ({ ...f, geburtsdatum: e.target.value }))} className="mt-1" />
+                    </div>
 
-            <Button onClick={handleSave} disabled={saving} className="w-full">
-              <Save size={16} className="mr-2" /> {saving ? "Speichern..." : "Profil speichern"}
-            </Button>
+                    {/* Provisionssatz – hervorgehoben */}
+                    <div>
+                      <Label className="flex items-center gap-1"><Percent size={12} /> Provisionssatz %</Label>
+                      <div className="mt-1 relative">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={form.provisionssatz}
+                          onChange={e => setForm(f => ({ ...f, provisionssatz: e.target.value }))}
+                          placeholder="z.B. 3.0"
+                          className="bg-primary/10 border-primary/30 font-bold text-lg pl-9"
+                        />
+                        <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                      </div>
+                    </div>
+
+                    {/* Telefon – klickbar */}
+                    <div>
+                      <Label className="flex items-center gap-1"><Phone size={12} /> Telefon</Label>
+                      <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="mt-1" />
+                      {form.phone && (
+                        <a href={`tel:${form.phone}`} className="text-xs text-primary hover:underline mt-0.5 inline-flex items-center gap-1">
+                          <Phone size={10} /> Anrufen
+                        </a>
+                      )}
+                    </div>
+
+                    {/* E-Mail – klickbar */}
+                    <div>
+                      <Label className="flex items-center gap-1"><Mail size={12} /> E-Mail</Label>
+                      <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="mt-1" />
+                      {form.email && (
+                        <a href={`mailto:${form.email}`} className="text-xs text-primary hover:underline mt-0.5 inline-flex items-center gap-1">
+                          <Mail size={10} /> Mail senden
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Adresse */}
+                  <h4 className="text-xs font-semibold text-muted-foreground flex items-center gap-1 pt-2">
+                    <MapPin size={12} /> Adresse
+                  </h4>
+                  <div className="grid grid-cols-4 gap-3">
+                    <div className="col-span-2">
+                      <Label>Straße</Label>
+                      <Input value={form.strasse} onChange={e => setForm(f => ({ ...f, strasse: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <Label>Hausnr.</Label>
+                      <Input value={form.hausnummer} onChange={e => setForm(f => ({ ...f, hausnummer: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <Label>PLZ</Label>
+                      <Input value={form.plz} onChange={e => setForm(f => ({ ...f, plz: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div className="col-span-2">
+                      <Label>Ort</Label>
+                      <Input value={form.ort} onChange={e => setForm(f => ({ ...f, ort: e.target.value }))} className="mt-1" />
+                    </div>
+                  </div>
+                </section>
+
+                <Button onClick={handleSave} disabled={saving} className="w-full">
+                  <Save size={16} className="mr-2" /> {saving ? "Speichern..." : "Profil speichern"}
+                </Button>
+              </div>
+
+              {/* Rechte Spalte: Performance + Admin */}
+              <div className="space-y-4">
+                {/* Performance Widget */}
+                <section className="bg-muted/50 rounded-xl p-4 space-y-3">
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                    <TrendingUp size={14} className="text-primary" /> Performance
+                    <button onClick={() => { setPerfEditing(!perfEditing); setPerfForm({ ...perf }); }} className="ml-auto text-muted-foreground hover:text-foreground">
+                      <Pencil size={14} />
+                    </button>
+                  </h3>
+                  {perfEditing ? (
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs">Umsatz (€)</Label>
+                        <Input type="number" value={perfForm.umsatz} onChange={e => setPerfForm(f => ({ ...f, umsatz: Number(e.target.value) }))} className="mt-1" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Objekte gesamt</Label>
+                        <Input type="number" value={perfForm.objektCount} onChange={e => setPerfForm(f => ({ ...f, objektCount: Number(e.target.value) }))} className="mt-1" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Finanzierungen genehmigt</Label>
+                        <Input type="number" value={perfForm.finanzCount} onChange={e => setPerfForm(f => ({ ...f, finanzCount: Number(e.target.value) }))} className="mt-1" />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handlePerfSave} className="flex-1">Übernehmen</Button>
+                        <Button size="sm" variant="outline" onClick={() => setPerfEditing(false)} className="flex-1">Abbrechen</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="text-center">
+                        <Banknote size={18} className="mx-auto text-primary mb-1" />
+                        <p className="text-lg font-bold">{perf.umsatz.toLocaleString("de-AT")} €</p>
+                        <p className="text-[10px] text-muted-foreground">Umsatz (verkauft)</p>
+                      </div>
+                      <div className="text-center">
+                        <Home size={18} className="mx-auto text-primary mb-1" />
+                        <p className="text-lg font-bold">{perf.objektCount}</p>
+                        <p className="text-[10px] text-muted-foreground">Objekte gesamt</p>
+                      </div>
+                      <div className="text-center">
+                        <TrendingUp size={18} className="mx-auto text-primary mb-1" />
+                        <p className="text-lg font-bold">{perf.finanzCount}</p>
+                        <p className="text-[10px] text-muted-foreground">Finanz. genehmigt</p>
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                {/* Admin-Einstellungen */}
+                <section className="border border-border rounded-xl p-4 space-y-4">
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                    <KeyRound size={14} className="text-destructive" /> Admin-Einstellungen
+                  </h3>
+
+                  {/* Rolle ändern */}
+                  <div>
+                    <Label className="text-xs">Rolle ändern</Label>
+                    <Select value={statusVal} onValueChange={handleStatusChange}>
+                      <SelectTrigger className="w-full mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="makler">Makler</SelectItem>
+                        <SelectItem value="trainee">Trainee</SelectItem>
+                        <SelectItem value="ehemalig">Ehemalig</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Passwort zurücksetzen */}
+                  {partner.user_id && (
+                    <div>
+                      <Label className="text-xs">Passwort überschreiben</Label>
+                      <div className="flex gap-2 mt-1">
+                        <div className="relative flex-1">
+                          <Input
+                            type={showPw ? "text" : "password"}
+                            value={newPassword}
+                            onChange={e => setNewPassword(e.target.value)}
+                            placeholder="Neues Passwort (min. 6 Zeichen)"
+                          />
+                          <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                        <Button variant="destructive" size="sm" onClick={handlePasswordReset} disabled={pwLoading}>
+                          {pwLoading ? "..." : "Setzen"}
+                        </Button>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">Das Passwort wird sofort überschrieben.</p>
+                    </div>
+                  )}
+                </section>
+              </div>
+            </div>
           </TabsContent>
 
           {/* TAB 2: Werbemittel */}
           <TabsContent value="werbemittel" className="space-y-5 mt-4">
-            {/* Upload */}
             <section className="space-y-3">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
                 <Upload size={14} className="text-primary" /> Personalisierte Designs hochladen
@@ -365,7 +433,6 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
                 {uploading && <p className="text-xs text-primary mt-2">Wird hochgeladen…</p>}
               </div>
 
-              {/* Hochgeladene Dateien */}
               {uploadedFiles.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-xs font-semibold text-muted-foreground">Hochgeladene Dateien</h4>
@@ -381,7 +448,6 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
               )}
             </section>
 
-            {/* Bestell-Verlauf */}
             <section className="space-y-3">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
                 <Package size={14} className="text-primary" /> Bestell-Verlauf
