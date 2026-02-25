@@ -86,6 +86,7 @@ const AppRoutes = () => (
       <Route path="/team" element={<Team />} />
       <Route path="/bestell-admin" element={<BestellAdmin />} />
       <Route path="/admin/audit-logs" element={<AuditLogs />} />
+      <Route path="/admin/sos-audit" element={<AuditLogs />} />
     </Route>
     <Route path="*" element={<NotFound />} />
   </Routes>

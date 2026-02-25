@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { Shield, ChevronDown, Search, FileText, Download, Loader2 } from "lucide-react";
+import { Shield, ChevronDown, Search, Download, Loader2, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import HaftungsModal from "@/components/HaftungsModal";
 import jsPDF from "jspdf";
+
+const HAFTUNGSTEXT = `HAFTUNGSAUSSCHLUSS – ImmoExpress brainy: Diese Anwendung stellt ausschließlich allgemeine Informationen bereit und ersetzt keine individuelle Rechtsberatung. Die bereitgestellten Inhalte wurden mithilfe von Künstlicher Intelligenz generiert und basieren auf öffentlich zugänglichen Quellen des Rechtsinformationssystems des Bundes (RIS – ris.bka.gv.at). Es wird keine Haftung für die Richtigkeit, Vollständigkeit oder Aktualität der Informationen übernommen. Für verbindliche Rechtsauskünfte wenden Sie sich bitte an einen Rechtsanwalt oder Notar. Keine Rechtsberatung gemäß § 2 RAO. Erstellt durch KI-Assistenz System ImmoExpress brainy.`;
 
 const bundeslaender = [
   { name: "Wien", kuerzel: "W", color: "bg-red-500", gesetze: [
@@ -81,12 +83,12 @@ export default function SOSRecht() {
   };
 
   const askKI = async () => {
-    if (!kiFrage.trim()) return;
+    if (!kiFrage.trim() || !haftungOk || !aktBL) return;
     setKiLoading(true);
     setKiAntwort("");
     try {
       const { data, error } = await supabase.functions.invoke("sos-recht-ki", {
-        body: { frage: kiFrage, bundesland: aktBL?.name || null },
+        body: { frage: kiFrage, bundesland: aktBL.name },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -106,43 +108,50 @@ export default function SOSRecht() {
     const margin = 20;
     const contentWidth = pageWidth - 2 * margin;
 
-    // Header with branding
     const addHeader = () => {
+      // Disclaimer as unlöschbarer Header
+      doc.setFillColor(255, 240, 240);
+      doc.rect(margin - 2, 8, contentWidth + 4, 22, "F");
+      doc.setDrawColor(200, 30, 30);
+      doc.rect(margin - 2, 8, contentWidth + 4, 22, "S");
+      doc.setFontSize(6);
+      doc.setTextColor(180, 30, 30);
+      const headerLines = doc.splitTextToSize(HAFTUNGSTEXT, contentWidth);
+      doc.text(headerLines.slice(0, 4), margin, 13);
+
       doc.setFontSize(8);
       doc.setTextColor(200, 80, 20);
-      doc.text("ImmoExpress brainy", margin, 12);
+      doc.text("ImmoExpress brainy", margin, 36);
       if (gpNummer) {
         doc.setTextColor(120, 120, 120);
-        doc.text(`GP-Nr: ${gpNummer}`, pageWidth - margin, 12, { align: "right" });
+        doc.text(`GP-Nr: ${gpNummer}`, pageWidth - margin, 36, { align: "right" });
       }
       doc.setDrawColor(200, 80, 20);
-      doc.line(margin, 16, pageWidth - margin, 16);
+      doc.line(margin, 39, pageWidth - margin, 39);
     };
 
-    // Red footer on every page
     const addFooter = (pageNum: number) => {
       const footerY = pageHeight - 15;
       doc.setFillColor(200, 30, 30);
       doc.rect(0, footerY - 5, pageWidth, 20, "F");
       doc.setFontSize(7);
       doc.setTextColor(255, 255, 255);
-      const footerText = "Haftungsausschluss: Keine Rechtsberatung gemäß § 2 RAO. Erstellt durch KI-Assistenz System ImmoExpress brainy. Quelle: RIS (ris.bka.gv.at).";
-      doc.text(footerText, margin, footerY + 2, { maxWidth: contentWidth });
+      doc.text("Haftungsausschluss: Keine Rechtsberatung gemäß § 2 RAO. Erstellt durch KI-Assistenz System ImmoExpress brainy. Quelle: RIS (ris.bka.gv.at).", margin, footerY + 2, { maxWidth: contentWidth });
       doc.text(`Seite ${pageNum}`, pageWidth - margin, footerY + 2, { align: "right" });
     };
 
     addHeader();
     doc.setFontSize(14);
     doc.setTextColor(30, 30, 30);
-    doc.text("SOS Recht – KI-Rechtsauskunft", margin, 28);
+    doc.text("SOS Recht – KI-Rechtsauskunft", margin, 48);
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
-    doc.text(`Bundesland: ${aktBL?.name || "Bundesweit"} | Erstellt: ${new Date().toLocaleDateString("de-AT")}`, margin, 35);
+    doc.text(`Bundesland: ${aktBL?.name || "Bundesweit"} | Erstellt: ${new Date().toLocaleDateString("de-AT")}`, margin, 55);
 
     doc.setFontSize(10);
     doc.setTextColor(50, 50, 50);
     const lines = doc.splitTextToSize(kiAntwort, contentWidth);
-    let y = 45;
+    let y = 63;
     let page = 1;
 
     for (const line of lines) {
@@ -151,7 +160,7 @@ export default function SOSRecht() {
         doc.addPage();
         page++;
         addHeader();
-        y = 25;
+        y = 48;
       }
       doc.text(line, margin, y);
       y += 5;
@@ -159,7 +168,7 @@ export default function SOSRecht() {
 
     addFooter(page);
     doc.save(`SOS_Recht_${aktBL?.name || "AT"}_${new Date().toISOString().slice(0, 10)}.pdf`);
-    toast({ title: "PDF erstellt", description: "Download gestartet." });
+    toast({ title: "PDF erstellt", description: "Download mit Haftungsausschluss gestartet." });
   };
 
   if (!haftungOk) {
@@ -185,55 +194,16 @@ export default function SOSRecht() {
         </div>
       </div>
 
-      {/* KI-Rechtssuche */}
-      <div className="bg-card rounded-2xl border border-border shadow-card p-4 mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <Search size={18} className="text-primary" />
-          <h3 className="font-bold text-foreground text-sm">KI-Rechtsauskunft (nur RIS.gv.at)</h3>
-        </div>
-        <div className="flex gap-2 mb-3">
-          <input
-            value={kiFrage}
-            onChange={e => setKiFrage(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && askKI()}
-            placeholder="z.B. Wie hoch ist die Maklerprovision bei Kauf in Wien?"
-            className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-          <button
-            onClick={askKI}
-            disabled={kiLoading || !kiFrage.trim()}
-            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            {kiLoading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-            Fragen
-          </button>
-        </div>
-
-        {kiAntwort && (
-          <div className="bg-accent rounded-xl p-4 border border-border">
-            <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{kiAntwort}</p>
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={generatePDF}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
-              >
-                <Download size={14} /> PDF herunterladen
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Bundesland-Auswahl */}
+      {/* STEP 1: Bundesland-Auswahl GANZ OBEN */}
       {!aktBL ? (
         <>
-          <h2 className="font-bold text-foreground text-lg mb-1">Bundesland wählen</h2>
-          <p className="text-muted-foreground text-sm mb-4">Wählen Sie Ihr Bundesland für lokale Rechtsinfos & KI-Suche.</p>
+          <h2 className="font-bold text-foreground text-lg mb-1">1. Bundesland wählen</h2>
+          <p className="text-muted-foreground text-sm mb-4">Wählen Sie zuerst Ihr Bundesland – danach erscheint das KI-Suchfeld.</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {bundeslaender.map((bl) => (
               <button
                 key={bl.name}
-                onClick={() => { setAktBL(bl); setAktGesetz(null); setKiAntwort(""); }}
+                onClick={() => { setAktBL(bl); setAktGesetz(null); setKiAntwort(""); setKiFrage(""); }}
                 className="bg-card rounded-2xl p-4 shadow-card border border-border hover:shadow-card-hover hover:border-primary/30 transition-all text-left group active:scale-95"
               >
                 <div className={`w-10 h-10 rounded-xl ${bl.color} flex items-center justify-center text-white font-black text-sm mb-3 shadow-sm`}>
@@ -244,12 +214,20 @@ export default function SOSRecht() {
               </button>
             ))}
           </div>
+
+          {/* Locked KI hint */}
+          <div className="mt-6 bg-muted/50 rounded-2xl p-4 border border-border flex items-center gap-3 opacity-60">
+            <Lock size={18} className="text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">KI-Rechtssuche wird nach Bundesland-Auswahl freigeschaltet.</p>
+          </div>
         </>
       ) : (
         <div className="animate-fade-in">
-          <button onClick={() => { setAktBL(null); setKiAntwort(""); }} className="flex items-center gap-2 text-primary font-semibold text-sm mb-4 hover:underline">
+          <button onClick={() => { setAktBL(null); setKiAntwort(""); setKiFrage(""); }} className="flex items-center gap-2 text-primary font-semibold text-sm mb-4 hover:underline">
             ← Alle Bundesländer
           </button>
+
+          {/* Bundesland Header */}
           <div className="flex items-center gap-3 mb-5">
             <div className={`w-12 h-12 rounded-xl ${aktBL.color} flex items-center justify-center text-white font-black text-lg shadow-sm`}>
               {aktBL.kuerzel}
@@ -260,6 +238,49 @@ export default function SOSRecht() {
             </div>
           </div>
 
+          {/* STEP 2: KI-Rechtssuche – nur sichtbar wenn Bundesland gewählt */}
+          <div className="bg-card rounded-2xl border border-border shadow-card p-4 mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Search size={18} className="text-primary" />
+              <h3 className="font-bold text-foreground text-sm">KI-Rechtsauskunft für: {aktBL.name}</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">Nur RIS (ris.bka.gv.at) · Paragraph & Bundesland werden genannt</p>
+            <div className="flex gap-2 mb-3">
+              <input
+                value={kiFrage}
+                onChange={e => setKiFrage(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && haftungOk && askKI()}
+                placeholder={`z.B. Wie hoch ist die Maklerprovision bei Kauf in ${aktBL.name}?`}
+                className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <button
+                onClick={askKI}
+                disabled={kiLoading || !kiFrage.trim() || !haftungOk}
+                title={!haftungOk ? "Bitte zuerst den Haftungsausschluss bestätigen" : undefined}
+                className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {kiLoading ? <Loader2 size={16} className="animate-spin" /> : !haftungOk ? <Lock size={16} /> : <Search size={16} />}
+                Fragen
+              </button>
+            </div>
+
+            {kiAntwort && (
+              <div className="bg-accent rounded-xl p-4 border border-border">
+                <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{kiAntwort}</p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={generatePDF}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                  >
+                    <Download size={14} /> PDF mit Haftungsausschluss
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Gesetze für gewähltes Bundesland */}
+          <h3 className="font-bold text-foreground text-sm mb-2">Relevante Rechtsthemen – {aktBL.name}</h3>
           <div className="space-y-2">
             {aktBL.gesetze.map((g, i) => (
               <div key={i} className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
