@@ -39,6 +39,29 @@ export default function Auth() {
     }
     const stored = localStorage.getItem(BIOMETRIC_KEY);
     setHasBiometricCred(!!stored);
+
+    // Voiceover: play once with fade-in
+    const audio = new Audio("/audio/voiceover_login.mp3");
+    audio.volume = 0;
+    const fadeIn = () => {
+      const interval = setInterval(() => {
+        if (audio.volume < 0.95) {
+          audio.volume = Math.min(audio.volume + 0.05, 1);
+        } else {
+          audio.volume = 1;
+          clearInterval(interval);
+        }
+      }, 80);
+    };
+    audio.addEventListener("canplaythrough", () => {
+      audio.play().then(fadeIn).catch(() => {});
+    }, { once: true });
+    audio.load();
+
+    return () => {
+      audio.pause();
+      audio.src = "";
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
