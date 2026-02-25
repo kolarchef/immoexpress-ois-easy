@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.ki-tools]
 verify_jwt = false
+
+[functions.sos-recht-ki]
+verify_jwt = false

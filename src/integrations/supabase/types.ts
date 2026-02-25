@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_legal_consent: {
+        Row: {
+          confirmation_status: string
+          created_at: string
+          gp_id: string | null
+          gp_nummer: string | null
+          id: string
+          ip_address: string | null
+          modul: string
+          user_id: string
+        }
+        Insert: {
+          confirmation_status?: string
+          created_at?: string
+          gp_id?: string | null
+          gp_nummer?: string | null
+          id?: string
+          ip_address?: string | null
+          modul?: string
+          user_id: string
+        }
+        Update: {
+          confirmation_status?: string
+          created_at?: string
+          gp_id?: string | null
+          gp_nummer?: string | null
+          id?: string
+          ip_address?: string | null
+          modul?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       aufgaben: {
         Row: {
           beschreibung: string | null
@@ -270,6 +303,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      customer_consent_log: {
+        Row: {
+          accepted: boolean
+          created_at: string
+          id: string
+          ip_address: string | null
+          token: string
+        }
+        Insert: {
+          accepted?: boolean
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          token: string
+        }
+        Update: {
+          accepted?: boolean
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          token?: string
+        }
+        Relationships: []
       }
       finanz_tresor_notizen: {
         Row: {
