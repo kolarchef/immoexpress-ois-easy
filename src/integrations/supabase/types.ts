@@ -544,6 +544,7 @@ export type Database = {
           beschreibung: string | null
           created_at: string
           flaeche_m2: number | null
+          gp_id: string | null
           hnr: string | null
           id: string
           immoz_export_datum: string | null
@@ -572,6 +573,7 @@ export type Database = {
           beschreibung?: string | null
           created_at?: string
           flaeche_m2?: number | null
+          gp_id?: string | null
           hnr?: string | null
           id?: string
           immoz_export_datum?: string | null
@@ -600,6 +602,7 @@ export type Database = {
           beschreibung?: string | null
           created_at?: string
           flaeche_m2?: number | null
+          gp_id?: string | null
           hnr?: string | null
           id?: string
           immoz_export_datum?: string | null
@@ -624,7 +627,15 @@ export type Database = {
           verkaufsart?: string | null
           zimmer?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "objekte_gp_id_fkey"
+            columns: ["gp_id"]
+            isOneToOne: false
+            referencedRelation: "geschaeftspartner"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

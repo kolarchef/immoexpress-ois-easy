@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import {
   User, Calendar, Phone, Mail, Percent, KeyRound, TrendingUp,
   Home, Banknote, GraduationCap, Save, Eye, EyeOff, MapPin,
-  Upload, ShoppingCart, Package, CheckCircle2, Pencil
+  Upload, ShoppingCart, Package, CheckCircle2, Pencil, Building2, ArrowRightLeft
 } from "lucide-react";
 
 type Partner = {
@@ -50,6 +51,22 @@ type Bestellung = {
   abgeschlossen_am: string | null;
 };
 
+type AssignedObjekt = {
+  id: string;
+  objektnummer: string | null;
+  objektart: string | null;
+  strasse: string | null;
+  hnr: string | null;
+  plz: string | null;
+  ort: string | null;
+  kaufpreis: number | null;
+  status: string | null;
+  flaeche_m2: number | null;
+  zimmer: number | null;
+};
+
+type GPOption = { id: string; name: string; status: string };
+
 interface GPDetailModalProps {
   partner: Partner | null;
   open: boolean;
@@ -58,6 +75,7 @@ interface GPDetailModalProps {
 }
 
 export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: GPDetailModalProps) {
+  const { user } = useAuth();
   const [form, setForm] = useState({
     name: "", email: "", phone: "", geburtsdatum: "", provisionssatz: "", lernerfolg: "",
     strasse: "", hausnummer: "", plz: "", ort: "",
@@ -73,6 +91,12 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
   const [bestellungen, setBestellungen] = useState<Bestellung[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; path: string }[]>([]);
+
+  // Assigned objects state
+  const [assignedObjekte, setAssignedObjekte] = useState<AssignedObjekt[]>([]);
+  const [gpOptions, setGpOptions] = useState<GPOption[]>([]);
+  const [transferObjektId, setTransferObjektId] = useState<string | null>(null);
+  const [transferTargetId, setTransferTargetId] = useState("");
 
   useEffect(() => {
     if (!partner) return;
@@ -91,22 +115,27 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
     setStatusVal(partner.status);
     setNewPassword("");
     setPerfEditing(false);
+    setTransferObjektId(null);
     loadPerformance(partner);
     loadBestellungen(partner);
     loadUploadedFiles(partner);
+    loadAssignedObjekte(partner);
+    loadGpOptions();
   }, [partner]);
 
   const loadPerformance = async (p: Partner) => {
-    if (!p.user_id) { setPerf({ umsatz: 0, objektCount: 0, finanzCount: 0 }); return; }
+    // Use gp_id-based query for assigned objects
     const [objRes, finRes] = await Promise.all([
-      supabase.from("objekte").select("kaufpreis, status").eq("user_id", p.user_id),
-      supabase.from("crm_kunden").select("id, finance_status").eq("user_id", p.user_id),
+      supabase.from("objekte").select("kaufpreis, status").eq("gp_id", p.id),
+      p.user_id
+        ? supabase.from("crm_kunden").select("id, finance_status").eq("user_id", p.user_id)
+        : Promise.resolve({ data: [] }),
     ]);
     const objekte = (objRes.data as any[]) || [];
-    const kunden = (finRes.data as any[]) || [];
+    const kunden = ((finRes as any).data as any[]) || [];
     const verkauft = objekte.filter(o => o.status === "verkauft");
-    const umsatz = verkauft.reduce((s, o) => s + (Number(o.kaufpreis) || 0), 0);
-    const finanzCount = kunden.filter(k => k.finance_status === "genehmigt").length;
+    const umsatz = verkauft.reduce((s: number, o: any) => s + (Number(o.kaufpreis) || 0), 0);
+    const finanzCount = kunden.filter((k: any) => k.finance_status === "genehmigt").length;
     const data = { umsatz, objektCount: objekte.length, finanzCount };
     setPerf(data);
     setPerfForm(data);
@@ -121,6 +150,43 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
   const loadUploadedFiles = async (p: Partner) => {
     const { data } = await supabase.storage.from("gp-werbemittel").list(`${p.id}/`);
     setUploadedFiles((data || []).map(f => ({ name: f.name, path: `${p.id}/${f.name}` })));
+  };
+
+  const loadAssignedObjekte = async (p: Partner) => {
+    const { data } = await supabase.from("objekte").select("id, objektnummer, objektart, strasse, hnr, plz, ort, kaufpreis, status, flaeche_m2, zimmer").eq("gp_id", p.id).order("created_at", { ascending: false });
+    setAssignedObjekte((data as AssignedObjekt[]) || []);
+  };
+
+  const loadGpOptions = async () => {
+    const { data } = await supabase.from("geschaeftspartner").select("id, name, status").neq("status", "ehemalig").order("name");
+    setGpOptions((data as GPOption[]) || []);
+  };
+
+  const handleTransfer = async (objektId: string, targetGpId: string) => {
+    if (!partner || !user) return;
+    const targetGp = gpOptions.find(g => g.id === targetGpId);
+    const { error } = await supabase.from("objekte").update({ gp_id: targetGpId } as any).eq("id", objektId);
+    if (error) { toast({ title: "Fehler", description: error.message, variant: "destructive" }); return; }
+
+    // Notify the target GP
+    const { data: gpData } = await supabase.from("geschaeftspartner").select("user_id").eq("id", targetGpId).single();
+    if (gpData?.user_id) {
+      const obj = assignedObjekte.find(o => o.id === objektId);
+      const addr = obj ? [obj.strasse, obj.hnr, obj.plz, obj.ort].filter(Boolean).join(", ") : "Objekt";
+      await supabase.from("nachrichten").insert({
+        user_id: user.id,
+        empfaenger_id: gpData.user_id,
+        titel: "Neues Objekt zugewiesen",
+        inhalt: `Dir wurde das Objekt "${addr}" zugewiesen.`,
+        typ: "system",
+      });
+    }
+
+    toast({ title: `Objekt an ${targetGp?.name || "GP"} übertragen` });
+    setTransferObjektId(null);
+    setTransferTargetId("");
+    loadAssignedObjekte(partner);
+    loadPerformance(partner);
   };
 
   const handleSave = async () => {
@@ -215,6 +281,15 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
     return <CheckCircle2 size={14} className="text-green-600" />;
   };
 
+  const objStatusBadge: Record<string, string> = {
+    aktiv: "bg-green-100 text-green-800",
+    reserviert: "bg-amber-100 text-amber-800",
+    verkauft: "bg-red-100 text-red-800",
+    vermietet: "bg-blue-100 text-blue-800",
+    entwurf: "bg-orange-100 text-orange-800",
+    deaktiviert: "bg-muted text-muted-foreground",
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[80vw] max-h-[90vh] overflow-y-auto">
@@ -227,8 +302,9 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
         </DialogHeader>
 
         <Tabs defaultValue="uebersicht" className="mt-2">
-          <TabsList className="w-full grid grid-cols-3">
+          <TabsList className="w-full grid grid-cols-4">
             <TabsTrigger value="uebersicht">Übersicht</TabsTrigger>
+            <TabsTrigger value="objekte">Objekte ({assignedObjekte.length})</TabsTrigger>
             <TabsTrigger value="werbemittel">Werbemittel</TabsTrigger>
             {isTrainee && <TabsTrigger value="ausbildung">Ausbildung</TabsTrigger>}
           </TabsList>
@@ -417,7 +493,93 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
             </div>
           </TabsContent>
 
-          {/* TAB 2: Werbemittel */}
+          {/* TAB 2: Zugeordnete Objekte */}
+          <TabsContent value="objekte" className="space-y-4 mt-4">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+              <Building2 size={14} className="text-primary" /> Zugeordnete Objekte
+            </h3>
+            {assignedObjekte.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Diesem GP sind noch keine Objekte zugewiesen.</p>
+            ) : (
+              <div className="space-y-2">
+                {assignedObjekte.map(obj => {
+                  const addr = [obj.strasse, obj.hnr, obj.plz, obj.ort].filter(Boolean).join(", ");
+                  return (
+                    <div key={obj.id} className="flex items-center gap-3 bg-muted/30 rounded-xl px-4 py-3 border border-border">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <Home size={18} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{addr || obj.objektart || "Objekt"}</p>
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                          <span>{obj.objektnummer}</span>
+                          {obj.objektart && <span>· {obj.objektart}</span>}
+                          {obj.flaeche_m2 && <span>· {obj.flaeche_m2}m²</span>}
+                          {obj.zimmer && <span>· {obj.zimmer} Zi.</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {obj.kaufpreis && (
+                          <span className="text-xs font-bold text-primary">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>
+                        )}
+                        <Badge className={`text-[10px] ${objStatusBadge[obj.status || "aktiv"] || "bg-muted text-muted-foreground"}`}>
+                          {(obj.status || "aktiv").charAt(0).toUpperCase() + (obj.status || "aktiv").slice(1)}
+                        </Badge>
+                        {/* Transfer button */}
+                        <button
+                          onClick={() => setTransferObjektId(transferObjektId === obj.id ? null : obj.id)}
+                          className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                          title="Objekt übertragen"
+                        >
+                          <ArrowRightLeft size={14} className="text-muted-foreground hover:text-primary" />
+                        </button>
+                      </div>
+                      {/* Transfer dropdown */}
+                      {transferObjektId === obj.id && (
+                        <div className="absolute right-4 mt-24 bg-card border border-border rounded-xl shadow-lg z-50 w-56 p-3" onClick={e => e.stopPropagation()}>
+                          <p className="text-xs font-semibold mb-2">Übertragen an:</p>
+                          <Select value={transferTargetId} onValueChange={setTransferTargetId}>
+                            <SelectTrigger className="w-full h-8 text-xs"><SelectValue placeholder="GP auswählen…" /></SelectTrigger>
+                            <SelectContent>
+                              {gpOptions.filter(g => g.id !== partner.id).map(g => (
+                                <SelectItem key={g.id} value={g.id}>{g.name} ({g.status})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            className="w-full mt-2"
+                            disabled={!transferTargetId}
+                            onClick={() => handleTransfer(obj.id, transferTargetId)}
+                          >
+                            <ArrowRightLeft size={12} className="mr-1" /> Übertragen
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Summary stats */}
+            <div className="grid grid-cols-3 gap-3 pt-2">
+              <div className="text-center bg-muted/30 rounded-lg p-3">
+                <p className="text-xl font-bold">{assignedObjekte.length}</p>
+                <p className="text-[10px] text-muted-foreground">Gesamt</p>
+              </div>
+              <div className="text-center bg-green-50 rounded-lg p-3">
+                <p className="text-xl font-bold text-green-700">{assignedObjekte.filter(o => o.status === "aktiv").length}</p>
+                <p className="text-[10px] text-muted-foreground">Aktiv</p>
+              </div>
+              <div className="text-center bg-red-50 rounded-lg p-3">
+                <p className="text-xl font-bold text-red-700">{assignedObjekte.filter(o => o.status === "verkauft").length}</p>
+                <p className="text-[10px] text-muted-foreground">Verkauft</p>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* TAB 3: Werbemittel */}
           <TabsContent value="werbemittel" className="space-y-5 mt-4">
             <section className="space-y-3">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
@@ -475,7 +637,7 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
             </section>
           </TabsContent>
 
-          {/* TAB 3: Ausbildung (nur Trainees) */}
+          {/* TAB 4: Ausbildung (nur Trainees) */}
           {isTrainee && (
             <TabsContent value="ausbildung" className="space-y-5 mt-4">
               <section className="space-y-3">

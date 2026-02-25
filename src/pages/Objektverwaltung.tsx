@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download, ExternalLink, Wand2, Crop, Expand, Check, BookOpen } from "lucide-react";
+import { Search, Plus, MapPin, BedDouble, Maximize2, Users, Send, MessageCircle, Phone, Mail, X, Eye, Edit3, Clock, History, RefreshCw, Sparkles, ChevronDown, Trash2, Save, Copy, FileText, Film, BarChart3, Share2, Download, ExternalLink, Wand2, Crop, Expand, Check, BookOpen, UserCheck, ArrowRightLeft } from "lucide-react";
 import MagicToolOverlay from "@/components/MagicToolOverlay";
 import PdfTemplateSelector, { type PdfTemplate } from "@/components/PdfTemplateSelector";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,10 +40,12 @@ type Objekt = {
   created_at: string;
   immoz_exportiert: boolean | null;
   provisionsstellung: string | null;
+  gp_id: string | null;
 };
 
 type Interessent = { id: string; name: string; typ: string | null; email: string | null; phone: string | null };
 type HistorieEntry = { id: string; feld: string; alter_wert: string | null; neuer_wert: string | null; created_at: string };
+type GPOption = { id: string; name: string; status: string };
 
 const statusOptions = [
   { value: "aktiv", label: "Aktiv", emoji: "\u{1F7E2}", color: "bg-green-500" },
@@ -94,16 +96,51 @@ export default function Objektverwaltung() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
-
-  // Magic Tools state
   const [magicEditOpen, setMagicEditOpen] = useState(false);
   const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);
-
-  // PDF template state for edit mode
   const [selectedPdfTemplate, setSelectedPdfTemplate] = useState<PdfTemplate>("expose-style");
-
-  // NotebookLM state for edit mode
   const [notebookLmText, setNotebookLmText] = useState("");
+
+  // GP assignment state
+  const [gpOptions, setGpOptions] = useState<GPOption[]>([]);
+  const [gpSearch, setGpSearch] = useState("");
+  const [gpDropdownOpen, setGpDropdownOpen] = useState(false);
+
+  const loadGpOptions = async () => {
+    const { data } = await supabase.from("geschaeftspartner").select("id, name, status").neq("status", "ehemalig").order("name");
+    setGpOptions((data as GPOption[]) || []);
+  };
+
+  useEffect(() => { loadGpOptions(); }, []);
+
+  const assignGp = async (objektId: string, gpId: string | null, gpName?: string) => {
+    const obj = objekte.find(o => o.id === objektId);
+    const oldGpId = obj?.gp_id;
+    const { error } = await supabase.from("objekte").update({ gp_id: gpId } as any).eq("id", objektId);
+    if (error) { toast({ title: "Fehler", description: error.message, variant: "destructive" }); return; }
+
+    // Send notification to new GP
+    if (gpId && gpName) {
+      const gp = gpOptions.find(g => g.id === gpId);
+      // Find user_id of GP
+      const { data: gpData } = await supabase.from("geschaeftspartner").select("user_id").eq("id", gpId).single();
+      if (gpData?.user_id && user) {
+        const addr = obj ? [obj.strasse, obj.hnr, obj.plz, obj.ort].filter(Boolean).join(", ") : "Objekt";
+        await supabase.from("nachrichten").insert({
+          user_id: user.id,
+          empfaenger_id: gpData.user_id,
+          titel: "Neues Objekt zugewiesen",
+          inhalt: `Dir wurde das Objekt "${addr}" zugewiesen.`,
+          typ: "system",
+        });
+      }
+    }
+
+    toast({ title: gpId ? `Objekt an ${gpName} zugewiesen` : "Zuweisung entfernt" });
+    load();
+    setGpDropdownOpen(false);
+    setGpSearch("");
+  };
 
   const load = async () => {
     if (!user) return;
@@ -310,6 +347,80 @@ export default function Objektverwaltung() {
   const inputCls = "mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const labelCls = "text-xs font-semibold text-muted-foreground uppercase tracking-wide";
 
+  // GP assignment helper
+  const getGpName = (gpId: string | null) => {
+    if (!gpId) return null;
+    return gpOptions.find(g => g.id === gpId)?.name || null;
+  };
+
+  const filteredGpOptions = gpOptions.filter(g =>
+    g.name.toLowerCase().includes(gpSearch.toLowerCase())
+  );
+
+  // GP assignment widget component
+  const GpAssignmentWidget = ({ objekt }: { objekt: Objekt }) => {
+    const currentGpName = getGpName(objekt.gp_id);
+    return (
+      <div className="flex items-center justify-between py-2">
+        <span className="text-muted-foreground flex items-center gap-1"><UserCheck size={12} className="text-primary" /> Zuständiger GP</span>
+        <div className="relative">
+          {currentGpName ? (
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-sm">{currentGpName}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setGpDropdownOpen(!gpDropdownOpen); }}
+                className="p-1 rounded hover:bg-accent"
+                title="GP wechseln"
+              >
+                <ArrowRightLeft size={12} className="text-primary" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); assignGp(objekt.id, null); }}
+                className="p-1 rounded hover:bg-destructive/10"
+                title="Zuweisung entfernen"
+              >
+                <X size={12} className="text-destructive" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); setGpDropdownOpen(!gpDropdownOpen); }}
+              className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+            >
+              <Plus size={12} /> GP zuweisen
+            </button>
+          )}
+          {gpDropdownOpen && (
+            <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-50 w-64 p-2" onClick={e => e.stopPropagation()}>
+              <input
+                value={gpSearch}
+                onChange={e => setGpSearch(e.target.value)}
+                placeholder="GP suchen…"
+                className="w-full px-3 py-2 text-sm border border-border rounded-lg mb-2 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                autoFocus
+              />
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {filteredGpOptions.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-2">Keine GPs gefunden</p>
+                )}
+                {filteredGpOptions.map(gp => (
+                  <button
+                    key={gp.id}
+                    onClick={() => assignGp(objekt.id, gp.id, gp.name)}
+                    className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-accent transition-colors flex items-center justify-between ${objekt.gp_id === gp.id ? "bg-primary/10 font-semibold" : ""}`}
+                  >
+                    <span>{gp.name}</span>
+                    <span className="text-[10px] text-muted-foreground capitalize">{gp.status}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="p-4 lg:p-8 animate-fade-in max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -369,6 +480,7 @@ export default function Objektverwaltung() {
         {filtered.map(obj => {
           const objStatus = obj.status || "aktiv";
           const entwurf = isEntwurf(obj);
+          const gpName = getGpName(obj.gp_id);
           return (
             <div key={obj.id} onClick={() => openDetail(obj.id)}
               className="bg-card rounded-2xl shadow-card border border-border overflow-hidden hover:shadow-md-custom transition-all cursor-pointer">
@@ -399,6 +511,7 @@ export default function Objektverwaltung() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                       <span className="text-[10px] text-white/70 flex items-center gap-0.5"><Clock size={9} /> {daysSince(obj.created_at)}d</span>
+                      {gpName && <span className="text-[10px] text-white/80 flex items-center gap-0.5"><UserCheck size={9} /> {gpName}</span>}
                     </div>
                   </div>
                   {obj.kaufpreis && <span className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-lg shadow">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
@@ -439,6 +552,7 @@ export default function Objektverwaltung() {
                 {obj.zimmer && <span><BedDouble size={11} className="inline mr-0.5" />{obj.zimmer} Zi.</span>}
                 {obj.flaeche_m2 && <span><Maximize2 size={11} className="inline mr-0.5" />{obj.flaeche_m2}m²</span>}
                 {!objPhotos[obj.id] && obj.kaufpreis && <span className="font-bold text-primary">€{Number(obj.kaufpreis).toLocaleString("de-AT")}</span>}
+                {gpName && !objPhotos[obj.id] && <span className="flex items-center gap-0.5"><UserCheck size={10} className="text-primary" /> {gpName}</span>}
               </div>
             </div>
           );
@@ -447,7 +561,7 @@ export default function Objektverwaltung() {
 
       {/* Detail Modal */}
       {detailObj && (
-        <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setDetailId(null)}>
+        <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => { setDetailId(null); setGpDropdownOpen(false); }}>
           <div className="bg-card rounded-2xl shadow-md-custom border border-border w-full max-w-md p-6 animate-fade-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -475,7 +589,7 @@ export default function Objektverwaltung() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-                <button onClick={() => setDetailId(null)} className="p-2 rounded-xl hover:bg-accent"><X size={16} className="text-muted-foreground" /></button>
+                <button onClick={() => { setDetailId(null); setGpDropdownOpen(false); }} className="p-2 rounded-xl hover:bg-accent"><X size={16} className="text-muted-foreground" /></button>
               </div>
             </div>
 
@@ -634,18 +748,16 @@ export default function Objektverwaltung() {
                             {photos.slice(1, 6).map((url, i) => (
                               <img key={i} src={url} alt={`Foto ${i+2}`}
                                 className="w-16 h-12 rounded-lg object-cover flex-shrink-0 border border-border cursor-pointer hover:ring-2 hover:ring-primary transition-all"
-                                onClick={() => openMagicEdit(url)} />
+                                onClick={() => openMagicEdit(url)}
+                              />
                             ))}
                           </div>
                         )}
                       </div>
                     )}
 
-                    {/* PDF Template Selector in Edit Mode */}
-                    <PdfTemplateSelector
-                      selected={selectedPdfTemplate}
-                      onChange={setSelectedPdfTemplate}
-                    />
+                    {/* PDF Template Selector */}
+                    <PdfTemplateSelector selected={selectedPdfTemplate} onChange={setSelectedPdfTemplate} />
 
                     <div className="flex gap-2">
                       <button onClick={() => setEditing(false)} className="flex-1 border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-accent">Abbrechen</button>
@@ -659,6 +771,8 @@ export default function Objektverwaltung() {
                   </div>
                 ) : (
                   <div className="space-y-2 text-sm mb-4">
+                    {/* GP Assignment Widget */}
+                    <GpAssignmentWidget objekt={detailObj} />
                     <div className="flex justify-between"><span className="text-muted-foreground">Objektnummer</span><span className="font-semibold">{detailObj.objektnummer || "–"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Art</span><span className="font-semibold">{detailObj.objektart}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Vermarktung</span><span className="font-semibold">{detailObj.verkaufsart || "Kauf"}</span></div>
@@ -758,7 +872,6 @@ export default function Objektverwaltung() {
               </>
             ) : detailTab === "medien" ? (
               <div className="space-y-4">
-                {/* Large photo area – 65vh with click-to-edit */}
                 {photos.length > 0 ? (
                   <div
                     className="relative rounded-2xl overflow-hidden border border-border cursor-pointer"
@@ -779,7 +892,6 @@ export default function Objektverwaltung() {
                   </div>
                 )}
 
-                {/* Thumbnails – click to open Magic Edit */}
                 {photos.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {photos.map((url, i) => (
@@ -794,7 +906,6 @@ export default function Objektverwaltung() {
                   </div>
                 )}
 
-                {/* KI Action Buttons with fixed actionIds */}
                 <div className="space-y-2.5">
                   <button
                     onClick={async () => {
@@ -844,7 +955,6 @@ export default function Objektverwaltung() {
                   {pdfLoading && <Progress value={60} className="h-1.5 rounded-full" />}
                 </div>
 
-                {/* Video slideshow */}
                 {photos.length > 0 && (
                   <VideoSlideshow
                     images={photos}
