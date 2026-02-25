@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import GPDetailModal from "@/components/GPDetailModal";
 
 type Partner = {
   id: string;
@@ -23,6 +24,10 @@ type Partner = {
   join_date: string;
   leave_date: string | null;
   notiz: string | null;
+  user_id: string | null;
+  geburtsdatum: string | null;
+  provisionssatz: number | null;
+  lernerfolg: string | null;
 };
 
 const statusLabels: Record<string, string> = {
@@ -43,6 +48,8 @@ export default function Team() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", status: "makler", join_date: new Date().toISOString().slice(0, 10) });
 
   const fetchPartners = async () => {
@@ -110,7 +117,7 @@ export default function Team() {
           <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Keine Einträge</TableCell></TableRow>
         )}
         {list.map(p => (
-          <TableRow key={p.id}>
+          <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setSelectedPartner(p); setDetailOpen(true); }}>
             <TableCell className="font-medium">{p.name}</TableCell>
             <TableCell>{p.email || "–"}</TableCell>
             <TableCell>{p.phone || "–"}</TableCell>
@@ -188,6 +195,13 @@ export default function Team() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* GP Detail Modal */}
+      <GPDetailModal
+        partner={selectedPartner}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onSaved={() => { fetchPartners(); setDetailOpen(false); }}
+      />
     </div>
   );
 }
