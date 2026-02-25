@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { LayoutDashboard, Search, CheckSquare, Camera, User, Bell, MessageCircle, Mic, MicOff, X, Send, Loader2, BarChart3, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Search, Camera, User, Bell, MessageCircle, Mic, X, Send, Loader2, BarChart3, ShieldCheck, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState as useStateHook } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,7 +19,7 @@ const bottomNav = [
 
 export default function AppLayout() {
   const navigate = useNavigate();
-  const { displayName, user } = useAuth();
+  const { displayName, user, signOut } = useAuth();
   const [showMicPanel, setShowMicPanel] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [sendingNote, setSendingNote] = useState(false);
@@ -100,8 +100,12 @@ export default function AppLayout() {
             <Bell size={20} className="text-muted-foreground" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full"></span>
           </button>
-          <button onClick={() => navigate("/profil")} className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-orange-sm">
-            <User size={16} className="text-primary-foreground" />
+          <button
+            onClick={async () => { await signOut(); navigate("/auth"); }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+          >
+            <LogOut size={16} />
+            <span className="hidden sm:inline">Logout</span>
           </button>
         </div>
       </header>
