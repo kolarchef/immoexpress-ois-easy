@@ -8,7 +8,7 @@ import {
   Search as SearchIcon, ShoppingCart, CheckSquare,
   FileSearch, Calculator, Handshake, Vault,
   Megaphone, BookOpen, Scale, Wrench, FileQuestion,
-  Package, X, Trash2, Bell, CheckCircle2
+  Package, X, Trash2, Bell, CheckCircle2, ShieldCheck
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +39,7 @@ const modules: Module[] = [
   { label: "FINANZ-TRESOR", icon: Vault, path: "/finanz-tresor", adminOnly: true },
   { label: "TEAM", icon: Users, path: "/team", adminOnly: true },
   { label: "WERBUNG", icon: Megaphone, path: "/werbung", adminOnly: true },
+  { label: "ADMIN-CENTER", icon: ShieldCheck, path: "/admin-center", adminOnly: true },
 ];
 
 const todos = [

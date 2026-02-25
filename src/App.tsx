@@ -39,6 +39,7 @@ import BestellAdmin from "./pages/BestellAdmin";
 import AuditLogs from "./pages/AuditLogs";
 import RechtDisclaimer from "./pages/RechtDisclaimer";
 import Rechtsarchiv from "./pages/Rechtsarchiv";
+import AdminCenter from "./pages/AdminCenter";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -90,6 +91,7 @@ const AppRoutes = () => (
       <Route path="/admin/audit-logs" element={<AuditLogs />} />
       <Route path="/admin/sos-audit" element={<AuditLogs />} />
       <Route path="/rechtsarchiv" element={<Rechtsarchiv />} />
+      <Route path="/admin-center" element={<AdminCenter />} />
     </Route>
     <Route path="*" element={<NotFound />} />
   </Routes>
