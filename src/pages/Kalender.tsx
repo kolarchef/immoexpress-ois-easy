@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, MapPin, Shield, Clock, Trash2, Upload, FileText, Download, Users, Check, HelpCircle, X, ChevronDown, ClipboardList, Image, Save } from "lucide-react";
+import { Plus, MapPin, Shield, Clock, Trash2, Upload, FileText, Download, Users, Check, HelpCircle, X, ChevronDown, ClipboardList, Image, Save, ListTodo, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -61,6 +61,7 @@ interface GpProfile {
   name: string;
   user_id: string | null;
   status: string;
+  gp_number: string | null;
 }
 
 export default function Kalender() {
@@ -103,6 +104,13 @@ export default function Kalender() {
   const [resultText, setResultText] = useState("");
   const [uploadingResult, setUploadingResult] = useState(false);
   const resultFileRef = useRef<HTMLInputElement>(null);
+
+  // Task assignment
+  const [taskMeetingId, setTaskMeetingId] = useState<string | null>(null);
+  const [taskTitel, setTaskTitel] = useState("");
+  const [taskGpNummer, setTaskGpNummer] = useState("");
+  const [taskFaellig, setTaskFaellig] = useState("");
+  const [gpList, setGpList] = useState<GpProfile[]>([]);
 
   const monat = monate[heute.getMonth()];
   const jahr = heute.getFullYear();
@@ -174,11 +182,12 @@ export default function Kalender() {
     }
 
     // Load GP profiles for participant names (admin only)
-    const { data: gps } = await supabase.from("geschaeftspartner").select("id, name, user_id, status");
+    const { data: gps } = await supabase.from("geschaeftspartner").select("id, name, user_id, status, gp_number");
     if (gps) {
       const map: Record<string, GpProfile> = {};
       gps.forEach((g: any) => { if (g.user_id) map[g.user_id] = g; });
       setGpProfiles(map);
+      setGpList(gps as any[]);
     }
   };
 
@@ -337,6 +346,34 @@ export default function Kalender() {
     setEditingResultFor(null);
     loadMeetings();
     toast({ title: "✅ Zusammenfassung gespeichert" });
+  };
+
+  const createTaskFromMeeting = async (meetingId: string) => {
+    if (!user || !taskTitel.trim() || !taskGpNummer.trim()) return;
+    const gp = gpList.find((g: any) => g.gp_number === taskGpNummer);
+    if (!gp || !gp.user_id) {
+      toast({ title: "Fehler", description: "GP-Nummer nicht gefunden oder kein User verknüpft", variant: "destructive" });
+      return;
+    }
+    const { error } = await supabase.from("aufgaben" as any).insert({
+      titel: taskTitel,
+      meeting_id: meetingId,
+      erstellt_von: user.id,
+      zugewiesen_an: gp.user_id,
+      gp_nummer: taskGpNummer,
+      faellig_am: taskFaellig || null,
+    } as any);
+    if (error) { toast({ title: "Fehler", description: error.message, variant: "destructive" }); return; }
+    // Send notification
+    await supabase.from("nachrichten").insert({
+      user_id: user.id,
+      empfaenger_id: gp.user_id,
+      titel: "Neue Aufgabe zugewiesen",
+      inhalt: `Aufgabe aus Meeting: ${taskTitel}`,
+      typ: "aufgabe",
+    });
+    toast({ title: "✅ Aufgabe erstellt & zugewiesen" });
+    setTaskTitel(""); setTaskGpNummer(""); setTaskFaellig(""); setTaskMeetingId(null);
   };
 
   const getGpName = (userId: string) => gpProfiles[userId]?.name || "Unbekannt";
@@ -636,6 +673,57 @@ export default function Kalender() {
                             onChange={e => { if (e.target.files) uploadResultFiles(m.id, e.target.files); }}
                           />
                         </label>
+                      )}
+
+                      {/* Admin: Task assignment from protocol */}
+                      {isAdmin && (
+                        <div className="mt-3 pt-3 border-t border-border">
+                          {taskMeetingId === m.id ? (
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold text-foreground flex items-center gap-1">
+                                <ListTodo size={12} className="text-primary" /> Aufgabe aus Beschluss erstellen
+                              </p>
+                              <Input
+                                value={taskTitel}
+                                onChange={e => setTaskTitel(e.target.value)}
+                                placeholder="Aufgabe / Beschluss…"
+                                className="text-sm"
+                              />
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs">GP-Nummer</Label>
+                                  <Select value={taskGpNummer} onValueChange={setTaskGpNummer}>
+                                    <SelectTrigger className="text-sm"><SelectValue placeholder="GP wählen" /></SelectTrigger>
+                                    <SelectContent>
+                                      {gpList.filter((g: any) => g.user_id && g.status !== "ehemalig").map((g: any) => (
+                                        <SelectItem key={g.id} value={g.gp_number || g.id}>
+                                          GP-{g.gp_number} · {g.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Fällig am</Label>
+                                  <Input type="date" value={taskFaellig} onChange={e => setTaskFaellig(e.target.value)} className="text-sm" />
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button size="sm" onClick={() => createTaskFromMeeting(m.id)} disabled={!taskTitel.trim() || !taskGpNummer} className="gap-1">
+                                  <UserPlus size={12} /> Zuweisen
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => setTaskMeetingId(null)}>Abbrechen</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setTaskMeetingId(m.id)}
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                            >
+                              <ListTodo size={14} /> Aufgabe aus Beschluss erstellen
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
