@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, MapPin, Shield, Clock, Trash2, Upload, FileText, Download, Users, Check, HelpCircle, X, ChevronDown } from "lucide-react";
+import { Plus, MapPin, Shield, Clock, Trash2, Upload, FileText, Download, Users, Check, HelpCircle, X, ChevronDown, ClipboardList, Image, Save } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -35,6 +36,8 @@ interface Meeting {
   beschreibung: string | null;
   created_by: string;
   created_at: string;
+  ergebnisse_text: string | null;
+  ergebnisse_verfuegbar: boolean;
 }
 
 interface MeetingFile {
@@ -42,6 +45,7 @@ interface MeetingFile {
   meeting_id: string;
   dateiname: string;
   storage_path: string;
+  typ: string;
 }
 
 interface MeetingResponse {
@@ -93,6 +97,12 @@ export default function Kalender() {
   // Response note editing
   const [editingNoteFor, setEditingNoteFor] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
+
+  // Result editing
+  const [editingResultFor, setEditingResultFor] = useState<string | null>(null);
+  const [resultText, setResultText] = useState("");
+  const [uploadingResult, setUploadingResult] = useState(false);
+  const resultFileRef = useRef<HTMLInputElement>(null);
 
   const monat = monate[heute.getMonth()];
   const jahr = heute.getFullYear();
@@ -301,6 +311,34 @@ export default function Kalender() {
     return "bg-red-500";
   };
 
+  const uploadResultFiles = async (meetingId: string, files: FileList) => {
+    setUploadingResult(true);
+    for (const file of Array.from(files)) {
+      const path = `${meetingId}/ergebnisse/${Date.now()}_${file.name}`;
+      const { error } = await supabase.storage.from("meeting-files").upload(path, file);
+      if (!error) {
+        await supabase.from("meeting_files" as any).insert({
+          meeting_id: meetingId, dateiname: file.name, storage_path: path, typ: "ergebnis",
+        } as any);
+      }
+    }
+    // Mark meeting as ergebnisse_verfuegbar
+    await supabase.from("meetings" as any).update({ ergebnisse_verfuegbar: true } as any).eq("id", meetingId);
+    setUploadingResult(false);
+    loadMeetings();
+    toast({ title: "✅ Ergebnisse hochgeladen" });
+  };
+
+  const saveErgebnisseText = async (meetingId: string) => {
+    await supabase.from("meetings" as any).update({
+      ergebnisse_text: resultText,
+      ergebnisse_verfuegbar: true,
+    } as any).eq("id", meetingId);
+    setEditingResultFor(null);
+    loadMeetings();
+    toast({ title: "✅ Zusammenfassung gespeichert" });
+  };
+
   const getGpName = (userId: string) => gpProfiles[userId]?.name || "Unbekannt";
 
   return (
@@ -393,7 +431,9 @@ export default function Kalender() {
             <div className="text-center py-12 text-muted-foreground">Keine Meetings vorhanden</div>
           ) : (
             meetings.map(m => {
-              const files = meetingFiles[m.id] || [];
+              const allFiles = meetingFiles[m.id] || [];
+              const files = allFiles.filter(f => f.typ !== "ergebnis");
+              const resultFiles = allFiles.filter(f => f.typ === "ergebnis");
               const responses = meetingResponses[m.id] || [];
               const myResp = myResponses[m.id];
               const teilnehmer = responses.filter(r => r.status === "teilnehmen");
@@ -415,7 +455,14 @@ export default function Kalender() {
                             {zielgruppeLabel(m.zielgruppe)}
                           </span>
                         </div>
-                        <h3 className="font-bold text-lg text-foreground">{m.titel}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-lg text-foreground">{m.titel}</h3>
+                          {m.ergebnisse_verfuegbar && (
+                            <Badge variant="secondary" className="text-[10px] bg-primary/15 text-primary border-0">
+                              <ClipboardList size={10} className="mr-0.5" /> Ergebnisse
+                            </Badge>
+                          )}
+                        </div>
                         {m.beschreibung && <p className="text-sm text-muted-foreground mt-1">{m.beschreibung}</p>}
                       </div>
                       {isAdmin && (
@@ -520,6 +567,76 @@ export default function Kalender() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* ─── Meeting-Ergebnisse ─── */}
+                  {(m.ergebnisse_verfuegbar || isAdmin) && (
+                    <div className="px-4 py-3 border-t border-border bg-primary/5">
+                      <p className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1">
+                        <ClipboardList size={14} className="text-primary" /> Meeting-Ergebnisse
+                      </p>
+
+                      {/* Zusammenfassung */}
+                      {editingResultFor === m.id ? (
+                        <div className="mb-3">
+                          <Textarea
+                            value={resultText}
+                            onChange={e => setResultText(e.target.value)}
+                            placeholder="Zusammenfassung & Entscheidungen eingeben…"
+                            rows={5}
+                            className="text-sm mb-2"
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={() => saveErgebnisseText(m.id)} className="gap-1">
+                              <Save size={12} /> Speichern
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setEditingResultFor(null)}>Abbrechen</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {m.ergebnisse_text ? (
+                            <div className="text-sm text-foreground whitespace-pre-wrap bg-card rounded-lg p-3 mb-3 border border-border">
+                              {m.ergebnisse_text}
+                            </div>
+                          ) : isAdmin ? (
+                            <p className="text-xs text-muted-foreground mb-2 italic">Noch keine Zusammenfassung</p>
+                          ) : null}
+                          {isAdmin && (
+                            <Button size="sm" variant="outline" className="mb-3 gap-1 text-xs"
+                              onClick={() => { setEditingResultFor(m.id); setResultText(m.ergebnisse_text || ""); }}>
+                              <FileText size={12} /> Zusammenfassung bearbeiten
+                            </Button>
+                          )}
+                        </>
+                      )}
+
+                      {/* Result files */}
+                      {resultFiles.length > 0 && (
+                        <div className="space-y-1 mb-2">
+                          <p className="text-xs text-muted-foreground font-medium">📎 Protokolle & Fotos</p>
+                          {resultFiles.map(f => (
+                            <button key={f.id} onClick={() => downloadFile(f.storage_path, f.dateiname)}
+                              className="flex items-center gap-2 text-sm text-foreground hover:text-primary transition-colors w-full text-left">
+                              <Download size={14} className="text-primary" />
+                              <span className="truncate">{f.dateiname}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Admin: Upload result files */}
+                      {isAdmin && (
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors">
+                          <Upload size={14} />
+                          <span>{uploadingResult ? "Wird hochgeladen…" : "Protokoll / Flipchart-Foto hochladen"}</span>
+                          <input type="file" multiple className="hidden"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp,.ppt,.pptx,.doc,.docx"
+                            onChange={e => { if (e.target.files) uploadResultFiles(m.id, e.target.files); }}
+                          />
+                        </label>
+                      )}
                     </div>
                   )}
                 </div>

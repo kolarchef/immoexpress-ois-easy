@@ -388,6 +388,7 @@ export type Database = {
           id: string
           meeting_id: string
           storage_path: string
+          typ: string
         }
         Insert: {
           created_at?: string
@@ -395,6 +396,7 @@ export type Database = {
           id?: string
           meeting_id: string
           storage_path: string
+          typ?: string
         }
         Update: {
           created_at?: string
@@ -402,6 +404,7 @@ export type Database = {
           id?: string
           meeting_id?: string
           storage_path?: string
+          typ?: string
         }
         Relationships: [
           {
@@ -457,6 +460,8 @@ export type Database = {
           created_at: string
           created_by: string
           datum: string
+          ergebnisse_text: string | null
+          ergebnisse_verfuegbar: boolean
           id: string
           titel: string
           uhrzeit: string
@@ -468,6 +473,8 @@ export type Database = {
           created_at?: string
           created_by: string
           datum: string
+          ergebnisse_text?: string | null
+          ergebnisse_verfuegbar?: boolean
           id?: string
           titel: string
           uhrzeit?: string
@@ -479,6 +486,8 @@ export type Database = {
           created_at?: string
           created_by?: string
           datum?: string
+          ergebnisse_text?: string | null
+          ergebnisse_verfuegbar?: boolean
           id?: string
           titel?: string
           uhrzeit?: string
