@@ -32,6 +32,9 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [hasBiometricCred, setHasBiometricCred] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   useEffect(() => {
     if (isMobileDevice()) {
@@ -40,7 +43,6 @@ export default function Auth() {
     const stored = localStorage.getItem(BIOMETRIC_KEY);
     setHasBiometricCred(!!stored);
 
-    // Voiceover: play once with fade-in
     const audio = new Audio("/audio/voiceover_login.mp3");
     audio.volume = 0;
     const fadeIn = () => {
@@ -94,6 +96,23 @@ export default function Auth() {
       }
     }
     setLoading(false);
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Reset-Link wurde gesendet! Prüfe dein Postfach.");
+      setShowForgot(false);
+      setForgotEmail("");
+    }
+    setForgotLoading(false);
   };
 
   const offerBiometricSetup = (em: string, pw: string) => {
@@ -173,7 +192,7 @@ export default function Auth() {
         </div>
 
         {/* Biometric Login Button */}
-        {biometricAvailable && hasBiometricCred && isLogin && (
+        {biometricAvailable && hasBiometricCred && isLogin && !showForgot && (
           <button
             onClick={handleBiometricLogin}
             disabled={loading}
@@ -189,69 +208,113 @@ export default function Auth() {
           </button>
         )}
 
-        {/* Login Form */}
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/15 space-y-4"
-        >
-          {!isLogin && (
+        {/* Forgot Password Form */}
+        {showForgot ? (
+          <form
+            onSubmit={handleForgotPassword}
+            className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/15 space-y-4"
+          >
+            <div className="text-center space-y-1">
+              <h2 className="text-lg font-bold text-[hsl(43,90%,55%)]">Passwort zurücksetzen</h2>
+              <p className="text-xs text-white/60">Gib deine E-Mail ein, um einen Reset-Link zu erhalten.</p>
+            </div>
             <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-white/80 text-sm">Name</Label>
+              <Label htmlFor="forgot-email" className="text-white/80 text-sm">E-Mail</Label>
               <Input
-                id="name"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Max Mustermann"
+                id="forgot-email"
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="max@immoexpress.at"
                 required
                 className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus-visible:ring-[hsl(43,90%,55%)]"
               />
             </div>
-          )}
-          <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-white/80 text-sm">E-Mail</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="max@immoexpress.at"
-              required
-              className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus-visible:ring-[hsl(43,90%,55%)]"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-white/80 text-sm">Passwort</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              minLength={6}
-              className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus-visible:ring-[hsl(43,90%,55%)]"
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full gap-2 bg-[hsl(43,90%,55%)] hover:bg-[hsl(43,90%,48%)] text-black font-bold rounded-xl h-12 text-base shadow-lg shadow-[hsl(43,90%,55%)]/25"
-          >
-            <Train size={18} />
-            {loading ? "Laden..." : isLogin ? "Einsteigen & Losfahren" : "Registrieren"}
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              disabled={forgotLoading}
+              className="w-full gap-2 bg-[hsl(43,90%,55%)] hover:bg-[hsl(43,90%,48%)] text-black font-bold rounded-xl h-12 text-base shadow-lg shadow-[hsl(43,90%,55%)]/25"
+            >
+              {forgotLoading ? "Senden..." : "Reset-Link senden"}
+            </Button>
+            <p className="text-center text-sm text-white/60">
+              <button
+                type="button"
+                onClick={() => setShowForgot(false)}
+                className="text-[hsl(43,90%,55%)] font-semibold hover:underline"
+              >
+                Zurück zum Login
+              </button>
+            </p>
+          </form>
+        ) : (
+          <>
+            {/* Login Form */}
+            <form
+              onSubmit={handleSubmit}
+              className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/15 space-y-4"
+            >
+              {!isLogin && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="text-white/80 text-sm">Name</Label>
+                  <Input
+                    id="name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Max Mustermann"
+                    required
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus-visible:ring-[hsl(43,90%,55%)]"
+                  />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-white/80 text-sm">E-Mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="max@immoexpress.at"
+                  required
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus-visible:ring-[hsl(43,90%,55%)]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-white/80 text-sm">Passwort</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus-visible:ring-[hsl(43,90%,55%)]"
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full gap-2 bg-[hsl(43,90%,55%)] hover:bg-[hsl(43,90%,48%)] text-black font-bold rounded-xl h-12 text-base shadow-lg shadow-[hsl(43,90%,55%)]/25"
+              >
+                <Train size={18} />
+                {loading ? "Laden..." : isLogin ? "Einsteigen & Losfahren" : "Registrieren"}
+              </Button>
+            </form>
 
-        {/* Toggle */}
-        <p className="text-center text-sm text-white/60">
-          {isLogin ? "Noch kein Konto?" : "Bereits registriert?"}{" "}
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-[hsl(43,90%,55%)] font-semibold hover:underline"
-          >
-            {isLogin ? "Registrieren" : "Anmelden"}
-          </button>
-        </p>
+            {/* Passwort vergessen */}
+            {isLogin && (
+              <p className="text-center text-sm text-white/60">
+                <button
+                  onClick={() => setShowForgot(true)}
+                  className="text-[hsl(43,90%,55%)] font-semibold hover:underline"
+                >
+                  Passwort vergessen?
+                </button>
+              </p>
+            )}
+          </>
+        )}
 
         {/* Tagline */}
         <p className="text-center text-xs text-white/40 pt-2">

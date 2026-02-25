@@ -40,6 +40,7 @@ import AuditLogs from "./pages/AuditLogs";
 import RechtDisclaimer from "./pages/RechtDisclaimer";
 import Rechtsarchiv from "./pages/Rechtsarchiv";
 import AdminCenter from "./pages/AdminCenter";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -55,6 +56,7 @@ const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<Auth />} />
     <Route path="/login" element={<Auth />} />
+    <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/upload" element={<KundenUpload />} />
     <Route path="/finanz-upload" element={<FinanzUpload />} />
     <Route path="/recht-disclaimer" element={<RechtDisclaimer />} />
