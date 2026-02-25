@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      aufgaben: {
+        Row: {
+          beschreibung: string | null
+          created_at: string
+          erledigt_am: string | null
+          erstellt_von: string
+          faellig_am: string | null
+          gp_nummer: string | null
+          id: string
+          meeting_id: string | null
+          prioritaet: string
+          status: string
+          titel: string
+          updated_at: string
+          zugewiesen_an: string
+        }
+        Insert: {
+          beschreibung?: string | null
+          created_at?: string
+          erledigt_am?: string | null
+          erstellt_von: string
+          faellig_am?: string | null
+          gp_nummer?: string | null
+          id?: string
+          meeting_id?: string | null
+          prioritaet?: string
+          status?: string
+          titel: string
+          updated_at?: string
+          zugewiesen_an: string
+        }
+        Update: {
+          beschreibung?: string | null
+          created_at?: string
+          erledigt_am?: string | null
+          erstellt_von?: string
+          faellig_am?: string | null
+          gp_nummer?: string | null
+          id?: string
+          meeting_id?: string | null
+          prioritaet?: string
+          status?: string
+          titel?: string
+          updated_at?: string
+          zugewiesen_an?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aufgaben_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bauplan_annotationen: {
         Row: {
           created_at: string
