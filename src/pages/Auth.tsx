@@ -10,10 +10,6 @@ import logoImg from "@/assets/logo_immoexpress.png";
 
 const BIOMETRIC_KEY = "immoexpress_biometric_cred";
 
-function isMobileDevice() {
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
 async function isWebAuthnAvailable() {
   if (!window.PublicKeyCredential) return false;
   try {
@@ -37,9 +33,7 @@ export default function Auth() {
   const [forgotLoading, setForgotLoading] = useState(false);
 
   useEffect(() => {
-    if (isMobileDevice()) {
-      isWebAuthnAvailable().then(setBiometricAvailable);
-    }
+    isWebAuthnAvailable().then(setBiometricAvailable);
     const stored = localStorage.getItem(BIOMETRIC_KEY);
     setHasBiometricCred(!!stored);
 
@@ -191,23 +185,6 @@ export default function Auth() {
           </p>
         </div>
 
-        {/* Biometric Login Button */}
-        {biometricAvailable && hasBiometricCred && isLogin && !showForgot && (
-          <button
-            onClick={handleBiometricLogin}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 bg-white/10 backdrop-blur-md border border-[hsl(43,90%,55%)]/30 rounded-2xl p-4 hover:bg-white/15 transition-all active:scale-[0.98] disabled:opacity-50"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[hsl(43,90%,55%)]/20 flex items-center justify-center">
-              <Fingerprint size={28} className="text-[hsl(43,90%,55%)]" />
-            </div>
-            <div className="text-left">
-              <div className="font-bold text-white text-sm">Mit Biometrie anmelden</div>
-              <div className="text-xs text-white/60">Fingerabdruck oder FaceID</div>
-            </div>
-          </button>
-        )}
-
         {/* Forgot Password Form */}
         {showForgot ? (
           <form
@@ -292,14 +269,29 @@ export default function Auth() {
                   className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus-visible:ring-[hsl(43,90%,55%)]"
                 />
               </div>
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full gap-2 bg-[hsl(43,90%,55%)] hover:bg-[hsl(43,90%,48%)] text-black font-bold rounded-xl h-12 text-base shadow-lg shadow-[hsl(43,90%,55%)]/25"
-              >
-                <Train size={18} />
-                {loading ? "Laden..." : isLogin ? "Einsteigen & Losfahren" : "Registrieren"}
-              </Button>
+
+              {/* Login Button + Biometric */}
+              <div className="flex gap-2">
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 gap-2 bg-[hsl(43,90%,55%)] hover:bg-[hsl(43,90%,48%)] text-black font-bold rounded-xl h-12 text-base shadow-lg shadow-[hsl(43,90%,55%)]/25"
+                >
+                  <Train size={18} />
+                  {loading ? "Laden..." : isLogin ? "Einsteigen & Losfahren" : "Registrieren"}
+                </Button>
+                {biometricAvailable && hasBiometricCred && isLogin && (
+                  <button
+                    type="button"
+                    onClick={handleBiometricLogin}
+                    disabled={loading}
+                    className="h-12 w-12 flex-shrink-0 flex items-center justify-center rounded-xl bg-white/10 backdrop-blur-md border border-[hsl(43,90%,55%)]/30 hover:bg-white/15 transition-all active:scale-95 disabled:opacity-50"
+                    title="Mit Fingerabdruck / FaceID anmelden"
+                  >
+                    <Fingerprint size={22} className="text-[hsl(43,90%,55%)]" />
+                  </button>
+                )}
+              </div>
             </form>
 
             {/* Passwort vergessen */}
