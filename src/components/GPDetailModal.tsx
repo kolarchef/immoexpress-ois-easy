@@ -92,12 +92,18 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
   const [bestellungen, setBestellungen] = useState<Bestellung[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; path: string }[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Assigned objects state
   const [assignedObjekte, setAssignedObjekte] = useState<AssignedObjekt[]>([]);
   const [gpOptions, setGpOptions] = useState<GPOption[]>([]);
   const [transferObjektId, setTransferObjektId] = useState<string | null>(null);
   const [transferTargetId, setTransferTargetId] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }).then(({ data }) => setIsAdmin(!!data));
+  }, [user]);
 
   useEffect(() => {
     if (!partner) return;
@@ -590,21 +596,23 @@ export default function GPDetailModal({ partner, open, onOpenChange, onSaved }: 
           <TabsContent value="werbemittel" className="space-y-5 mt-4">
             <section className="space-y-3">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                <Upload size={14} className="text-primary" /> Personalisierte Designs hochladen
+                <Upload size={14} className="text-primary" /> Personalisierte Designs
               </h3>
-              <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-                <input type="file" id="gp-upload" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.ai,.psd" />
-                <label htmlFor="gp-upload" className="cursor-pointer space-y-2 block">
-                  <Upload size={28} className="mx-auto text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Design-Datei hier ablegen oder klicken</p>
-                  <p className="text-[10px] text-muted-foreground">PDF, Bild, AI, PSD</p>
-                </label>
-                {uploading && <p className="text-xs text-primary mt-2">Wird hochgeladen…</p>}
-              </div>
+              {isAdmin && (
+                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+                  <input type="file" id="gp-upload" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.ai,.psd" />
+                  <label htmlFor="gp-upload" className="cursor-pointer space-y-2 block">
+                    <Upload size={28} className="mx-auto text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Design-Datei hier ablegen oder klicken</p>
+                    <p className="text-[10px] text-muted-foreground">PDF, Bild, AI, PSD</p>
+                  </label>
+                  {uploading && <p className="text-xs text-primary mt-2">Wird hochgeladen…</p>}
+                </div>
+              )}
 
               {uploadedFiles.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-xs font-semibold text-muted-foreground">Hochgeladene Dateien</h4>
+                  <h4 className="text-xs font-semibold text-muted-foreground">Verfügbare Dateien</h4>
                   {uploadedFiles.map(f => (
                     <div key={f.path} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
                       <span className="text-sm truncate flex-1">{f.name}</span>
