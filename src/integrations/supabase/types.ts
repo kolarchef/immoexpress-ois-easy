@@ -249,6 +249,51 @@ export type Database = {
           },
         ]
       }
+      geschaeftspartner: {
+        Row: {
+          created_at: string
+          created_by: string
+          email: string | null
+          id: string
+          join_date: string
+          leave_date: string | null
+          name: string
+          notiz: string | null
+          phone: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          email?: string | null
+          id?: string
+          join_date?: string
+          leave_date?: string | null
+          name: string
+          notiz?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          id?: string
+          join_date?: string
+          leave_date?: string | null
+          name?: string
+          notiz?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       immoz_exporte: {
         Row: {
           anzahl: number | null

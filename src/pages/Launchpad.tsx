@@ -32,7 +32,7 @@ const modules: Module[] = [
   { label: "BEWERTUNG", icon: Calculator, path: "/bewertung" },
   { label: "NETZWERK", icon: Handshake, path: "/netzwerk" },
   { label: "FINANZ-TRESOR", icon: Vault, path: "/finanz-tresor", adminOnly: true },
-  { label: "TEAM", icon: Users, path: "/team-performance", adminOnly: true },
+  { label: "TEAM", icon: Users, path: "/team", adminOnly: true },
   { label: "WERBUNG", icon: Megaphone, path: "/werbung", adminOnly: true },
 ];
 
