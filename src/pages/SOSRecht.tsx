@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Shield, ChevronDown, Search, Download, Loader2, Lock } from "lucide-react";
+import { Shield, ChevronDown, Search, Download, Loader2, Lock, Check, ArrowRight, MapPin, Landmark, Mountain, Trees, Building2, Waves, Factory, Grape, Castle } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -9,39 +10,39 @@ import jsPDF from "jspdf";
 const HAFTUNGSTEXT = `HAFTUNGSAUSSCHLUSS – ImmoExpress brainy: Diese Anwendung stellt ausschließlich allgemeine Informationen bereit und ersetzt keine individuelle Rechtsberatung. Die bereitgestellten Inhalte wurden mithilfe von Künstlicher Intelligenz generiert und basieren auf öffentlich zugänglichen Quellen des Rechtsinformationssystems des Bundes (RIS – ris.bka.gv.at). Es wird keine Haftung für die Richtigkeit, Vollständigkeit oder Aktualität der Informationen übernommen. Für verbindliche Rechtsauskünfte wenden Sie sich bitte an einen Rechtsanwalt oder Notar. Keine Rechtsberatung gemäß § 2 RAO. Erstellt durch KI-Assistenz System ImmoExpress brainy.`;
 
 const bundeslaender = [
-  { name: "Wien", kuerzel: "W", color: "bg-red-500", gesetze: [
+  { name: "Wien", kuerzel: "W", icon: Landmark, gesetze: [
     { titel: "Maklergesetz (MaklerG)", text: "Makler in Wien unterliegen dem Maklergesetz BGBl I 1996/262. Die Maklergebühr (Provision) beträgt bei Kauf max. 3% + 20% MwSt. des Kaufpreises auf beiden Seiten (Käufer & Verkäufer)." },
     { titel: "Alleinvermittlung (Wiener Praxis)", text: "Alleinvermittlungsverträge sind in Wien üblich. Gemäß § 14 MaklerG entsteht der Provisionsanspruch auch ohne Abschluss, wenn der Auftraggeber vertragswidrig handelt." },
     { titel: "IMV & Nebenkostenübersicht", text: "Gemäß Immobilienmaklerverordnung (IMV BGBl II 1996/297) muss der Makler eine vollständige Nebenkostenübersicht bereitstellen: Grundbucheintragungsgebühr 1,1%, Grunderwerbsteuer 3,5%, Vertragserrichtungskosten ca. 1-2%." },
     { titel: "Finanzamt-Gebühren Wien", text: "Grunderwerbsteuer: 3,5% (bei nahen Angehörigen abgestuft). Eintragungsgebühr: 1,1% des Kaufpreises. Immobilienertragssteuer (ImmoESt): 30% des Veräußerungsgewinns." },
   ]},
-  { name: "Niederösterreich", kuerzel: "NÖ", color: "bg-yellow-500", gesetze: [
+  { name: "Niederösterreich", kuerzel: "NÖ", icon: Trees, gesetze: [
     { titel: "Maklerrecht NÖ", text: "In NÖ gelten bundesweites MaklerG sowie landesspezifische Regelungen für Bauland-Widmungen gem. NÖ ROG 2014. Besonderheit: Landwirtschaftliche Grundstücke unterliegen dem NÖ Grundverkehrsgesetz." },
     { titel: "NÖ Grundverkehrsgesetz", text: "Erwerb land- und forstwirtschaftlicher Flächen bedarf der Genehmigung der NÖ Grundverkehrsbehörde. Ausländische Staatsbürger benötigen zusätzliche Genehmigungen." },
   ]},
-  { name: "Steiermark", kuerzel: "ST", color: "bg-green-600", gesetze: [
+  { name: "Steiermark", kuerzel: "ST", icon: Mountain, gesetze: [
     { titel: "Stmk. Maklerrecht", text: "Steirische Makler unterliegen dem MaklerG. Besonderheit: Für Graz-Umgebung gelten verschärfte Widmungsvorschriften gem. Stmk. ROG 2010." },
     { titel: "Stmk. Grundverkehrsgesetz", text: "Grundverkehr mit land- und forstwirtschaftlichen Grundstücken erfordert Genehmigung. Ausnahmen für Kleinflächen bis 2 ha unter bestimmten Voraussetzungen." },
   ]},
-  { name: "Salzburg", kuerzel: "S", color: "bg-blue-500", gesetze: [
+  { name: "Salzburg", kuerzel: "S", icon: Castle, gesetze: [
     { titel: "Sbg. Fremdenwohnrecht", text: "In Salzburg unterliegen Zweitwohnsitze dem Sbg. Raumordnungsgesetz 2009. Fremdenverkehrsgemeinden haben besondere Beschränkungen für Nebenwohnsitze." },
     { titel: "Maklergebühren Salzburg", text: "Bundesweites MaklerG gilt. Ortsübliche Provision: Käufer 3% + MwSt., Verkäufer 3% + MwSt." },
   ]},
-  { name: "Tirol", kuerzel: "T", color: "bg-red-700", gesetze: [
+  { name: "Tirol", kuerzel: "T", icon: Mountain, gesetze: [
     { titel: "Tiroler Grundverkehrsgesetz", text: "Das TGVG 1996 regelt den Grunderwerb streng. EU-Bürger wie Inländer behandelt. Drittstaatsangehörige benötigen Genehmigung der Grundverkehrsbehörde." },
     { titel: "Freizeitwohnsitz-Beschränkung", text: "Tiroler ROG 2016 beschränkt Freizeitwohnsitze stark. Neue Widmungen für Freizeitwohnsitze praktisch ausgeschlossen." },
   ]},
-  { name: "Vorarlberg", kuerzel: "V", color: "bg-red-600", gesetze: [
+  { name: "Vorarlberg", kuerzel: "V", icon: Waves, gesetze: [
     { titel: "Vlbg. Grundverkehrsgesetz", text: "Das Vlbg. GVG regelt Grunderwerb. Besonderheit: Wohnbauförderungsrecht ist in Vorarlberg besonders restriktiv für Nicht-Hauptwohnsitze." },
     { titel: "Maklerpraxis Vorarlberg", text: "Bundesweites MaklerG. Besonderheit: In Ballungsräumen oft Doppelanwaltspflicht bei Immobiliengeschäften > €500.000 empfohlen." },
   ]},
-  { name: "Oberösterreich", kuerzel: "OÖ", color: "bg-blue-600", gesetze: [
+  { name: "Oberösterreich", kuerzel: "OÖ", icon: Factory, gesetze: [
     { titel: "OÖ Maklerrecht", text: "Bundesweites MaklerG. OÖ Besonderheit: Bodenreformgesetz regelt landwirtschaftliche Flächen." },
   ]},
-  { name: "Kärnten", kuerzel: "K", color: "bg-yellow-400", gesetze: [
+  { name: "Kärnten", kuerzel: "K", icon: Waves, gesetze: [
     { titel: "Kärntner Grundverkehrsgesetz", text: "K-GVG 1994 regelt Grunderwerb. Seenähe-Grundstücke haben besondere Widmungseinschränkungen." },
   ]},
-  { name: "Burgenland", kuerzel: "B", color: "bg-red-400", gesetze: [
+  { name: "Burgenland", kuerzel: "B", icon: Grape, gesetze: [
     { titel: "Bgld. Raumplanungsgesetz", text: "Das Bgld. RPG 2019 regelt Widmungen. Grenzregionen: Zusätzliche Prüfpflichten bei Grundstückserwerb durch Drittstaatsangehörige." },
   ]},
 ];
@@ -109,7 +110,6 @@ export default function SOSRecht() {
     const contentWidth = pageWidth - 2 * margin;
 
     const addHeader = () => {
-      // Disclaimer as unlöschbarer Header
       doc.setFillColor(255, 240, 240);
       doc.rect(margin - 2, 8, contentWidth + 4, 22, "F");
       doc.setDrawColor(200, 30, 30);
@@ -175,44 +175,54 @@ export default function SOSRecht() {
     return <HaftungsModal modul="SOS Recht" onAccept={handleAccept} />;
   }
 
+  // Step indicator
+  const currentStep = !aktBL ? 1 : 2;
+  const totalSteps = 3;
+
   return (
-    <div className="p-4 lg:p-8 animate-fade-in max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">SOS Legal Q&A</h1>
-          <p className="text-primary text-xs font-semibold tracking-wider uppercase">ImmoExpress Professional · Österreich</p>
+    <div className="p-4 lg:p-8 animate-fade-in max-w-xl mx-auto">
+      {/* Step Header */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">
+            Step {currentStep} of {totalSteps}
+          </p>
+          <Shield size={20} className="text-primary" />
         </div>
-        <Shield size={28} className="text-primary" />
+        <Progress value={(currentStep / totalSteps) * 100} className="h-1.5 mb-4" />
+        <h1 className="text-2xl font-bold text-foreground">
+          {!aktBL ? "Bundesland wählen" : `KI-Rechtsauskunft für: ${aktBL.name}`}
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          {!aktBL
+            ? "Wählen Sie zuerst Ihr Bundesland, um die regionale Rechtsauskunft zu starten."
+            : "Stellen Sie Ihre Rechtsfrage – die KI nutzt ausschließlich RIS (ris.bka.gv.at)."}
+        </p>
       </div>
 
-      {/* Haftungshinweis Banner */}
-      <div className="bg-accent rounded-2xl p-4 border border-primary/20 mb-6 flex items-start gap-3">
-        <Shield size={18} className="text-primary flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="text-xs font-bold text-primary uppercase tracking-wide mb-1">Rechtliche Information</p>
-          <p className="text-xs text-muted-foreground">Alle Informationen basieren auf österreichischem Recht (MaklerG, IMV, KSchG, ABGB) und sind nur zur allgemeinen Orientierung. Quelle: RIS (ris.bka.gv.at). Kein Ersatz für Rechtsberatung.</p>
-        </div>
-      </div>
-
-      {/* STEP 1: Bundesland-Auswahl GANZ OBEN */}
+      {/* STEP 1: Bundesland Selection – vertical list */}
       {!aktBL ? (
         <>
-          <h2 className="font-bold text-foreground text-lg mb-1">1. Bundesland wählen</h2>
-          <p className="text-muted-foreground text-sm mb-4">Wählen Sie zuerst Ihr Bundesland – danach erscheint das KI-Suchfeld.</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {bundeslaender.map((bl) => (
-              <button
-                key={bl.name}
-                onClick={() => { setAktBL(bl); setAktGesetz(null); setKiAntwort(""); setKiFrage(""); }}
-                className="bg-card rounded-2xl p-4 shadow-card border border-border hover:shadow-card-hover hover:border-primary/30 transition-all text-left group active:scale-95"
-              >
-                <div className={`w-10 h-10 rounded-xl ${bl.color} flex items-center justify-center text-white font-black text-sm mb-3 shadow-sm`}>
-                  {bl.kuerzel}
-                </div>
-                <div className="font-bold text-foreground text-sm group-hover:text-primary transition-colors">{bl.name}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">{bl.gesetze.length} Themen</div>
-              </button>
-            ))}
+          <div className="space-y-2.5">
+            {bundeslaender.map((bl) => {
+              const Icon = bl.icon;
+              return (
+                <button
+                  key={bl.name}
+                  onClick={() => { setAktBL(bl); setAktGesetz(null); setKiAntwort(""); setKiFrage(""); }}
+                  className="w-full flex items-center gap-4 bg-card rounded-2xl p-4 shadow-card border border-border hover:border-primary/40 hover:shadow-md transition-all text-left group active:scale-[0.98]"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-accent flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition-colors">
+                    <Icon size={20} className="text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-bold text-foreground text-sm group-hover:text-primary transition-colors block">{bl.name}</span>
+                    <span className="text-xs text-muted-foreground">{bl.gesetze.length} Rechtsthemen</span>
+                  </div>
+                  <div className="w-6 h-6 rounded-full border-2 border-border flex-shrink-0 group-hover:border-primary/40 transition-colors" />
+                </button>
+              );
+            })}
           </div>
 
           {/* Locked KI hint */}
@@ -223,26 +233,28 @@ export default function SOSRecht() {
         </>
       ) : (
         <div className="animate-fade-in">
-          <button onClick={() => { setAktBL(null); setKiAntwort(""); setKiFrage(""); }} className="flex items-center gap-2 text-primary font-semibold text-sm mb-4 hover:underline">
-            ← Alle Bundesländer
+          {/* Selected Bundesland card */}
+          <button
+            onClick={() => { setAktBL(null); setKiAntwort(""); setKiFrage(""); }}
+            className="w-full flex items-center gap-4 bg-card rounded-2xl p-4 shadow-card border-2 border-primary mb-6 text-left group hover:bg-accent/50 transition-colors"
+          >
+            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <aktBL.icon size={20} className="text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="font-bold text-foreground text-sm block">{aktBL.name}</span>
+              <span className="text-xs text-muted-foreground">Tippen zum Ändern</span>
+            </div>
+            <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+              <Check size={14} className="text-primary-foreground" />
+            </div>
           </button>
 
-          {/* Bundesland Header */}
-          <div className="flex items-center gap-3 mb-5">
-            <div className={`w-12 h-12 rounded-xl ${aktBL.color} flex items-center justify-center text-white font-black text-lg shadow-sm`}>
-              {aktBL.kuerzel}
-            </div>
-            <div>
-              <h2 className="font-bold text-foreground text-xl">{aktBL.name}</h2>
-              <p className="text-xs text-muted-foreground">Österreichisches Immobilienrecht</p>
-            </div>
-          </div>
-
-          {/* STEP 2: KI-Rechtssuche – nur sichtbar wenn Bundesland gewählt */}
+          {/* KI Search */}
           <div className="bg-card rounded-2xl border border-border shadow-card p-4 mb-6">
             <div className="flex items-center gap-2 mb-2">
               <Search size={18} className="text-primary" />
-              <h3 className="font-bold text-foreground text-sm">KI-Rechtsauskunft für: {aktBL.name}</h3>
+              <h3 className="font-bold text-foreground text-sm">KI-Rechtsauskunft</h3>
             </div>
             <p className="text-xs text-muted-foreground mb-3">Nur RIS (ris.bka.gv.at) · Paragraph & Bundesland werden genannt</p>
             <div className="flex gap-2 mb-3">
@@ -251,7 +263,7 @@ export default function SOSRecht() {
                 onChange={e => setKiFrage(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && haftungOk && askKI()}
                 placeholder={`z.B. Wie hoch ist die Maklerprovision bei Kauf in ${aktBL.name}?`}
-                className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <button
                 onClick={askKI}
@@ -279,7 +291,7 @@ export default function SOSRecht() {
             )}
           </div>
 
-          {/* Gesetze für gewähltes Bundesland */}
+          {/* Gesetze */}
           <h3 className="font-bold text-foreground text-sm mb-2">Relevante Rechtsthemen – {aktBL.name}</h3>
           <div className="space-y-2">
             {aktBL.gesetze.map((g, i) => (
