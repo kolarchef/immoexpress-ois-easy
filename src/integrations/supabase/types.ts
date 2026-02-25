@@ -402,8 +402,10 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          elearning_zugang: boolean
           email: string | null
           geburtsdatum: string | null
+          gesperrt: boolean
           gp_number: string | null
           hausnummer: string | null
           id: string
@@ -424,8 +426,10 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
+          elearning_zugang?: boolean
           email?: string | null
           geburtsdatum?: string | null
+          gesperrt?: boolean
           gp_number?: string | null
           hausnummer?: string | null
           id?: string
@@ -446,8 +450,10 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
+          elearning_zugang?: boolean
           email?: string | null
           geburtsdatum?: string | null
+          gesperrt?: boolean
           gp_number?: string | null
           hausnummer?: string | null
           id?: string
