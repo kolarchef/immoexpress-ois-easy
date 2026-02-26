@@ -63,7 +63,7 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
   const allPflichtChecked = CHECKLIST_ITEMS.filter(i => i.pflicht).every(i => detectedItems[i.key]);
 
   useEffect(() => {
-    if (detailTab === "dokumente" && selected) loadDokumente();
+    if (selected) loadDokumente();
   }, [detailTab, selected]);
 
   const loadDokumente = async () => {
@@ -277,6 +277,45 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
                   <div className="flex justify-between"><span className="text-muted-foreground">Ort</span><span className="font-semibold">{selected.ort}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-bold text-primary">{selected.budget}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="font-semibold">{selected.status}</span></div>
+                </CardContent>
+              </Card>
+
+              {/* Dokumenten-Status */}
+              <Card className="card-radius shadow-card">
+                <CardContent className="p-5">
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <FileText size={12} className="text-primary" /> Dokumenten-Status
+                  </h4>
+                  <div className="space-y-2">
+                    {CHECKLIST_ITEMS.map(item => {
+                      const found = detectedItems[item.key];
+                      return (
+                        <div key={item.key} className="flex items-center gap-2.5">
+                          {found ? (
+                            <button
+                              onClick={() => {
+                                const dok = dokumente.find(d => d.dateiname.toLowerCase().includes(item.patterns[0]));
+                                if (dok) handleDownload(dok);
+                              }}
+                              className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center hover:bg-green-100 transition-colors"
+                              title={`Öffnen: ${found}`}
+                            >
+                              {getFileIcon(found)}
+                            </button>
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
+                              <Circle size={14} className="text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs ${found ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{item.label}</p>
+                            {found && <p className="text-[10px] text-green-600 truncate">{found}</p>}
+                          </div>
+                          {item.pflicht && !found && <span className="text-[9px] font-bold text-destructive">Pflicht</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </CardContent>
               </Card>
 

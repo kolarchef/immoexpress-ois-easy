@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Upload, Camera, CheckCircle, FileText, Loader2 } from "lucide-react";
+import { Upload, Camera, CheckCircle, FileText, Loader2, PenLine, Train } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import logoImg from "@/assets/logo_immoexpress.png";
 
 const DOKUMENT_TYPEN = [
   { key: "strom", label: "Strom-Foto (Zählerstand)" },
@@ -19,6 +20,12 @@ export default function KundenUpload() {
   const [loading, setLoading] = useState(true);
   const [uploads, setUploads] = useState<Record<string, boolean>>({});
   const [uploading, setUploading] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  // Signature canvas
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSigned, setHasSigned] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -41,6 +48,45 @@ export default function KundenUpload() {
       setLoading(false);
     })();
   }, [token]);
+
+  // Signature drawing
+  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setIsDrawing(true);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const pos = "touches" in e ? e.touches[0] : e;
+    ctx.beginPath();
+    ctx.moveTo(pos.clientX - rect.left, pos.clientY - rect.top);
+  };
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const pos = "touches" in e ? e.touches[0] : e;
+    ctx.strokeStyle = "hsl(43,90%,55%)";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineTo(pos.clientX - rect.left, pos.clientY - rect.top);
+    ctx.stroke();
+    setHasSigned(true);
+  };
+
+  const stopDraw = () => setIsDrawing(false);
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSigned(false);
+  };
 
   const handleUpload = async (typ: string, file: File) => {
     if (!anfrage) return;
@@ -69,13 +115,38 @@ export default function KundenUpload() {
     }
   };
 
+  const handleSubmitAll = async () => {
+    if (!hasSigned) {
+      toast({ title: "Bitte unterschreiben", description: "Eine Unterschrift ist erforderlich.", variant: "destructive" });
+      return;
+    }
+    // Upload signature as image
+    const canvas = canvasRef.current;
+    if (canvas && anfrage) {
+      try {
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
+        if (blob) {
+          const path = `${anfrage.id}/signatur_${Date.now()}.png`;
+          await supabase.storage.from("kundenunterlagen").upload(path, blob);
+          await supabase.from("unterlagen_uploads").insert({
+            anfrage_id: anfrage.id,
+            dokument_typ: "signatur",
+            dateiname: "Unterschrift",
+            storage_path: path,
+          });
+        }
+      } catch {}
+    }
+    setSubmitted(true);
+  };
+
   if (!token) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center p-6">
-        <div className="bg-card rounded-2xl p-8 shadow-card border border-border text-center max-w-sm">
-          <FileText size={40} className="text-muted-foreground mx-auto mb-4" />
-          <h1 className="text-lg font-bold text-foreground">Ungültiger Link</h1>
-          <p className="text-sm text-muted-foreground mt-2">Dieser Upload-Link ist nicht gültig. Bitte kontaktieren Sie Ihren Makler.</p>
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6">
+        <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 text-center max-w-sm">
+          <FileText size={40} className="text-[hsl(43,90%,55%)] mx-auto mb-4" />
+          <h1 className="text-lg font-bold text-white">Ungültiger Link</h1>
+          <p className="text-sm text-white/50 mt-2">Dieser Upload-Link ist nicht gültig. Bitte kontaktieren Sie Ihren Makler.</p>
         </div>
       </div>
     );
@@ -83,8 +154,29 @@ export default function KundenUpload() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-primary" />
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-[hsl(43,90%,55%)]" />
+      </div>
+    );
+  }
+
+  // Success screen
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6">
+        <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-[hsl(43,90%,55%)]/20 text-center max-w-sm animate-fade-in space-y-4">
+          <div className="w-16 h-16 bg-[hsl(43,90%,55%)]/20 rounded-2xl flex items-center justify-center mx-auto">
+            <CheckCircle size={32} className="text-[hsl(43,90%,55%)]" />
+          </div>
+          <h1 className="text-xl font-bold text-[hsl(43,90%,55%)]">Erfolgreich übermittelt!</h1>
+          <p className="text-sm text-white/70 leading-relaxed">
+            Unterlagen erfolgreich in den Immo Express geladen. Vielen Dank!
+          </p>
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <Train size={16} className="text-[hsl(43,90%,55%)]" />
+            <span className="text-xs text-white/40">Immo Express brainy</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -92,47 +184,51 @@ export default function KundenUpload() {
   const checkliste: string[] = anfrage?.checkliste || DOKUMENT_TYPEN.map((d) => d.key);
 
   return (
-    <div className="min-h-screen bg-surface p-4 max-w-lg mx-auto">
-      <div className="text-center mb-6 pt-6">
-        <div className="w-14 h-14 bg-primary-light rounded-2xl flex items-center justify-center mx-auto mb-3">
-          <Upload size={24} className="text-primary" />
-        </div>
-        <h1 className="text-xl font-bold text-foreground">Unterlagen hochladen</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+    <div className="min-h-screen bg-[#0a0a0a] p-4 max-w-lg mx-auto">
+      {/* Header */}
+      <div className="text-center mb-6 pt-6 space-y-3">
+        <img
+          src={logoImg}
+          alt="ImmoExpress"
+          className="h-14 w-14 rounded-2xl mx-auto shadow-lg ring-2 ring-[hsl(43,90%,55%)]/40"
+        />
+        <h1 className="text-xl font-bold text-[hsl(43,90%,55%)]">Unterlagen hochladen</h1>
+        <p className="text-sm text-white/60">
           Bitte laden Sie die angeforderten Dokumente hoch.
-          {anfrage?.kunde_name && <> · Für: <strong>{anfrage.kunde_name}</strong></>}
+          {anfrage?.kunde_name && <> · Für: <strong className="text-white/80">{anfrage.kunde_name}</strong></>}
         </p>
       </div>
 
+      {/* Document Cards */}
       <div className="space-y-3">
         {DOKUMENT_TYPEN.filter((d) => checkliste.includes(d.key)).map((dok) => (
-          <div key={dok.key} className="bg-card rounded-2xl p-4 shadow-card border border-border">
+          <div key={dok.key} className="bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {uploads[dok.key] ? (
-                  <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
-                    <CheckCircle size={20} className="text-green-600" />
+                  <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                    <CheckCircle size={20} className="text-green-400" />
                   </div>
                 ) : (
-                  <div className="w-10 h-10 rounded-xl bg-primary-light flex items-center justify-center">
-                    <FileText size={20} className="text-primary" />
+                  <div className="w-10 h-10 rounded-xl bg-[hsl(43,90%,55%)]/20 flex items-center justify-center">
+                    <FileText size={20} className="text-[hsl(43,90%,55%)]" />
                   </div>
                 )}
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{dok.label}</p>
-                  <p className="text-xs text-muted-foreground">{uploads[dok.key] ? "Hochgeladen ✓" : "Noch ausstehend"}</p>
+                  <p className="text-sm font-semibold text-white">{dok.label}</p>
+                  <p className="text-xs text-white/40">{uploads[dok.key] ? "Hochgeladen ✓" : "Noch ausstehend"}</p>
                 </div>
               </div>
 
               {!uploads[dok.key] && (
                 <div className="flex gap-2">
-                  <label className="cursor-pointer bg-primary text-primary-foreground rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all">
+                  <label className="cursor-pointer bg-[hsl(43,90%,55%)] text-black rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all">
                     {uploading === dok.key ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
                     Foto
                     <input type="file" accept="image/*" capture="environment" className="hidden"
                       onChange={(e) => e.target.files?.[0] && handleUpload(dok.key, e.target.files[0])} />
                   </label>
-                  <label className="cursor-pointer bg-accent text-foreground border border-border rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 hover:bg-secondary transition-all">
+                  <label className="cursor-pointer bg-white/10 text-white border border-white/20 rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 hover:bg-white/15 transition-all">
                     <Upload size={14} />
                     Datei
                     <input type="file" accept="image/*,.pdf,.doc,.docx" className="hidden"
@@ -145,8 +241,46 @@ export default function KundenUpload() {
         ))}
       </div>
 
-      <div className="mt-6 bg-accent rounded-xl p-4 border border-border">
-        <p className="text-xs text-muted-foreground text-center">
+      {/* Signature Field */}
+      <div className="mt-6 bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-[hsl(43,90%,55%)] flex items-center gap-2">
+            <PenLine size={16} /> Unterschrift
+          </h3>
+          {hasSigned && (
+            <button onClick={clearSignature} className="text-xs text-white/40 hover:text-white/60 transition-colors">
+              Löschen
+            </button>
+          )}
+        </div>
+        <canvas
+          ref={canvasRef}
+          width={380}
+          height={120}
+          className="w-full rounded-xl bg-white/5 border border-white/10 touch-none cursor-crosshair"
+          onMouseDown={startDraw}
+          onMouseMove={draw}
+          onMouseUp={stopDraw}
+          onMouseLeave={stopDraw}
+          onTouchStart={startDraw}
+          onTouchMove={draw}
+          onTouchEnd={stopDraw}
+        />
+        <p className="text-[10px] text-white/30 text-center">Bitte unterschreiben Sie hier mit dem Finger oder der Maus</p>
+      </div>
+
+      {/* Submit Button */}
+      <button
+        onClick={handleSubmitAll}
+        className="w-full mt-4 bg-[hsl(43,90%,55%)] hover:bg-[hsl(43,90%,48%)] text-black font-bold rounded-xl h-12 text-base shadow-lg shadow-[hsl(43,90%,55%)]/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+      >
+        <Train size={18} />
+        Unterlagen absenden
+      </button>
+
+      {/* DSGVO Notice */}
+      <div className="mt-4 bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
+        <p className="text-xs text-white/40 text-center">
           🔒 Ihre Daten werden verschlüsselt übertragen und DSGVO-konform verarbeitet.
         </p>
       </div>
