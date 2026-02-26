@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Calendar, Home, Key, FileText, Upload, Download, Trash2, Loader2, Send, CheckCircle, FileSpreadsheet, File, ClipboardCheck, CircleCheck, Circle, Lock, History, StickyNote } from "lucide-react";
+import { X, Calendar, Home, Key, FileText, Upload, Download, Trash2, Loader2, Send, CheckCircle, FileSpreadsheet, File, ClipboardCheck, CircleCheck, Circle, Lock, History, StickyNote, Pencil, Save, User, Phone, Mail, MapPin, DollarSign } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { sendAction } from "@/lib/sendAction";
@@ -50,6 +50,18 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
 
   const [showChecklist, setShowChecklist] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Stammdaten editing
+  const [editStamm, setEditStamm] = useState(false);
+  const [stammData, setStammData] = useState({
+    name: selected.name || "",
+    email: selected.email || "",
+    phone: selected.phone || "",
+    typ: selected.typ || "Käufer",
+    ort: selected.ort || "",
+    budget: selected.budget || "",
+  });
+  const [savingStamm, setSavingStamm] = useState(false);
 
   const isLocked = financeStatus === "uebertragen" || financeStatus === "abgeschlossen";
 
@@ -113,6 +125,29 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
     loadDokumente();
   };
 
+  const handleSaveStamm = async () => {
+    setSavingStamm(true);
+    try {
+      const { error } = await supabase.from("crm_kunden").update({
+        name: stammData.name.trim(),
+        email: stammData.email.trim(),
+        phone: stammData.phone.trim(),
+        typ: stammData.typ,
+        ort: stammData.ort.trim(),
+        budget: stammData.budget.trim(),
+      }).eq("id", selected.id);
+      if (error) throw error;
+      // Update selected object in parent (reflected on next open)
+      Object.assign(selected, stammData);
+      setEditStamm(false);
+      toast({ title: "✓ Stammdaten gespeichert" });
+    } catch (err: any) {
+      toast({ title: "Fehler", description: err.message, variant: "destructive" });
+    } finally {
+      setSavingStamm(false);
+    }
+  };
+
   const handleSendFinance = async () => {
     if (financeShared || sendingFinance) return;
     setSendingFinance(true);
@@ -145,8 +180,8 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
   const statusInfo = financeStatus !== "offen" ? financeStatusLabel[financeStatus] : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div className="bg-surface rounded-2xl shadow-md-custom border border-border w-full max-w-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-surface rounded-2xl shadow-md-custom border border-border w-full max-w-4xl animate-fade-in max-h-[95vh] overflow-y-auto">
         {/* Header */}
         <div className="bg-card rounded-t-2xl px-6 py-4 border-b border-border flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -159,7 +194,6 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Finance Button */}
             {!isLocked && financeStatus !== "abgeschlossen" && financeStatus !== "storniert" && (
               <button
                 onClick={() => {
@@ -272,11 +306,72 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
               {/* Left Column: Stammdaten */}
               <Card className="card-radius shadow-card">
                 <CardContent className="p-5 space-y-3 text-sm">
-                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wide mb-2">Stammdaten</h4>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Typ</span><span className="font-semibold">{selected.typ}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Ort</span><span className="font-semibold">{selected.ort}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-bold text-primary">{selected.budget}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="font-semibold">{selected.status}</span></div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wide">Stammdaten</h4>
+                    {!isLocked && (
+                      <button
+                        onClick={() => {
+                          if (editStamm) {
+                            setEditStamm(false);
+                          } else {
+                            setStammData({
+                              name: selected.name || "",
+                              email: selected.email || "",
+                              phone: selected.phone || "",
+                              typ: selected.typ || "Käufer",
+                              ort: selected.ort || "",
+                              budget: selected.budget || "",
+                            });
+                            setEditStamm(true);
+                          }
+                        }}
+                        className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+                      >
+                        {editStamm ? <X size={11} /> : <Pencil size={11} />}
+                        {editStamm ? "Abbrechen" : "Bearbeiten"}
+                      </button>
+                    )}
+                  </div>
+
+                  {editStamm ? (
+                    <div className="space-y-2.5">
+                      <StammInput icon={<User size={12} />} label="Name" value={stammData.name} onChange={(v) => setStammData({ ...stammData, name: v })} />
+                      <StammInput icon={<Mail size={12} />} label="E-Mail" value={stammData.email} onChange={(v) => setStammData({ ...stammData, email: v })} type="email" />
+                      <StammInput icon={<Phone size={12} />} label="Telefon" value={stammData.phone} onChange={(v) => setStammData({ ...stammData, phone: v })} type="tel" />
+                      <div>
+                        <label className="text-xs text-muted-foreground font-semibold block mb-1">Typ</label>
+                        <select
+                          value={stammData.typ}
+                          onChange={(e) => setStammData({ ...stammData, typ: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
+                        >
+                          {["Käufer", "Verkäufer", "Mieter", "Vermieter", "Interessent"].map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <StammInput icon={<MapPin size={12} />} label="Ort" value={stammData.ort} onChange={(v) => setStammData({ ...stammData, ort: v })} />
+                      <StammInput icon={<DollarSign size={12} />} label="Budget" value={stammData.budget} onChange={(v) => setStammData({ ...stammData, budget: v })} />
+                      <button
+                        onClick={handleSaveStamm}
+                        disabled={savingStamm}
+                        className="w-full bg-primary text-primary-foreground py-2 rounded-xl text-sm font-semibold shadow-orange hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {savingStamm ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                        Stammdaten speichern
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className="font-semibold">{selected.name}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">E-Mail</span><span className="font-semibold text-xs">{selected.email || "–"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Telefon</span><span className="font-semibold">{selected.phone || "–"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Typ</span><span className="font-semibold">{selected.typ}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Ort</span><span className="font-semibold">{selected.ort || "–"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-bold text-primary">{selected.budget || "–"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="font-semibold">{selected.status}</span></div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -450,6 +545,20 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function StammInput({ icon, label, value, onChange, type = "text" }: { icon: React.ReactNode; label: string; value: string; onChange: (v: string) => void; type?: string }) {
+  return (
+    <div>
+      <label className="text-xs text-muted-foreground font-semibold block mb-1 flex items-center gap-1">{icon} {label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
+      />
     </div>
   );
 }

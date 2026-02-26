@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
-  FolderPlus, Link as LinkIcon, Copy, CheckCircle, MessageCircle, Mail
+  FolderPlus, Link as LinkIcon, Copy, CheckCircle, MessageCircle, Mail,
+  PenLine, Clock, Camera
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
@@ -98,6 +99,11 @@ export default function Unterlagen() {
   const [generatingLink, setGeneratingLink] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
 
+  // Feature toggles for the link
+  const [includeSignature, setIncludeSignature] = useState(true);
+  const [includeTimestamp, setIncludeTimestamp] = useState(true);
+  const [includeScan, setIncludeScan] = useState(true);
+
   const toggleCheck = (key: string) =>
     setCheckedItems((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -113,11 +119,19 @@ export default function Unterlagen() {
     try {
       const { data, error } = await supabase
         .from("unterlagen_anfragen")
-        .insert({ kunde_name: kundeName || "Kunde", checkliste: selected })
+        .insert({
+          kunde_name: kundeName || "Kunde",
+          checkliste: selected,
+        })
         .select()
         .single();
       if (error) throw error;
-      const link = `${window.location.origin}/upload?token=${data.token}`;
+      // Build link with feature flags
+      const params = new URLSearchParams({ token: data.token });
+      if (includeSignature) params.set("sig", "1");
+      if (includeTimestamp) params.set("ts", "1");
+      if (includeScan) params.set("scan", "1");
+      const link = `${window.location.origin}/upload?${params.toString()}`;
       setGeneratedLink(link);
       toast({ title: "✓ Link erstellt", description: "Der Anforderungs-Link wurde generiert." });
     } catch (err: any) {
@@ -224,6 +238,14 @@ export default function Unterlagen() {
           ))}
         </Tabs>
 
+        {/* Feature Toggles */}
+        <div className="bg-accent rounded-xl p-4 border border-border space-y-2.5">
+          <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">Kunden-Upload Features</p>
+          <FeatureToggle icon={<PenLine size={14} className="text-primary" />} label="Digitale Unterschrift" checked={includeSignature} onChange={setIncludeSignature} />
+          <FeatureToggle icon={<Clock size={14} className="text-primary" />} label="Zeitstempel-Erfassung" checked={includeTimestamp} onChange={setIncludeTimestamp} />
+          <FeatureToggle icon={<Camera size={14} className="text-primary" />} label="Foto-zu-PDF Scan" checked={includeScan} onChange={setIncludeScan} />
+        </div>
+
         {/* Create Link */}
         <button
           onClick={handleCreateLink}
@@ -267,5 +289,21 @@ export default function Unterlagen() {
         )}
       </div>
     </div>
+  );
+}
+
+function FeatureToggle({ icon, label, checked, onChange }: { icon: React.ReactNode; label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-3 cursor-pointer group">
+      <div
+        onClick={() => onChange(!checked)}
+        className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${checked ? "bg-primary" : "bg-muted-foreground/30"}`}
+      >
+        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
+      </div>
+      <span className="flex items-center gap-1.5 text-sm text-foreground">
+        {icon} {label}
+      </span>
+    </label>
   );
 }

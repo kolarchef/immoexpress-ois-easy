@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Upload, Camera, CheckCircle, FileText, Loader2, PenLine, Train } from "lucide-react";
+import { Upload, Camera, CheckCircle, FileText, Loader2, PenLine, Train, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import logoImg from "@/assets/logo_immoexpress.png";
@@ -16,11 +16,16 @@ const DOKUMENT_TYPEN = [
 export default function KundenUpload() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
+  const showSignature = searchParams.get("sig") === "1";
+  const showTimestamp = searchParams.get("ts") === "1";
+  const showScan = searchParams.get("scan") === "1";
+
   const [anfrage, setAnfrage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploads, setUploads] = useState<Record<string, boolean>>({});
   const [uploading, setUploading] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [uploadTimestamps, setUploadTimestamps] = useState<Record<string, string>>({});
 
   // Signature canvas
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -99,6 +104,7 @@ export default function KundenUpload() {
         .upload(path, file);
       if (uploadErr) throw uploadErr;
 
+      const now = new Date().toISOString();
       await supabase.from("unterlagen_uploads").insert({
         anfrage_id: anfrage.id,
         dokument_typ: typ,
@@ -107,6 +113,9 @@ export default function KundenUpload() {
       });
 
       setUploads((prev) => ({ ...prev, [typ]: true }));
+      if (showTimestamp) {
+        setUploadTimestamps((prev) => ({ ...prev, [typ]: now }));
+      }
       toast({ title: "✓ Hochgeladen", description: `${typ} wurde erfolgreich übermittelt.` });
     } catch (err: any) {
       toast({ title: "Fehler", description: err.message, variant: "destructive" });
@@ -116,15 +125,14 @@ export default function KundenUpload() {
   };
 
   const handleSubmitAll = async () => {
-    if (!hasSigned) {
+    if (showSignature && !hasSigned) {
       toast({ title: "Bitte unterschreiben", description: "Eine Unterschrift ist erforderlich.", variant: "destructive" });
       return;
     }
     // Upload signature as image
-    const canvas = canvasRef.current;
-    if (canvas && anfrage) {
+    if (showSignature && canvasRef.current && anfrage) {
       try {
-        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
+        const blob = await new Promise<Blob | null>(resolve => canvasRef.current!.toBlob(resolve, "image/png"));
         if (blob) {
           const path = `${anfrage.id}/signatur_${Date.now()}.png`;
           await supabase.storage.from("kundenunterlagen").upload(path, blob);
@@ -137,12 +145,34 @@ export default function KundenUpload() {
         }
       } catch {}
     }
+
+    // Send notification to makler/trainee
+    try {
+      if (anfrage.kunde_id) {
+        // Find the makler who owns this customer
+        const { data: kunde } = await supabase
+          .from("crm_kunden")
+          .select("user_id, name")
+          .eq("id", anfrage.kunde_id)
+          .single();
+        if (kunde?.user_id) {
+          await supabase.from("nachrichten").insert({
+            user_id: kunde.user_id,
+            empfaenger_id: kunde.user_id,
+            titel: `📄 Unterlagen eingegangen: ${anfrage.kunde_name}`,
+            inhalt: `Der Kunde ${anfrage.kunde_name} hat alle angeforderten Unterlagen hochgeladen. Bitte prüfen Sie die Dokumente.`,
+            typ: "system",
+          });
+        }
+      }
+    } catch {}
+
     setSubmitted(true);
   };
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6">
+      <div className="min-h-screen bg-[hsl(0,0%,4%)] flex items-center justify-center p-6">
         <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 text-center max-w-sm">
           <FileText size={40} className="text-[hsl(43,90%,55%)] mx-auto mb-4" />
           <h1 className="text-lg font-bold text-white">Ungültiger Link</h1>
@@ -154,16 +184,15 @@ export default function KundenUpload() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <div className="min-h-screen bg-[hsl(0,0%,4%)] flex items-center justify-center">
         <Loader2 size={32} className="animate-spin text-[hsl(43,90%,55%)]" />
       </div>
     );
   }
 
-  // Success screen
   if (submitted) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6">
+      <div className="min-h-screen bg-[hsl(0,0%,4%)] flex items-center justify-center p-6">
         <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-[hsl(43,90%,55%)]/20 text-center max-w-sm animate-fade-in space-y-4">
           <div className="w-16 h-16 bg-[hsl(43,90%,55%)]/20 rounded-2xl flex items-center justify-center mx-auto">
             <CheckCircle size={32} className="text-[hsl(43,90%,55%)]" />
@@ -184,7 +213,7 @@ export default function KundenUpload() {
   const checkliste: string[] = anfrage?.checkliste || DOKUMENT_TYPEN.map((d) => d.key);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] p-4 max-w-lg mx-auto">
+    <div className="min-h-screen bg-[hsl(0,0%,4%)] p-4 max-w-lg mx-auto">
       {/* Header */}
       <div className="text-center mb-6 pt-6 space-y-3">
         <img
@@ -216,18 +245,37 @@ export default function KundenUpload() {
                 )}
                 <div>
                   <p className="text-sm font-semibold text-white">{dok.label}</p>
-                  <p className="text-xs text-white/40">{uploads[dok.key] ? "Hochgeladen ✓" : "Noch ausstehend"}</p>
+                  <p className="text-xs text-white/40">
+                    {uploads[dok.key] ? "Hochgeladen ✓" : "Noch ausstehend"}
+                  </p>
+                  {/* Timestamp display */}
+                  {showTimestamp && uploadTimestamps[dok.key] && (
+                    <p className="text-[10px] text-[hsl(43,90%,55%)]/70 flex items-center gap-1 mt-0.5">
+                      <Clock size={10} />
+                      {new Date(uploadTimestamps[dok.key]).toLocaleString("de-AT")}
+                    </p>
+                  )}
                 </div>
               </div>
 
               {!uploads[dok.key] && (
                 <div className="flex gap-2">
-                  <label className="cursor-pointer bg-[hsl(43,90%,55%)] text-black rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all">
-                    {uploading === dok.key ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-                    Foto
-                    <input type="file" accept="image/*" capture="environment" className="hidden"
-                      onChange={(e) => e.target.files?.[0] && handleUpload(dok.key, e.target.files[0])} />
-                  </label>
+                  {/* Scan / Camera button */}
+                  {showScan ? (
+                    <label className="cursor-pointer bg-[hsl(43,90%,55%)] text-black rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all">
+                      {uploading === dok.key ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                      Scan
+                      <input type="file" accept="image/*" capture="environment" className="hidden"
+                        onChange={(e) => e.target.files?.[0] && handleUpload(dok.key, e.target.files[0])} />
+                    </label>
+                  ) : (
+                    <label className="cursor-pointer bg-[hsl(43,90%,55%)] text-black rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 hover:opacity-90 transition-all">
+                      {uploading === dok.key ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                      Foto
+                      <input type="file" accept="image/*" capture="environment" className="hidden"
+                        onChange={(e) => e.target.files?.[0] && handleUpload(dok.key, e.target.files[0])} />
+                    </label>
+                  )}
                   <label className="cursor-pointer bg-white/10 text-white border border-white/20 rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 hover:bg-white/15 transition-all">
                     <Upload size={14} />
                     Datei
@@ -241,33 +289,35 @@ export default function KundenUpload() {
         ))}
       </div>
 
-      {/* Signature Field */}
-      <div className="mt-6 bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-[hsl(43,90%,55%)] flex items-center gap-2">
-            <PenLine size={16} /> Unterschrift
-          </h3>
-          {hasSigned && (
-            <button onClick={clearSignature} className="text-xs text-white/40 hover:text-white/60 transition-colors">
-              Löschen
-            </button>
-          )}
+      {/* Signature Field - only if enabled */}
+      {showSignature && (
+        <div className="mt-6 bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-[hsl(43,90%,55%)] flex items-center gap-2">
+              <PenLine size={16} /> Unterschrift
+            </h3>
+            {hasSigned && (
+              <button onClick={clearSignature} className="text-xs text-white/40 hover:text-white/60 transition-colors">
+                Löschen
+              </button>
+            )}
+          </div>
+          <canvas
+            ref={canvasRef}
+            width={380}
+            height={120}
+            className="w-full rounded-xl bg-white/5 border border-white/10 touch-none cursor-crosshair"
+            onMouseDown={startDraw}
+            onMouseMove={draw}
+            onMouseUp={stopDraw}
+            onMouseLeave={stopDraw}
+            onTouchStart={startDraw}
+            onTouchMove={draw}
+            onTouchEnd={stopDraw}
+          />
+          <p className="text-[10px] text-white/30 text-center">Bitte unterschreiben Sie hier mit dem Finger oder der Maus</p>
         </div>
-        <canvas
-          ref={canvasRef}
-          width={380}
-          height={120}
-          className="w-full rounded-xl bg-white/5 border border-white/10 touch-none cursor-crosshair"
-          onMouseDown={startDraw}
-          onMouseMove={draw}
-          onMouseUp={stopDraw}
-          onMouseLeave={stopDraw}
-          onTouchStart={startDraw}
-          onTouchMove={draw}
-          onTouchEnd={stopDraw}
-        />
-        <p className="text-[10px] text-white/30 text-center">Bitte unterschreiben Sie hier mit dem Finger oder der Maus</p>
-      </div>
+      )}
 
       {/* Submit Button */}
       <button
