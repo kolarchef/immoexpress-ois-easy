@@ -158,11 +158,11 @@ export default function AdminCenter() {
   ];
 
   const getRoleBadge = (userId: string, gp?: GpRow) => {
-    if (gp?.gesperrt) return { label: "Gesperrt", variant: "destructive" as const };
+    if (gp?.gesperrt) return { label: "Gesperrt", variant: "destructive" as const, dotColor: "bg-red-500" };
     const role = roles[userId];
-    if (role === "admin") return { label: "Admin", variant: "destructive" as const };
-    if (gp?.status === "trainee") return { label: "Trainee", variant: "secondary" as const };
-    return { label: "Makler", variant: "secondary" as const };
+    if (role === "admin") return { label: "Admin", variant: "default" as const, dotColor: "bg-primary" };
+    if (gp?.status === "trainee") return { label: "Trainee", variant: "secondary" as const, dotColor: "bg-yellow-500" };
+    return { label: "Makler", variant: "secondary" as const, dotColor: "bg-green-500" };
   };
 
   if (loading) {
@@ -305,11 +305,14 @@ export default function AdminCenter() {
                   </div>
                   <Badge
                     variant={badge.variant}
-                    className={`text-[10px] shrink-0 ${
-                      badge.label === "Gesperrt" ? "" :
-                      badge.label === "Admin" ? "bg-primary/20 text-primary border-primary/30" : ""
+                    className={`text-[10px] shrink-0 gap-1.5 ${
+                      badge.label === "Gesperrt" ? "bg-red-50 text-red-700 border-red-200" :
+                      badge.label === "Admin" ? "bg-primary/20 text-primary border-primary/30" :
+                      badge.label === "Makler" ? "bg-green-50 text-green-700 border-green-200" :
+                      "bg-yellow-50 text-yellow-700 border-yellow-200"
                     }`}
                   >
+                    <span className={`w-2 h-2 rounded-full ${badge.dotColor}`} />
                     {badge.label}
                   </Badge>
                 </div>

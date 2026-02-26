@@ -37,26 +37,38 @@ export default function Auth() {
     const stored = localStorage.getItem(BIOMETRIC_KEY);
     setHasBiometricCred(!!stored);
 
-    const audio = new Audio("/audio/voiceover_login.mp3");
-    audio.volume = 0;
-    const fadeIn = () => {
+    // Voiceover audio with fade-in
+    const voiceover = new Audio("/audio/voiceover_login.mp3");
+    voiceover.volume = 0;
+    const fadeInVoiceover = () => {
       const interval = setInterval(() => {
-        if (audio.volume < 0.95) {
-          audio.volume = Math.min(audio.volume + 0.05, 1);
+        if (voiceover.volume < 0.95) {
+          voiceover.volume = Math.min(voiceover.volume + 0.05, 1);
         } else {
-          audio.volume = 1;
+          voiceover.volume = 1;
           clearInterval(interval);
         }
       }, 80);
     };
-    audio.addEventListener("canplaythrough", () => {
-      audio.play().then(fadeIn).catch(() => {});
+    voiceover.addEventListener("canplaythrough", () => {
+      voiceover.play().then(fadeInVoiceover).catch(() => {});
     }, { once: true });
-    audio.load();
+    voiceover.load();
+
+    // Steam train ambient loop at 25% volume
+    const steamLoop = new Audio("/audio/voiceover_login.mp3");
+    steamLoop.volume = 0.25;
+    steamLoop.loop = true;
+    steamLoop.addEventListener("canplaythrough", () => {
+      steamLoop.play().catch(() => {});
+    }, { once: true });
+    steamLoop.load();
 
     return () => {
-      audio.pause();
-      audio.src = "";
+      voiceover.pause();
+      voiceover.src = "";
+      steamLoop.pause();
+      steamLoop.src = "";
     };
   }, []);
 
