@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   ShieldCheck, Users, BarChart3, Settings, TrendingUp,
   Building2, FileText, Clock, ChevronRight, UserCog,
-  Plus, Search, GraduationCap
+  Plus, Search, GraduationCap, Plug, CheckCircle2, XCircle
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -49,6 +49,36 @@ export default function AdminCenter() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("alle");
   const [search, setSearch] = useState("");
+  const [webhookStatus, setWebhookStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [webhookMsg, setWebhookMsg] = useState("");
+
+  const testWebhook = async () => {
+    setWebhookStatus("loading");
+    setWebhookMsg("");
+    const now = new Date();
+    const payload = {
+      test_uhrzeit: now.toLocaleTimeString("de-AT"),
+      test_status: "manuelle Prüfung",
+      audit_log_id: "test-123",
+    };
+    try {
+      const res = await fetch("https://hook.eu1.make.com/h9en89uu0xj9nkl7ez8hqd1cxw52r1v5", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        setWebhookStatus("success");
+        setWebhookMsg(`Verbindung steht! Make.com hat geantwortet. (HTTP ${res.status})`);
+      } else {
+        setWebhookStatus("error");
+        setWebhookMsg(`Fehler: HTTP ${res.status} – ${res.statusText}`);
+      }
+    } catch (err: any) {
+      setWebhookStatus("error");
+      setWebhookMsg(`Netzwerkfehler: ${err.message || "Timeout oder keine Verbindung"}`);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -354,6 +384,42 @@ export default function AdminCenter() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* Webhook-Diagnose */}
+      <section>
+        <h2 className="text-lg font-bold text-foreground mb-3 flex items-center gap-2">
+          <Plug size={18} className="text-primary" /> Schnittstellen-Diagnose
+        </h2>
+        <div className="bg-card rounded-2xl p-4 shadow-card border border-border space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Teste die Verbindung zu Make.com, um sicherzustellen, dass Webhooks korrekt ausgelöst werden.
+          </p>
+          <Button
+            onClick={testWebhook}
+            disabled={webhookStatus === "loading"}
+            className="w-full gap-2"
+          >
+            {webhookStatus === "loading" ? (
+              <span className="animate-spin w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full" />
+            ) : (
+              <Plug size={16} />
+            )}
+            Schnittstelle zu Make.com testen
+          </Button>
+          {webhookStatus === "success" && (
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-green-50 border border-green-200">
+              <CheckCircle2 size={18} className="text-green-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-green-700 font-medium">{webhookMsg}</p>
+            </div>
+          )}
+          {webhookStatus === "error" && (
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200">
+              <XCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700 font-medium">{webhookMsg}</p>
+            </div>
+          )}
         </div>
       </section>
     </div>
