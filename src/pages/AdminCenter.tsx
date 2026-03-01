@@ -49,12 +49,14 @@ export default function AdminCenter() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("alle");
   const [search, setSearch] = useState("");
-  const [webhookStatus, setWebhookStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [webhookStatus, setWebhookStatus] = useState<"idle" | "loading" | "success" | "error" | "warning">("idle");
   const [webhookMsg, setWebhookMsg] = useState("");
+  const [webhookDetails, setWebhookDetails] = useState("");
 
   const testWebhook = async () => {
     setWebhookStatus("loading");
     setWebhookMsg("");
+    setWebhookDetails("");
     const now = new Date();
     const payload = {
       test_uhrzeit: now.toLocaleTimeString("de-AT"),
@@ -67,16 +69,26 @@ export default function AdminCenter() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const bodyText = await res.text();
       if (res.ok) {
-        setWebhookStatus("success");
-        setWebhookMsg(`Verbindung steht! Make.com hat geantwortet. (HTTP ${res.status})`);
+        const isAcceptedOnly = bodyText.trim().toLowerCase() === "accepted";
+        if (isAcceptedOnly) {
+          setWebhookStatus("warning");
+          setWebhookMsg("ACHTUNG: Make empfängt das Paket, kennt aber den Inhalt noch nicht. Bitte in Make 'Determine Data Structure' starten und Test erneut senden!");
+        } else {
+          setWebhookStatus("success");
+          setWebhookMsg(`Verbindung steht! Make.com hat geantwortet. (HTTP ${res.status})`);
+        }
+        setWebhookDetails(`Header gesetzt: JA (Content-Type: application/json)\nHTTP ${res.status}\nAntwort: ${bodyText}`);
       } else {
         setWebhookStatus("error");
         setWebhookMsg(`Fehler: HTTP ${res.status} – ${res.statusText}`);
+        setWebhookDetails(`Header gesetzt: JA (Content-Type: application/json)\nAntwort: ${bodyText}`);
       }
     } catch (err: any) {
       setWebhookStatus("error");
       setWebhookMsg(`Netzwerkfehler: ${err.message || "Timeout oder keine Verbindung"}`);
+      setWebhookDetails("");
     }
   };
 
@@ -411,13 +423,28 @@ export default function AdminCenter() {
           {webhookStatus === "success" && (
             <div className="flex items-start gap-2 p-3 rounded-xl bg-green-50 border border-green-200">
               <CheckCircle2 size={18} className="text-green-600 shrink-0 mt-0.5" />
-              <p className="text-sm text-green-700 font-medium">{webhookMsg}</p>
+              <div>
+                <p className="text-sm text-green-700 font-medium">{webhookMsg}</p>
+                {webhookDetails && <pre className="text-xs text-green-600 mt-1 whitespace-pre-wrap">{webhookDetails}</pre>}
+              </div>
+            </div>
+          )}
+          {webhookStatus === "warning" && (
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-300">
+              <XCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-amber-700 font-bold">{webhookMsg}</p>
+                {webhookDetails && <pre className="text-xs text-amber-600 mt-1 whitespace-pre-wrap">{webhookDetails}</pre>}
+              </div>
             </div>
           )}
           {webhookStatus === "error" && (
             <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200">
               <XCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700 font-medium">{webhookMsg}</p>
+              <div>
+                <p className="text-sm text-red-700 font-medium">{webhookMsg}</p>
+                {webhookDetails && <pre className="text-xs text-red-600 mt-1 whitespace-pre-wrap">{webhookDetails}</pre>}
+              </div>
             </div>
           )}
         </div>
