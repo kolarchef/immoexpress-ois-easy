@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Shield, ChevronDown, Search, Download, Loader2, Lock, Check, ArrowRight, MapPin, Landmark, Mountain, Trees, Building2, Waves, Factory, Grape, Castle } from "lucide-react";
+import { Shield, ChevronDown, Search, Download, Loader2, Lock, Check, ArrowRight, MapPin, Landmark, Mountain, Trees, Building2, Waves, Factory, Grape, Castle, MessageCircle, Mail } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -59,6 +59,7 @@ export default function SOSRecht() {
   const [kiFrage, setKiFrage] = useState("");
   const [kiAntwort, setKiAntwort] = useState("");
   const [kiLoading, setKiLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -98,6 +99,38 @@ export default function SOSRecht() {
       toast({ title: "KI-Fehler", description: e.message || "Unbekannter Fehler", variant: "destructive" });
     } finally {
       setKiLoading(false);
+    }
+  };
+
+  const shareAdvice = async (channel: "whatsapp" | "email") => {
+    if (!kiAntwort || !user || !aktBL) return;
+    setSharing(true);
+    try {
+      const { data, error } = await supabase.from("shared_advice").insert({
+        user_id: user.id,
+        bundesland: aktBL.name,
+        frage: kiFrage,
+        antwort: kiAntwort,
+      } as any).select("id").single();
+      if (error) throw error;
+      const adviceId = (data as any).id;
+      const baseUrl = window.location.origin;
+      const link = `${baseUrl}/view-advice?id=${adviceId}`;
+      const now = new Date();
+      const datum = now.toLocaleDateString("de-AT");
+      const uhrzeit = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+      const text = `Guten Tag! Hier finden Sie Ihre Rechtsinformationen (erstellt am ${datum} um ${uhrzeit}): ${link}. Hinweis: Der Link ist aus Datenschutzgründen 14 Tage gültig.`;
+
+      if (channel === "whatsapp") {
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+      } else {
+        window.open(`mailto:?subject=${encodeURIComponent("Ihre Rechtsinformationen – ImmoExpress brainy")}&body=${encodeURIComponent(text)}`, "_blank");
+      }
+      toast({ title: "Link erstellt", description: "Der Sharing-Link ist 14 Tage gültig." });
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -281,10 +314,18 @@ export default function SOSRecht() {
                 <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{kiAntwort}</p>
                 <div className="flex gap-2 mt-3">
                   <button
-                    onClick={generatePDF}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                    onClick={() => shareAdvice("whatsapp")}
+                    disabled={sharing}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[hsl(142,70%,40%)] text-white text-xs font-semibold hover:bg-[hsl(142,70%,35%)] transition-colors disabled:opacity-50"
                   >
-                    <Download size={14} /> PDF mit Haftungsausschluss
+                    <MessageCircle size={14} /> WhatsApp
+                  </button>
+                  <button
+                    onClick={() => shareAdvice("email")}
+                    disabled={sharing}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    <Mail size={14} /> E-Mail
                   </button>
                 </div>
               </div>
