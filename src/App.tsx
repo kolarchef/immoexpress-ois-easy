@@ -42,6 +42,7 @@ import Rechtsarchiv from "./pages/Rechtsarchiv";
 import AdminCenter from "./pages/AdminCenter";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import ViewAdvice from "./pages/ViewAdvice";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const AppRoutes = () => (
     <Route path="/upload" element={<KundenUpload />} />
     <Route path="/finanz-upload" element={<FinanzUpload />} />
     <Route path="/recht-disclaimer" element={<RechtDisclaimer />} />
+    <Route path="/view-advice" element={<ViewAdvice />} />
     <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
       <Route path="/" element={<Index />} />
       <Route path="/launchpad" element={<Launchpad />} />

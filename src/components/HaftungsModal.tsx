@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Shield, X, Mail, FileText } from "lucide-react";
+import { Shield } from "lucide-react";
 
 interface Props {
   modul: string;
@@ -57,22 +57,17 @@ export default function HaftungsModal({ modul, onAccept }: Props) {
         </label>
 
         {/* Aktionen */}
-        <div className="flex gap-3">
-          <button
-            disabled={!bestaetigt}
-            onClick={onAccept}
-            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 ${
-              bestaetigt
-                ? "bg-primary text-primary-foreground shadow-orange hover:bg-primary-dark"
-                : "bg-muted text-muted-foreground cursor-not-allowed"
-            }`}
-          >
-            Bestätigen &amp; Fortfahren
-          </button>
-          <button className="flex items-center gap-2 px-4 py-3 rounded-xl border border-border bg-accent text-accent-foreground text-sm font-semibold hover:bg-secondary transition-colors">
-            <Mail size={15} /> Per E-Mail senden
-          </button>
-        </div>
+        <button
+          disabled={!bestaetigt}
+          onClick={onAccept}
+          className={`w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-95 ${
+            bestaetigt
+              ? "bg-primary text-primary-foreground shadow-orange hover:bg-primary-dark"
+              : "bg-muted text-muted-foreground cursor-not-allowed"
+          }`}
+        >
+          Bestätigen &amp; Fortfahren
+        </button>
       </div>
     </div>
   );

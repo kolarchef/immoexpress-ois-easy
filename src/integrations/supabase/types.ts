@@ -946,6 +946,36 @@ export type Database = {
         }
         Relationships: []
       }
+      shared_advice: {
+        Row: {
+          antwort: string
+          bundesland: string
+          created_at: string
+          expires_at: string
+          frage: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          antwort: string
+          bundesland: string
+          created_at?: string
+          expires_at?: string
+          frage: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          antwort?: string
+          bundesland?: string
+          created_at?: string
+          expires_at?: string
+          frage?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       termine: {
         Row: {
           created_at: string
