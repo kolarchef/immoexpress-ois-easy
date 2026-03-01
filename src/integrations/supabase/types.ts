@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           confirmation_status: string
           created_at: string
+          gesehen_von: string[] | null
           gp_id: string | null
           gp_nummer: string | null
           id: string
@@ -28,6 +29,7 @@ export type Database = {
         Insert: {
           confirmation_status?: string
           created_at?: string
+          gesehen_von?: string[] | null
           gp_id?: string | null
           gp_nummer?: string | null
           id?: string
@@ -38,6 +40,7 @@ export type Database = {
         Update: {
           confirmation_status?: string
           created_at?: string
+          gesehen_von?: string[] | null
           gp_id?: string | null
           gp_nummer?: string | null
           id?: string

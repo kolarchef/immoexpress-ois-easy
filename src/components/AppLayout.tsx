@@ -1,8 +1,7 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LayoutDashboard, Search, Camera, User, Bell, MessageCircle, Mic, X, Send, Loader2, BarChart3, ShieldCheck, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect, useState as useStateHook } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import MessengerDrawer from "@/components/MessengerDrawer";
 import AudioRecorder from "@/components/AudioRecorder";
@@ -23,13 +22,27 @@ export default function AppLayout() {
   const [showMicPanel, setShowMicPanel] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [sendingNote, setSendingNote] = useState(false);
-  const [isAdmin, setIsAdmin] = useStateHook(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [archivUnseenCount, setArchivUnseenCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
     supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").then(({ data }) => {
       setIsAdmin(!!data?.length);
     });
+    // Fetch unseen count for archiv badge
+    supabase
+      .from("audit_legal_consent")
+      .select("id, gesehen_von")
+      .then(({ data }) => {
+        if (data) {
+          const unseen = data.filter((row: any) => {
+            const seen: string[] = (row as any).gesehen_von || [];
+            return !seen.includes(user.id);
+          }).length;
+          setArchivUnseenCount(unseen);
+        }
+      });
   }, [user]);
 
   const handleTranscript = (text: string) => {
@@ -159,8 +172,13 @@ export default function AppLayout() {
               {({ isActive }) => (
                 <>
                   {special ? (
-                    <div className="w-8 h-8 rounded-lg bg-destructive flex items-center justify-center shadow-sm">
+                    <div className="relative w-8 h-8 rounded-lg bg-destructive flex items-center justify-center shadow-sm">
                       <Icon size={18} className="text-white" />
+                      {archivUnseenCount > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                          {archivUnseenCount > 99 ? "99+" : archivUnseenCount}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <div className={`p-1.5 rounded-xl transition-all ${isActive ? "bg-primary-light" : ""}`}>
