@@ -64,7 +64,7 @@ export default function AdminCenter() {
       audit_log_id: "test-123",
     };
     try {
-      const res = await fetch("https://hook.eu1.make.com/h9en89uu0xj9nkl7ez8hqd1cxw52r1v5", {
+      const res = await fetch("https://hook.eu1.make.com/bj8cwjpk7enhlirypnj3es0wfa3upl2c", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
