@@ -119,12 +119,13 @@ export default function SOSRecht() {
       const now = new Date();
       const datum = now.toLocaleDateString("de-AT");
       const uhrzeit = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
-      const text = `Guten Tag! Hier finden Sie Ihre Rechtsinformationen (erstellt am ${datum} um ${uhrzeit}): ${link}. Hinweis: Der Link ist aus Datenschutzgründen 14 Tage gültig.`;
+      const whatsappText = `Guten Tag! Hier finden Sie Ihre Rechtsinformationen (erstellt am ${datum} um ${uhrzeit}): ${link}\n\nHinweis: Der Link ist aus Datenschutzgründen 14 Tage gültig.`;
+      const emailBody = `Guten Tag,\n\nhier finden Sie Ihre Rechtsinformationen (erstellt am ${datum} um ${uhrzeit}):\n\n${link}\n\nHinweis: Der Link ist aus Datenschutzgründen 14 Tage gültig.\n\nMit freundlichen Grüßen\nImmoExpress brainy`;
 
       if (channel === "whatsapp") {
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+        window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, "_blank");
       } else {
-        window.open(`mailto:?subject=${encodeURIComponent("Ihre Rechtsinformationen – ImmoExpress brainy")}&body=${encodeURIComponent(text)}`, "_blank");
+        window.open(`mailto:?subject=${encodeURIComponent("Ihre Rechtsinformationen – ImmoExpress brainy")}&body=${encodeURIComponent(emailBody)}`, "_blank");
       }
       toast({ title: "Link erstellt", description: "Der Sharing-Link ist 14 Tage gültig." });
     } catch (e: any) {
