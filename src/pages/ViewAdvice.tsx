@@ -112,21 +112,38 @@ export default function ViewAdvice() {
 
   return (
     <div className="min-h-screen bg-background p-4 lg:p-8 relative overflow-hidden">
-      {/* Diagonal Watermark */}
+      {/* Diagonal Watermark – repeated across entire background */}
       <div
-        className="pointer-events-none fixed inset-0 flex items-center justify-center z-0"
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
         aria-hidden="true"
       >
-        <p
-          className="text-[3.5rem] lg:text-[5rem] font-bold whitespace-nowrap select-none"
+        <div
+          className="absolute select-none"
           style={{
-            transform: "rotate(-35deg)",
-            color: "hsl(var(--muted-foreground) / 0.07)",
-            letterSpacing: "0.05em",
+            top: "50%",
+            left: "50%",
+            width: "200vmax",
+            transform: "translate(-50%, -50%) rotate(-35deg)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "5rem",
+            alignItems: "center",
           }}
         >
-          Rechtsinformation gem. § 2 RAO
-        </p>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <p
+              key={i}
+              className="whitespace-nowrap font-bold tracking-widest"
+              style={{
+                fontSize: "clamp(2rem, 4vw, 3.5rem)",
+                color: "hsl(var(--muted-foreground) / 0.06)",
+                letterSpacing: "0.15em",
+              }}
+            >
+              RECHTSINFORMATION GEM. § 2 RAO &nbsp;&nbsp;&nbsp; RECHTSINFORMATION GEM. § 2 RAO &nbsp;&nbsp;&nbsp; RECHTSINFORMATION GEM. § 2 RAO
+            </p>
+          ))}
+        </div>
       </div>
 
       <div className="max-w-xl mx-auto relative z-10">
