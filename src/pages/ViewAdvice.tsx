@@ -163,7 +163,7 @@ export default function ViewAdvice() {
           <img src={logoImg} alt="ImmoExpress" className="h-12 w-auto flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-foreground">
-              LG {maklerName || "Ihr Makler"}
+              LG {maklerName || "Dominik Kebhart"}
             </p>
             <p className="text-xs text-muted-foreground leading-relaxed mt-1">
               ImmoExpress Immobilientreuhand GmbH<br />

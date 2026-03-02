@@ -123,7 +123,9 @@ export default function SOSRecht() {
       const emailBody = `Guten Tag,\n\nhier finden Sie Ihre Rechtsinformationen (erstellt am ${datum} um ${uhrzeit}):\n\n${link}\n\nHinweis: Der Link ist aus Datenschutzgründen 14 Tage gültig.\n\nMit freundlichen Grüßen\nImmoExpress brainy`;
 
       if (channel === "whatsapp") {
-        window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, "_blank");
+        const waLink = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
+        // Fallback: try direct wa.me link (works on mobile without API)
+        window.location.href = waLink;
       } else {
         window.open(`mailto:?subject=${encodeURIComponent("Ihre Rechtsinformationen – ImmoExpress brainy")}&body=${encodeURIComponent(emailBody)}`, "_blank");
       }
