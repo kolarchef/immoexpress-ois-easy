@@ -57,11 +57,13 @@ export default function AdminCenter() {
     setWebhookStatus("loading");
     setWebhookMsg("");
     setWebhookDetails("");
-    const now = new Date();
     const payload = {
-      test_uhrzeit: now.toLocaleTimeString("de-AT"),
-      test_status: "manuelle Prüfung",
-      audit_log_id: "test-123",
+      actionId: "rechtsberatung",
+      data: {
+        question: "Verbindungstest",
+        user_name: "System-Test",
+        userIp: "0.0.0.0",
+      },
     };
     try {
       const res = await fetch("https://hook.eu1.make.com/bj8cwjpk7enhlirypnj3es0wfa3upl2c", {
