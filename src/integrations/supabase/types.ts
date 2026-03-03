@@ -50,6 +50,39 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_log: {
+        Row: {
+          ai_response: string | null
+          bundesland: string | null
+          created_at: string
+          id: string
+          question: string
+          user_id: string
+          user_ip: string | null
+          user_name: string | null
+        }
+        Insert: {
+          ai_response?: string | null
+          bundesland?: string | null
+          created_at?: string
+          id?: string
+          question: string
+          user_id: string
+          user_ip?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          ai_response?: string | null
+          bundesland?: string | null
+          created_at?: string
+          id?: string
+          question?: string
+          user_id?: string
+          user_ip?: string | null
+          user_name?: string | null
+        }
+        Relationships: []
+      }
       aufgaben: {
         Row: {
           beschreibung: string | null

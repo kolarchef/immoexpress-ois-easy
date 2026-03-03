@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Shield, ChevronDown, Search, Download, Loader2, Lock, Check, ArrowRight, MapPin, Landmark, Mountain, Trees, Building2, Waves, Factory, Grape, Castle, MessageCircle, Mail } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import HaftungsModal from "@/components/HaftungsModal";
-import { sendRechtsberatung } from "@/lib/webhookService";
+import { sendAction, } from "@/lib/sendAction";
+import { ACTION_IDS } from "@/lib/webhookService";
 import jsPDF from "jspdf";
 
 const HAFTUNGSTEXT = `HAFTUNGSAUSSCHLUSS – ImmoExpress brainy: Diese Anwendung stellt ausschließlich allgemeine Informationen bereit und ersetzt keine individuelle Rechtsberatung. Die bereitgestellten Inhalte wurden mithilfe von Künstlicher Intelligenz generiert und basieren auf öffentlich zugänglichen Quellen des Rechtsinformationssystems des Bundes (RIS – ris.bka.gv.at). Es wird keine Haftung für die Richtigkeit, Vollständigkeit oder Aktualität der Informationen übernommen. Für verbindliche Rechtsauskünfte wenden Sie sich bitte an einen Rechtsanwalt oder Notar. Keine Rechtsberatung gemäß § 2 RAO. Erstellt durch KI-Assistenz System ImmoExpress brainy.`;
@@ -85,13 +86,32 @@ export default function SOSRecht() {
     setHaftungOk(true);
   };
 
+  // Ref to hold the realtime channel so we can unsubscribe
+  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Cleanup realtime on unmount
+  useEffect(() => {
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+      }
+    };
+  }, []);
+
   const askKI = async () => {
-    if (!kiFrage.trim() || !haftungOk || !aktBL) return;
+    if (!kiFrage.trim() || !haftungOk || !aktBL || !user) return;
     setKiLoading(true);
     setKiAntwort("");
+
+    // Cleanup previous channel
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
+
     try {
-      // 1. Webhook an Make.com senden
-      const userName = user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Unbekannt";
+      // 1. Get user info
+      const userName = user.user_metadata?.display_name || user.email?.split("@")[0] || "Unbekannt";
       let userIp = "0.0.0.0";
       try {
         const ipRes = await fetch("https://api.ipify.org?format=json");
@@ -99,20 +119,71 @@ export default function SOSRecht() {
         userIp = ipData.ip || "0.0.0.0";
       } catch { /* fallback IP */ }
 
-      sendRechtsberatung(kiFrage, userName, userIp).catch((err) =>
-        console.warn("Webhook-Fehler (Make.com):", err)
-      );
+      // 2. Insert row into audit_log
+      const { data: auditRow, error: insertError } = await supabase
+        .from("audit_log" as any)
+        .insert({
+          user_id: user.id,
+          question: kiFrage,
+          user_name: userName,
+          user_ip: userIp,
+          bundesland: aktBL.name,
+        } as any)
+        .select("id")
+        .single();
 
-      // 2. KI Edge Function aufrufen
-      const { data, error } = await supabase.functions.invoke("sos-recht-ki", {
-        body: { frage: kiFrage, bundesland: aktBL.name },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setKiAntwort(data.text || "Keine Antwort erhalten.");
+      if (insertError) throw insertError;
+      const auditId = (auditRow as any).id;
+
+      // 3. Subscribe to realtime updates on this specific row
+      const channel = supabase
+        .channel(`audit_log_${auditId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "audit_log",
+            filter: `id=eq.${auditId}`,
+          },
+          (payload: any) => {
+            const aiResponse = payload.new?.ai_response;
+            if (aiResponse) {
+              setKiAntwort(aiResponse);
+              setKiLoading(false);
+              // Cleanup channel after receiving response
+              supabase.removeChannel(channel);
+              realtimeChannelRef.current = null;
+            }
+          }
+        )
+        .subscribe();
+
+      realtimeChannelRef.current = channel;
+
+      // 4. Send webhook to Make.com with the audit_log row ID
+      sendAction(ACTION_IDS.RECHTSBERATUNG, {
+        audit_log_id: auditId,
+        question: kiFrage,
+        user_name: userName,
+        userIp,
+        bundesland: aktBL.name,
+      }).catch((err) => console.warn("Webhook-Fehler (Make.com):", err));
+
+      // 5. Timeout fallback after 60 seconds
+      setTimeout(() => {
+        if (realtimeChannelRef.current === channel) {
+          setKiLoading(false);
+          if (!kiAntwort) {
+            toast({ title: "Timeout", description: "Keine Antwort erhalten. Bitte erneut versuchen.", variant: "destructive" });
+          }
+          supabase.removeChannel(channel);
+          realtimeChannelRef.current = null;
+        }
+      }, 60000);
+
     } catch (e: any) {
-      toast({ title: "KI-Fehler", description: e.message || "Unbekannter Fehler", variant: "destructive" });
-    } finally {
+      toast({ title: "Fehler", description: e.message || "Unbekannter Fehler", variant: "destructive" });
       setKiLoading(false);
     }
   };
