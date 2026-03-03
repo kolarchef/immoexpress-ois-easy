@@ -86,15 +86,13 @@ export default function SOSRecht() {
     setHaftungOk(true);
   };
 
-  // Ref to hold the realtime channel so we can unsubscribe
-  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Polling ref to allow cleanup
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Cleanup realtime on unmount
+  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
-      if (realtimeChannelRef.current) {
-        supabase.removeChannel(realtimeChannelRef.current);
-      }
+      if (pollingRef.current) clearInterval(pollingRef.current);
     };
   }, []);
 
@@ -103,10 +101,10 @@ export default function SOSRecht() {
     setKiLoading(true);
     setKiAntwort("");
 
-    // Cleanup previous channel
-    if (realtimeChannelRef.current) {
-      supabase.removeChannel(realtimeChannelRef.current);
-      realtimeChannelRef.current = null;
+    // Stop any previous polling
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
     }
 
     try {
@@ -135,33 +133,7 @@ export default function SOSRecht() {
       if (insertError) throw insertError;
       const auditId = (auditRow as any).id;
 
-      // 3. Subscribe to realtime updates on this specific row
-      const channel = supabase
-        .channel(`audit_log_${auditId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "audit_log",
-            filter: `id=eq.${auditId}`,
-          },
-          (payload: any) => {
-            const aiResponse = payload.new?.ai_response;
-            if (aiResponse) {
-              setKiAntwort(aiResponse);
-              setKiLoading(false);
-              // Cleanup channel after receiving response
-              supabase.removeChannel(channel);
-              realtimeChannelRef.current = null;
-            }
-          }
-        )
-        .subscribe();
-
-      realtimeChannelRef.current = channel;
-
-      // 4. Send webhook to Make.com with the audit_log row ID
+      // 3. Send webhook to Make.com with the audit_log row ID
       sendAction(ACTION_IDS.RECHTSBERATUNG, {
         audit_log_id: auditId,
         question: kiFrage,
@@ -170,17 +142,35 @@ export default function SOSRecht() {
         bundesland: aktBL.name,
       }).catch((err) => console.warn("Webhook-Fehler (Make.com):", err));
 
-      // 5. Timeout fallback after 60 seconds
-      setTimeout(() => {
-        if (realtimeChannelRef.current === channel) {
+      // 4. Poll audit_log every 3 seconds for ai_response
+      let elapsed = 0;
+      const POLL_INTERVAL = 3000;
+      const TIMEOUT = 90000;
+
+      pollingRef.current = setInterval(async () => {
+        elapsed += POLL_INTERVAL;
+
+        const { data, error } = await supabase
+          .from("audit_log" as any)
+          .select("ai_response")
+          .eq("id", auditId)
+          .single();
+
+        if (!error && data && (data as any).ai_response) {
+          setKiAntwort((data as any).ai_response);
           setKiLoading(false);
-          if (!kiAntwort) {
-            toast({ title: "Timeout", description: "Keine Antwort erhalten. Bitte erneut versuchen.", variant: "destructive" });
-          }
-          supabase.removeChannel(channel);
-          realtimeChannelRef.current = null;
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          return;
         }
-      }, 60000);
+
+        if (elapsed >= TIMEOUT) {
+          setKiLoading(false);
+          toast({ title: "Timeout", description: "Keine Antwort erhalten. Bitte erneut versuchen.", variant: "destructive" });
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+      }, POLL_INTERVAL);
 
     } catch (e: any) {
       toast({ title: "Fehler", description: e.message || "Unbekannter Fehler", variant: "destructive" });
