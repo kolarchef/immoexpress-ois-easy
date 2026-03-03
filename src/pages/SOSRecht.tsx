@@ -388,8 +388,21 @@ export default function SOSRecht() {
               </button>
             </div>
 
+            {/* Loading bubble */}
+            {kiLoading && (
+              <div className="bg-accent rounded-xl p-4 border border-border animate-fade-in">
+                <div className="flex items-center gap-3">
+                  <Loader2 size={20} className="animate-spin text-primary" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Wird analysiert…</p>
+                    <p className="text-xs text-muted-foreground">Die KI prüft Ihre Frage gegen das RIS.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {kiAntwort && (
-              <div className="bg-accent rounded-xl p-4 border border-border">
+              <div className="bg-accent rounded-xl p-4 border border-border animate-fade-in">
                 <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{kiAntwort}</p>
                 <div className="flex gap-2 mt-3">
                   <button
