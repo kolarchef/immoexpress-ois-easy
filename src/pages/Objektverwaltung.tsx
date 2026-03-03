@@ -95,6 +95,7 @@ export default function Objektverwaltung() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [savingEdit, setSavingEdit] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
+  const [videoStyle, setVideoStyle] = useState<"factual" | "dynamic">("factual");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [magicEditOpen, setMagicEditOpen] = useState(false);
   const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);
@@ -915,6 +916,7 @@ export default function Objektverwaltung() {
                           objekt_id: detailObj.id,
                           objekt: { titel: detailObj.kurzinfo || detailObj.objektart, objektnummer: detailObj.objektnummer, ort: detailObj.ort, plz: detailObj.plz },
                           bilder_anzahl: photos.length,
+                          video_style: videoStyle,
                         });
                         if (ok) toast({ title: "✅ Video-Auftrag gesendet" });
                         else throw new Error(`Fehler: ${status}`);
@@ -969,7 +971,9 @@ export default function Objektverwaltung() {
                       if (type === "whatsapp") window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank");
                       else window.open(`mailto:?subject=${encodeURIComponent(detailObj.kurzinfo || "Immobilie")}&body=${encodeURIComponent(shareText)}`);
                       if (user) supabase.from("objekt_statistiken").insert({ objekt_id: detailObj.id, user_id: user.id, typ: "video", kanal: type });
-                    }}
+                     }}
+                     videoStyle={videoStyle}
+                     onStyleChange={setVideoStyle}
                   />
                 )}
               </div>

@@ -45,6 +45,7 @@ export interface PdfWebhookParams {
 export interface VideoWebhookParams extends PdfWebhookParams {
   template: string;
   video_format: "16:9" | "9:16";
+  video_style?: "factual" | "dynamic";
 }
 
 // --- Action IDs (single source of truth) -------------------------------------

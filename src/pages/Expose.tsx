@@ -63,6 +63,7 @@ export default function Expose() {
   const [magicEditOpen, setMagicEditOpen] = useState(false);
   const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);
   const [videoFormat, setVideoFormat] = useState<"16:9" | "9:16">("16:9");
+  const [videoStyle, setVideoStyle] = useState<"factual" | "dynamic">("factual");
   const [form, setForm] = useState({
     titel: "", objektnummer: "", bezirk: "", plz: "", ort: "", strasse: "", hnr: "",
     objektart: "", kaufpreis: "", miete: "",
@@ -209,6 +210,7 @@ export default function Expose() {
       const { ok, status } = await sendVideoKi({
         template: selectedTemplate,
         video_format: videoFormat,
+        video_style: videoStyle,
         objekt: {
           titel: form.titel, objektnummer: form.objektnummer, bezirk: form.bezirk,
           plz: form.plz, ort: form.ort, strasse: form.strasse, hnr: form.hnr,
