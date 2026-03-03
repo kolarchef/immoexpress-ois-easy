@@ -5,6 +5,7 @@ import { toast } from "@/hooks/use-toast";
 import logoImg from "@/assets/logo_immoexpress_zug.jpeg";
 
 export type VideoFormat = "16:9" | "9:16";
+export type VideoStyle = "factual" | "dynamic";
 
 interface VideoSlideshowProps {
   images: string[];
@@ -18,9 +19,11 @@ interface VideoSlideshowProps {
   onShare?: (type: "whatsapp" | "email") => void;
   videoFormat?: VideoFormat;
   onFormatChange?: (format: VideoFormat) => void;
+  videoStyle?: VideoStyle;
+  onStyleChange?: (style: VideoStyle) => void;
 }
 
-export default function VideoSlideshow({ images, titel, preis, flaeche, zimmer, beschreibung, maklerName, maklerEmail, onShare, videoFormat = "16:9", onFormatChange }: VideoSlideshowProps) {
+export default function VideoSlideshow({ images, titel, preis, flaeche, zimmer, beschreibung, maklerName, maklerEmail, onShare, videoFormat = "16:9", onFormatChange, videoStyle = "factual", onStyleChange }: VideoSlideshowProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -331,6 +334,36 @@ export default function VideoSlideshow({ images, titel, preis, flaeche, zimmer, 
           <Switch checked={voiceGender === "male"} onCheckedChange={c => setVoiceGender(c ? "male" : "female")} />
           <span className="text-xs text-muted-foreground">♂️</span>
         </div>
+      </div>
+
+      {/* Video Style Selection */}
+      <div className="bg-card border border-border rounded-xl px-4 py-3 space-y-2">
+        <p className="text-sm font-semibold text-foreground">Video-Stil</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onStyleChange?.("factual")}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all border ${
+              videoStyle === "factual"
+                ? "bg-primary text-primary-foreground border-primary shadow-orange"
+                : "bg-accent text-foreground border-border hover:bg-secondary"
+            }`}
+          >
+            🏢 Professionell
+          </button>
+          <button
+            onClick={() => onStyleChange?.("dynamic")}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all border ${
+              videoStyle === "dynamic"
+                ? "bg-primary text-primary-foreground border-primary shadow-orange"
+                : "bg-accent text-foreground border-border hover:bg-secondary"
+            }`}
+          >
+            🎬 Dynamisch
+          </button>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          {videoStyle === "factual" ? "Sachlich & seriös – ideal für Investoren und Eigentümer" : "Energisch & modern – ideal für Social Media und junge Zielgruppen"}
+        </p>
       </div>
 
       {/* Format Selection (9:16 / 16:9) */}
