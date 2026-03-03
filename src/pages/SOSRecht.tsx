@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import HaftungsModal from "@/components/HaftungsModal";
+import { sendRechtsberatung } from "@/lib/webhookService";
 import jsPDF from "jspdf";
 
 const HAFTUNGSTEXT = `HAFTUNGSAUSSCHLUSS – ImmoExpress brainy: Diese Anwendung stellt ausschließlich allgemeine Informationen bereit und ersetzt keine individuelle Rechtsberatung. Die bereitgestellten Inhalte wurden mithilfe von Künstlicher Intelligenz generiert und basieren auf öffentlich zugänglichen Quellen des Rechtsinformationssystems des Bundes (RIS – ris.bka.gv.at). Es wird keine Haftung für die Richtigkeit, Vollständigkeit oder Aktualität der Informationen übernommen. Für verbindliche Rechtsauskünfte wenden Sie sich bitte an einen Rechtsanwalt oder Notar. Keine Rechtsberatung gemäß § 2 RAO. Erstellt durch KI-Assistenz System ImmoExpress brainy.`;
@@ -89,6 +90,20 @@ export default function SOSRecht() {
     setKiLoading(true);
     setKiAntwort("");
     try {
+      // 1. Webhook an Make.com senden
+      const userName = user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Unbekannt";
+      let userIp = "0.0.0.0";
+      try {
+        const ipRes = await fetch("https://api.ipify.org?format=json");
+        const ipData = await ipRes.json();
+        userIp = ipData.ip || "0.0.0.0";
+      } catch { /* fallback IP */ }
+
+      sendRechtsberatung(kiFrage, userName, userIp).catch((err) =>
+        console.warn("Webhook-Fehler (Make.com):", err)
+      );
+
+      // 2. KI Edge Function aufrufen
       const { data, error } = await supabase.functions.invoke("sos-recht-ki", {
         body: { frage: kiFrage, bundesland: aktBL.name },
       });

@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const FALLBACK_WEBHOOK_URL = "https://hook.eu1.make.com/j5plnvxlv6hvmj1gr93qa5s5nk0hcb1l";
+const FALLBACK_WEBHOOK_URL = "https://hook.eu1.make.com/bj8cwjpk7enhlirypnj3es0wfa3upl2c";
 
 /**
  * Loads the Make.com webhook URL from the user's profile.
