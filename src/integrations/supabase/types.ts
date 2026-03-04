@@ -364,6 +364,87 @@ export type Database = {
         }
         Relationships: []
       }
+      customers: {
+        Row: {
+          ablehnungsgrund_bank: string | null
+          budget: string | null
+          created_at: string
+          dsgvo_einwilligung: boolean | null
+          einzugsdatum: string | null
+          email: string | null
+          finance_shared: boolean
+          finance_status: string | null
+          geburtsdatum: string | null
+          id: string
+          kaufdatum: string | null
+          mobiltelefon: string | null
+          nachname: string
+          newsletter_aktiv: boolean | null
+          notizen: string | null
+          objekt_id: string | null
+          ort: string | null
+          status: string | null
+          sterne: number | null
+          typ: string | null
+          updated_at: string
+          user_id: string
+          vorname: string
+          zustaendigkeit: string | null
+        }
+        Insert: {
+          ablehnungsgrund_bank?: string | null
+          budget?: string | null
+          created_at?: string
+          dsgvo_einwilligung?: boolean | null
+          einzugsdatum?: string | null
+          email?: string | null
+          finance_shared?: boolean
+          finance_status?: string | null
+          geburtsdatum?: string | null
+          id?: string
+          kaufdatum?: string | null
+          mobiltelefon?: string | null
+          nachname?: string
+          newsletter_aktiv?: boolean | null
+          notizen?: string | null
+          objekt_id?: string | null
+          ort?: string | null
+          status?: string | null
+          sterne?: number | null
+          typ?: string | null
+          updated_at?: string
+          user_id: string
+          vorname?: string
+          zustaendigkeit?: string | null
+        }
+        Update: {
+          ablehnungsgrund_bank?: string | null
+          budget?: string | null
+          created_at?: string
+          dsgvo_einwilligung?: boolean | null
+          einzugsdatum?: string | null
+          email?: string | null
+          finance_shared?: boolean
+          finance_status?: string | null
+          geburtsdatum?: string | null
+          id?: string
+          kaufdatum?: string | null
+          mobiltelefon?: string | null
+          nachname?: string
+          newsletter_aktiv?: boolean | null
+          notizen?: string | null
+          objekt_id?: string | null
+          ort?: string | null
+          status?: string | null
+          sterne?: number | null
+          typ?: string | null
+          updated_at?: string
+          user_id?: string
+          vorname?: string
+          zustaendigkeit?: string | null
+        }
+        Relationships: []
+      }
       finanz_tresor_notizen: {
         Row: {
           created_at: string
@@ -535,6 +616,50 @@ export type Database = {
           status?: string | null
         }
         Relationships: []
+      }
+      invoices: {
+        Row: {
+          created_at: string
+          gesamtbetrag: number | null
+          id: string
+          internal_note: string | null
+          kunde_id: string | null
+          payment_method: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gesamtbetrag?: number | null
+          id?: string
+          internal_note?: string | null
+          kunde_id?: string | null
+          payment_method?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gesamtbetrag?: number | null
+          id?: string
+          internal_note?: string | null
+          kunde_id?: string | null
+          payment_method?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_kunde_id_fkey"
+            columns: ["kunde_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meeting_files: {
         Row: {
@@ -717,6 +842,99 @@ export type Database = {
           status?: string | null
           text?: string | null
           typ?: string | null
+        }
+        Relationships: []
+      }
+      objects: {
+        Row: {
+          art: string | null
+          beschreibung: string | null
+          bezirk: string | null
+          created_at: string
+          hnr: string | null
+          id: string
+          immoz_export_datum: string | null
+          immoz_exportiert: boolean | null
+          interne_notizen: string | null
+          kaeufer_provision: number | null
+          kaufpreis: number | null
+          ki_text: string | null
+          kurzinfo: string | null
+          m2: number | null
+          objektnummer: string | null
+          ort: string | null
+          plz: string | null
+          provisionsstellung: string | null
+          status: string | null
+          stock: string | null
+          strasse: string | null
+          titel: string | null
+          top: string | null
+          updated_at: string
+          user_id: string
+          verkaeufer_provision: number | null
+          vermarktung: string | null
+          zimmer: number | null
+        }
+        Insert: {
+          art?: string | null
+          beschreibung?: string | null
+          bezirk?: string | null
+          created_at?: string
+          hnr?: string | null
+          id?: string
+          immoz_export_datum?: string | null
+          immoz_exportiert?: boolean | null
+          interne_notizen?: string | null
+          kaeufer_provision?: number | null
+          kaufpreis?: number | null
+          ki_text?: string | null
+          kurzinfo?: string | null
+          m2?: number | null
+          objektnummer?: string | null
+          ort?: string | null
+          plz?: string | null
+          provisionsstellung?: string | null
+          status?: string | null
+          stock?: string | null
+          strasse?: string | null
+          titel?: string | null
+          top?: string | null
+          updated_at?: string
+          user_id: string
+          verkaeufer_provision?: number | null
+          vermarktung?: string | null
+          zimmer?: number | null
+        }
+        Update: {
+          art?: string | null
+          beschreibung?: string | null
+          bezirk?: string | null
+          created_at?: string
+          hnr?: string | null
+          id?: string
+          immoz_export_datum?: string | null
+          immoz_exportiert?: boolean | null
+          interne_notizen?: string | null
+          kaeufer_provision?: number | null
+          kaufpreis?: number | null
+          ki_text?: string | null
+          kurzinfo?: string | null
+          m2?: number | null
+          objektnummer?: string | null
+          ort?: string | null
+          plz?: string | null
+          provisionsstellung?: string | null
+          status?: string | null
+          stock?: string | null
+          strasse?: string | null
+          titel?: string | null
+          top?: string | null
+          updated_at?: string
+          user_id?: string
+          verkaeufer_provision?: number | null
+          vermarktung?: string | null
+          zimmer?: number | null
         }
         Relationships: []
       }

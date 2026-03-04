@@ -128,14 +128,15 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
   const handleSaveStamm = async () => {
     setSavingStamm(true);
     try {
-      const { error } = await supabase.from("crm_kunden").update({
-        name: stammData.name.trim(),
+      const { error } = await supabase.from("customers" as any).update({
+        vorname: stammData.name.split(" ")[0]?.trim() || "",
+        nachname: stammData.name.split(" ").slice(1).join(" ")?.trim() || "",
         email: stammData.email.trim(),
-        phone: stammData.phone.trim(),
+        mobiltelefon: stammData.phone.trim(),
         typ: stammData.typ,
         ort: stammData.ort.trim(),
         budget: stammData.budget.trim(),
-      }).eq("id", selected.id);
+      } as any).eq("id", selected.id);
       if (error) throw error;
       // Update selected object in parent (reflected on next open)
       Object.assign(selected, stammData);
@@ -159,7 +160,7 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
         phone: selected.phone,
         budget: selected.budget,
       });
-      await supabase.from("crm_kunden").update({ finance_shared: true, finance_status: "uebertragen" }).eq("id", selected.id);
+      await supabase.from("customers" as any).update({ finance_shared: true, finance_status: "uebertragen" } as any).eq("id", selected.id);
       setFinanceShared(true);
       setFinanceStatus("uebertragen");
       toast({ title: "✓ Übertragen", description: `${selected.name} an Finanzierung gesendet.` });
