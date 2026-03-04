@@ -4,9 +4,32 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import CrmDetailModal from "@/components/CrmDetailModal";
-import type { Tables } from "@/integrations/supabase/types";
 
-type Kunde = Tables<"crm_kunden">;
+interface Customer {
+  id: string;
+  vorname: string;
+  nachname: string;
+  email: string | null;
+  mobiltelefon: string | null;
+  typ: string | null;
+  geburtsdatum: string | null;
+  einzugsdatum: string | null;
+  kaufdatum: string | null;
+  notizen: string | null;
+  zustaendigkeit: string | null;
+  status: string | null;
+  budget: string | null;
+  ort: string | null;
+  sterne: number | null;
+  dsgvo_einwilligung: boolean | null;
+  finance_shared: boolean;
+  finance_status: string | null;
+  ablehnungsgrund_bank: string | null;
+  objekt_id: string | null;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
 
 const financeStatusConfig: Record<string, { color: string; label: string; dot: string }> = {
   uebertragen: { color: "bg-blue-100 text-blue-700", label: "Übertragen", dot: "bg-blue-500" },
@@ -37,12 +60,12 @@ function formatDate(dateStr: string | null) {
 export default function CRM() {
   const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
-  const [selected, setSelected] = useState<Kunde | null>(null);
+  const [selected, setSelected] = useState<Customer | null>(null);
   const [editDates, setEditDates] = useState(false);
   const [editedDates, setEditedDates] = useState({ geburtsdatum: "", kaufdatum: "", einzugsdatum: "" });
   const [detailTab, setDetailTab] = useState<"info" | "dokumente">("info");
 
-  const [kunden, setKunden] = useState<Kunde[]>([]);
+  const [kunden, setKunden] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [newForm, setNewForm] = useState({
@@ -52,20 +75,20 @@ export default function CRM() {
     objekt_id: "",
   });
 
-  const [objekte, setObjekte] = useState<{ id: string; objektnummer: string | null; objektart: string | null; ort: string | null }[]>([]);
+  const [objekte, setObjekte] = useState<{ id: string; objektnummer: string | null; art: string | null; ort: string | null }[]>([]);
   const { user } = useAuth();
 
   const loadKunden = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     const { data, error } = await supabase
-      .from("crm_kunden")
+      .from("customers" as any)
       .select("*")
       .order("created_at", { ascending: false });
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      setKunden(data || []);
+      setKunden((data as any[]) || []);
     }
     setLoading(false);
   }, [user]);
@@ -73,47 +96,50 @@ export default function CRM() {
   useEffect(() => {
     if (user) {
       loadKunden();
-      supabase.from("objekte").select("id, objektnummer, objektart, ort").then(({ data }) => {
-        if (data) setObjekte(data);
+      supabase.from("objects" as any).select("id, objektnummer, art, ort").then(({ data }) => {
+        if (data) setObjekte(data as any[]);
       });
     }
   }, [user, loadKunden]);
 
   const handleCreate = async () => {
     if (!user) return;
-    const name = `${newForm.vorname} ${newForm.nachname}`.trim();
-    if (!name) {
+    if (!newForm.vorname && !newForm.nachname) {
       toast({ title: "Name erforderlich", variant: "destructive" });
       return;
     }
-    const { error } = await supabase.from("crm_kunden").insert({
-      name,
-      phone: newForm.phone || null,
+    const { error } = await supabase.from("customers" as any).insert({
+      vorname: newForm.vorname,
+      nachname: newForm.nachname,
+      mobiltelefon: newForm.phone || null,
       email: newForm.email || null,
       typ: newForm.typ,
-      notiz: newForm.notiz || null,
+      notizen: newForm.notiz || null,
+      zustaendigkeit: newForm.zustaendigkeit,
       geburtsdatum: newForm.geburtsdatum || null,
       kaufdatum: newForm.kaufdatum || null,
       einzugsdatum: newForm.einzugsdatum || null,
       dsgvo_einwilligung: newForm.dsgvo,
       objekt_id: newForm.objekt_id || null,
       user_id: user.id,
-    });
+    } as any);
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "✓ Kunde angelegt", description: name });
+      toast({ title: "✓ Kunde angelegt", description: `${newForm.vorname} ${newForm.nachname}` });
       setShowNew(false);
       setNewForm({ vorname: "", nachname: "", phone: "", email: "", typ: "Käufer", notiz: "", zustaendigkeit: "Vertriebsteam Wien", geburtsdatum: "", kaufdatum: "", einzugsdatum: "", dsgvo: false, objekt_id: "" });
       loadKunden();
     }
   };
 
-  const filtered = kunden.filter(k =>
-    (k.name || "").toLowerCase().includes(search.toLowerCase()) ||
-    (k.ort || "").toLowerCase().includes(search.toLowerCase()) ||
-    (k.typ || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = kunden.filter(k => {
+    const fullName = `${k.vorname} ${k.nachname}`.toLowerCase();
+    const s = search.toLowerCase();
+    return fullName.includes(s) ||
+      (k.ort || "").toLowerCase().includes(s) ||
+      (k.typ || "").toLowerCase().includes(s);
+  });
 
   return (
     <div className="p-4 lg:p-8 animate-fade-in max-w-5xl mx-auto">
@@ -165,16 +191,17 @@ export default function CRM() {
       {/* Kunden-Karten */}
       <div className="space-y-3">
         {filtered.map((k) => {
+          const fullName = `${k.vorname} ${k.nachname}`.trim();
           const fStatus = k.finance_status && k.finance_status !== "offen" ? financeStatusConfig[k.finance_status] : null;
           return (
             <div key={k.id} className="bg-card rounded-2xl p-4 shadow-card border border-border hover:shadow-card-hover transition-all duration-200 cursor-pointer" onClick={() => setSelected(k)}>
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 shadow-orange-sm text-primary-foreground font-bold text-lg">
-                  {(k.name || "?").charAt(0)}
+                  {(k.vorname || k.nachname || "?").charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-foreground">{k.name}</h3>
+                    <h3 className="font-bold text-foreground">{fullName || "–"}</h3>
                     {k.typ && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${typColors[k.typ] || "bg-muted text-muted-foreground"}`}>{k.typ}</span>}
                     {k.status && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColors[k.status] || "bg-muted text-muted-foreground"}`}>{k.status}</span>}
                     {fStatus && (
@@ -215,24 +242,24 @@ export default function CRM() {
                       </span>
                     )}
                   </div>
-                  {k.notiz && <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{k.notiz}</p>}
+                  {k.notizen && <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{k.notizen}</p>}
                 </div>
               </div>
 
               {/* Schnellwahl-Buttons */}
               <div className="flex gap-2 mt-3 pt-3 border-t border-border" onClick={e => e.stopPropagation()}>
-                {k.phone && (
+                {k.mobiltelefon && (
                   <a
-                    href={`https://wa.me/${k.phone.replace(/\s+/g, "")}`}
+                    href={`https://wa.me/${k.mobiltelefon.replace(/\s+/g, "")}`}
                     target="_blank" rel="noopener noreferrer"
                     className="flex-1 flex items-center justify-center gap-1.5 bg-green-500 text-white py-2 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors active:scale-95"
                   >
                     <MessageCircle size={14} /> WhatsApp
                   </a>
                 )}
-                {k.phone && (
+                {k.mobiltelefon && (
                   <a
-                    href={`tel:${k.phone}`}
+                    href={`tel:${k.mobiltelefon}`}
                     className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-primary-foreground py-2 rounded-xl text-xs font-semibold shadow-orange-sm hover:bg-primary-dark transition-colors active:scale-95"
                   >
                     <Phone size={14} /> Anrufen
@@ -325,7 +352,7 @@ export default function CRM() {
                 <select value={newForm.objekt_id} onChange={e => setNewForm({...newForm, objekt_id: e.target.value})} className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground">
                   <option value="">Kein Objekt</option>
                   {objekte.map(o => (
-                    <option key={o.id} value={o.id}>{o.objektnummer || "–"} · {o.objektart} · {o.ort || ""}</option>
+                    <option key={o.id} value={o.id}>{o.objektnummer || "–"} · {o.art} · {o.ort || ""}</option>
                   ))}
                 </select>
               </div>

@@ -158,29 +158,32 @@ export default function Expose() {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error("Nicht eingeloggt");
 
-      const objektData = {
+      // objektData is built inline below
+      const objektInsert = {
         user_id: currentUser.id,
         objektnummer: form.objektnummer || `EXP-${Date.now().toString().slice(-6)}`,
         kurzinfo: kurzbeschreibung || form.beschreibung,
-        objektart: form.objektart,
-        flaeche_m2: form.flaeche ? parseFloat(form.flaeche) : null,
+        art: form.objektart,
+        m2: form.flaeche ? parseFloat(form.flaeche) : null,
         kaufpreis: form.verkaufsart === "Kauf" && form.kaufpreis ? parseFloat(form.kaufpreis) : null,
         zimmer: form.zimmer ? parseFloat(form.zimmer) : null,
         plz: form.plz,
         ort: form.ort || form.bezirk,
         strasse: form.strasse,
         hnr: form.hnr,
+        bezirk: form.bezirk,
+        titel: form.titel,
         provisionsstellung: form.provisionsstellung,
         kaeufer_provision: form.kaeufer_provision ? parseFloat(form.kaeufer_provision) : null,
         verkaeufer_provision: form.verkaeufer_provision ? parseFloat(form.verkaeufer_provision) : null,
         beschreibung: aiText || form.beschreibung,
         ki_text: aiText,
-        verkaufsart: form.verkaufsart,
+        vermarktung: form.verkaufsart,
         status: exportToImmoZ ? "aktiv" : "entwurf",
         immoz_exportiert: exportToImmoZ,
         immoz_export_datum: exportToImmoZ ? new Date().toISOString() : null,
       };
-      const { data: obj, error: objErr } = await supabase.from("objekte").insert(objektData).select().single();
+      const { data: obj, error: objErr } = await supabase.from("objects" as any).insert(objektInsert as any).select().single();
       if (objErr) throw objErr;
 
       if (exportToImmoZ) {
