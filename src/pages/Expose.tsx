@@ -183,7 +183,7 @@ export default function Expose() {
         immoz_exportiert: exportToImmoZ,
         immoz_export_datum: exportToImmoZ ? new Date().toISOString() : null,
       };
-      const { data: obj, error: objErr } = await supabase.from("objects" as any).insert(objektInsert as any).select().single();
+      const { data: obj, error: objErr } = await supabase.from("objects" as any).insert(objektInsert as any).select().single() as { data: any; error: any };
       if (objErr) throw objErr;
 
       if (exportToImmoZ) {

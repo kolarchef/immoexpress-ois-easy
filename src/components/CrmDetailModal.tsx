@@ -160,7 +160,7 @@ export default function CrmDetailModal({ selected, editDates, setEditDates, edit
         phone: selected.phone,
         budget: selected.budget,
       });
-      await supabase.from("crm_kunden").update({ finance_shared: true, finance_status: "uebertragen" }).eq("id", selected.id);
+      await supabase.from("customers" as any).update({ finance_shared: true, finance_status: "uebertragen" } as any).eq("id", selected.id);
       setFinanceShared(true);
       setFinanceStatus("uebertragen");
       toast({ title: "✓ Übertragen", description: `${selected.name} an Finanzierung gesendet.` });
