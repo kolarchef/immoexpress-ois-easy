@@ -1,9 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-// Deine manuelle Enterprise-Verbindung
-const SUPABASE_URL = "https://kuqgkivyyauodsgvfyn.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_HlSgtimqc97jN34a3yi1zQ_GhMYmjXk";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
