@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus, Eye, Sparkles, Save, Mic, BookOpen, LayoutTemplate, Send } from "lucide-react";
+import { FileText, Upload, Wand2, X, Image, Download, RefreshCw, CheckCircle, AlertCircle, Copy, ArrowRight, Plus, Eye, Sparkles, Save, Mic, BookOpen, LayoutTemplate, Send, MapPin, BarChart3, Camera } from "lucide-react";
 import MagicToolOverlay from "@/components/MagicToolOverlay";
 import ObjektModal from "@/components/ObjektModal";
 import ExposePreviewModal from "@/components/ExposePreviewModal";
@@ -7,6 +7,7 @@ import AudioRecorder from "@/components/AudioRecorder";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import { sendPdfQuick, sendPdfClassic, sendPdfInvestment, sendVideoKi, sendNotizSpeichern, ACTION_IDS, type PdfWebhookParams } from "@/lib/webhookService";
 
 const bundeslaender = [
@@ -29,10 +30,10 @@ const KURZBESCHREIBUNG_LIMIT = 2000;
 
 export type PdfTemplate = "quick-check" | "expose-style" | "investment";
 
-const pdfTemplates: { id: PdfTemplate; label: string; icon: string; desc: string }[] = [
-  { id: "quick-check", label: "Quick-Check", icon: "⚡", desc: "Kompakt · Infografiken · Harte Fakten" },
-  { id: "expose-style", label: "Exposé-Style", icon: "🏠", desc: "Emotional · Große Bilder · Sprachnotizen" },
-  { id: "investment", label: "Investment-Analyse", icon: "📊", desc: "Seriös · Tabellen · Marktdaten" },
+const pdfTemplates: { id: PdfTemplate; label: string; icon: string; desc: string; actionId: string }[] = [
+  { id: "quick-check", label: "Quick-Check", icon: "⚡", desc: "Kompakt · Infografiken · Harte Fakten", actionId: "expose_pdf_quick" },
+  { id: "expose-style", label: "Klassisch", icon: "🏠", desc: "Emotional · Große Bilder · Sprachnotizen", actionId: "expose_pdf_classic" },
+  { id: "investment", label: "Investment", icon: "📊", desc: "Tabellen · Marktdaten · Mietpreisentwicklung", actionId: "expose_pdf_investment" },
 ];
 
 interface ImageDesc {
@@ -66,6 +67,10 @@ export default function Expose() {
   const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);
   const [videoFormat, setVideoFormat] = useState<"16:9" | "9:16">("16:9");
   const [videoStyle, setVideoStyle] = useState<"factual" | "dynamic">("factual");
+  // Context checkboxes
+  const [ctxFotos, setCtxFotos] = useState(false);
+  const [ctxStandort, setCtxStandort] = useState(false);
+  const [ctxMarkt, setCtxMarkt] = useState(false);
   const [form, setForm] = useState({
     titel: "", objektnummer: "", bezirk: "", plz: "", ort: "", strasse: "", hnr: "",
     objektart: "", kaufpreis: "", miete: "",
@@ -116,6 +121,27 @@ export default function Expose() {
     }
   };
 
+  const generateStandortContext = () => {
+    const bezirk = form.bezirk;
+    if (!bezirk) return "";
+    // Generate location context based on district
+    const isWien = bezirk.startsWith("Wien");
+    const district = isWien ? bezirk.split("(")[1]?.replace(")", "") || bezirk : bezirk;
+    return `\n\nStandort-Analyse (${bezirk}):\n` +
+      `Lage: ${district} – ${isWien ? "Wiener Stadtteil" : "Österreich"}\n` +
+      `Infrastruktur: Öffentliche Verkehrsmittel, Schulen, Einkaufsmöglichkeiten und Erholungsgebiete in der Umgebung.\n` +
+      `Bitte analysiere die Lage detailliert mit Bezug auf Lebensqualität, Anbindung und Nahversorgung.`;
+  };
+
+  const generateMarktContext = () => {
+    const bezirk = form.bezirk;
+    if (!bezirk) return "";
+    return `\n\nMarktanalyse-Kontext (${bezirk}):\n` +
+      `Bitte berücksichtige aktuelle Markttrends, Mietpreisentwicklung und Vergleichswerte für die Region ${bezirk}.` +
+      `${form.flaeche ? ` Objektgröße: ${form.flaeche} m².` : ""}` +
+      `${form.kaufpreis ? ` Angebotspreis: € ${form.kaufpreis}.` : ""}`;
+  };
+
   const handleGenerate = async (withKorrektur = false) => {
     setGenerating(true);
     try {
@@ -124,18 +150,23 @@ export default function Expose() {
         beschreibung: [
           form.beschreibung,
           sprachnotizen ? `\n\nSprachnotizen vom Objekt:\n${sprachnotizen}` : "",
-          notebookLmText ? `\n\nNotebookLM-Analyse:\n${notebookLmText}` : "",
+          notebookLmText ? `\n\nBrainy Intelligence Center:\n${notebookLmText}` : "",
+          zielgruppe ? `\n\nZielgruppe: ${zielgruppe}` : "",
+          verkaufsFokus ? `\n\nVerkaufs-Fokus: ${verkaufsFokus}` : "",
+          ctxStandort ? generateStandortContext() : "",
+          ctxMarkt ? generateMarktContext() : "",
           withKorrektur && korrekturText ? `\n\nKorrektur-Hinweis: ${korrekturText}` : "",
         ].filter(Boolean).join(""),
       };
+      const useImages = ctxFotos && images.length > 0;
       const { data, error } = await supabase.functions.invoke("expose-ki", {
-        body: { form: formData, imageDataUrls: images.slice(0, 5), laenge: exposeLaenge },
+        body: { form: formData, imageDataUrls: useImages ? images.slice(0, 5) : [], laenge: exposeLaenge },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setAiText(data.text || "");
       setAiModel(data.model || "");
-      if (images.length > 0) setImageAnalyzed(true);
+      if (useImages) setImageAnalyzed(true);
       setKorrekturText("");
     } catch (err: unknown) {
       toast({ title: "KI-Fehler", description: err instanceof Error ? err.message : "Fehler", variant: "destructive" });
@@ -160,7 +191,6 @@ export default function Expose() {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error("Nicht eingeloggt");
 
-      // objektData is built inline below
       const objektInsert = {
         user_id: currentUser.id,
         objektnummer: form.objektnummer || `EXP-${Date.now().toString().slice(-6)}`,
@@ -206,6 +236,30 @@ export default function Expose() {
 
   const handlePdfExport = () => {
     setShowPreview(true);
+  };
+
+  const handlePdfTemplateClick = async (t: typeof pdfTemplates[0]) => {
+    setSelectedTemplate(t.id);
+    const pdfParams: PdfWebhookParams = {
+      objekt: {
+        titel: form.titel, objektnummer: form.objektnummer, bezirk: form.bezirk,
+        plz: form.plz, ort: form.ort, strasse: form.strasse, hnr: form.hnr,
+        objektart: form.objektart, verkaufsart: form.verkaufsart, kaufpreis: form.kaufpreis,
+        miete: form.miete, flaeche: form.flaeche, zimmer: form.zimmer,
+        provisionsstellung: form.provisionsstellung,
+        kaeufer_provision: form.kaeufer_provision, verkaeufer_provision: form.verkaeufer_provision,
+      },
+      texte: {
+        ki_expose: aiText, kurzbeschreibung, beschreibung: form.beschreibung,
+        sprachnotizen, notebook_lm: notebookLmText,
+      },
+      image_urls: images.filter(Boolean),
+      bilder_anzahl: images.length,
+    };
+    const sendFn = t.actionId === ACTION_IDS.PDF_QUICK ? sendPdfQuick
+      : t.actionId === ACTION_IDS.PDF_INVESTMENT ? sendPdfInvestment
+      : sendPdfClassic;
+    await sendFn(pdfParams);
   };
 
   const handleVideoWebhook = async () => {
@@ -257,7 +311,7 @@ export default function Expose() {
         <p className="text-muted-foreground text-sm mt-0.5">KI-gestützt · Wiener Makler-Stil · 3 PDF-Vorlagen</p>
       </div>
 
-      {/* Objektdaten */}
+      {/* ═══ OBEN: Objektdaten ═══ */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <FileText size={18} className="text-primary" />
@@ -359,7 +413,7 @@ export default function Expose() {
         </div>
       </div>
 
-      {/* Foto-Upload */}
+      {/* ═══ OBEN: Fotos ═══ */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
         <div className="flex items-center gap-2 mb-3">
           <Image size={18} className="text-primary" />
@@ -439,7 +493,15 @@ export default function Expose() {
         )}
       </div>
 
-      {/* 🎙️ Sprachnotizen */}
+      {/* Beschreibung */}
+      <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Beschreibung / Notizen</label>
+        <textarea className="mt-2 w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          rows={6} placeholder="Besonderheiten, Dachterrasse, Tiefgaragenplatz…" value={form.beschreibung}
+          onChange={(e) => setForm({ ...form, beschreibung: e.target.value })} />
+      </div>
+
+      {/* ═══ MITTE: Sprachnotizen ═══ */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-3">
         <div className="flex items-center gap-2">
           <Mic size={18} className="text-primary" />
@@ -457,13 +519,54 @@ export default function Expose() {
         )}
       </div>
 
-      {/* 🧠 Brainy Intelligence Center */}
-      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-3">
+      {/* ═══ MITTE: PDF-Vorlage wählen – Premium Design ═══ */}
+      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
+        <div className="flex items-center gap-2">
+          <LayoutTemplate size={18} className="text-primary" />
+          <h2 className="font-bold text-foreground">PDF-Vorlage</h2>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {pdfTemplates.map(t => (
+            <button
+              key={t.id}
+              onClick={() => handlePdfTemplateClick(t)}
+              className={`relative flex flex-col items-start p-4 rounded-xl border transition-all text-left group ${
+                selectedTemplate === t.id
+                  ? "border-primary bg-primary/[0.03] ring-1 ring-primary/20"
+                  : "border-border bg-card hover:border-muted-foreground/30"
+              }`}
+            >
+              {/* Top accent line */}
+              <div className={`absolute top-0 left-4 right-4 h-[2px] rounded-full transition-all ${
+                selectedTemplate === t.id ? "bg-primary" : "bg-transparent group-hover:bg-border"
+              }`} />
+              
+              <span className="text-lg mb-2">{t.icon}</span>
+              <span className="text-sm font-semibold text-foreground" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                {t.label}
+              </span>
+              <span className="text-[10px] text-muted-foreground mt-1 leading-snug">{t.desc}</span>
+              
+              {selectedTemplate === t.id && (
+                <div className="mt-2 flex items-center gap-1">
+                  <CheckCircle size={11} className="text-primary" />
+                  <span className="text-[10px] font-semibold text-primary">Ausgewählt</span>
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══ UNTEN: Brainy Intelligence Center ═══ */}
+      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
         <div className="flex items-center gap-2">
           <BookOpen size={18} className="text-primary" />
           <h2 className="font-bold text-foreground">Brainy Intelligence Center</h2>
         </div>
         <p className="text-xs text-muted-foreground">Füge strukturierte Analyse-Outputs ein – für Video-Skripte und detaillierte Berichte.</p>
+        
+        {/* Zielgruppe & Verkaufs-Fokus */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Zielgruppe</label>
@@ -491,6 +594,36 @@ export default function Expose() {
             </select>
           </div>
         </div>
+
+        {/* KI-Kontext Checkboxen */}
+        <div className="border border-border rounded-xl p-4 bg-surface/50 space-y-3">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">KI-Kontext für Textgenerierung</label>
+          <div className="space-y-2.5">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <Checkbox checked={ctxFotos} onCheckedChange={(v) => setCtxFotos(!!v)} />
+              <Camera size={14} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="text-sm text-foreground">Fotos analysieren</span>
+              {images.length > 0 && ctxFotos && (
+                <span className="text-[10px] text-primary font-semibold ml-auto">{Math.min(images.length, 5)} Fotos</span>
+              )}
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <Checkbox checked={ctxStandort} onCheckedChange={(v) => setCtxStandort(!!v)} />
+              <MapPin size={14} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="text-sm text-foreground">Standort / Infrastruktur einbeziehen</span>
+              {ctxStandort && form.bezirk && (
+                <span className="text-[10px] text-primary font-semibold ml-auto">{form.bezirk.split("–")[0].trim()}</span>
+              )}
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <Checkbox checked={ctxMarkt} onCheckedChange={(v) => setCtxMarkt(!!v)} />
+              <BarChart3 size={14} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="text-sm text-foreground">Marktanalyse berücksichtigen</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Analyse-Textfeld */}
         <textarea
           className="w-full bg-card border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
           style={{ minHeight: "300px" }}
@@ -500,6 +633,7 @@ export default function Expose() {
         {notebookLmText && (
           <p className="text-xs text-primary font-semibold">✓ {notebookLmText.length} Zeichen · Wird in KI-Textgenerierung & Investment-PDF verwendet</p>
         )}
+        
         <button
           onClick={async () => {
             const { ok } = await sendNotizSpeichern(notebookLmText, "notebook_lm");
@@ -507,46 +641,47 @@ export default function Expose() {
             else toast({ title: "Fehler beim Speichern", variant: "destructive" });
           }}
           disabled={!notebookLmText.trim()}
-          className="w-full bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full bg-accent text-foreground border border-border rounded-xl py-2.5 text-sm font-semibold hover:bg-secondary transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Save size={14} /> Notiz & Analyse speichern
         </button>
-      </div>
 
-      {/* Beschreibung */}
-      <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Beschreibung / Notizen</label>
-        <textarea className="mt-2 w-full bg-surface border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-          rows={6} placeholder="Besonderheiten, Dachterrasse, Tiefgaragenplatz…" value={form.beschreibung}
-          onChange={(e) => setForm({ ...form, beschreibung: e.target.value })} />
-      </div>
+        {/* KI Exposé-Text Länge */}
+        <div className="border-t border-border pt-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Wand2 size={16} className="text-primary" />
+            <span className="text-sm font-bold text-foreground">KI-Exposé-Text</span>
+            {aiModel && <span className="ml-auto text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">{aiModel.split("/")[1]}</span>}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setExposeLaenge("kurz")}
+              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "kurz" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}>
+              Kurz
+            </button>
+            <button onClick={() => setExposeLaenge("lang")}
+              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "lang" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}>
+              Lang
+            </button>
+          </div>
 
-      {/* KI-Textgenerator */}
-      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
-        <div className="flex items-center gap-2">
-          <Wand2 size={18} className="text-primary" />
-          <h2 className="font-bold text-foreground">KI-Exposé-Text</h2>
-          {aiModel && <span className="ml-auto text-xs text-muted-foreground bg-accent px-2 py-0.5 rounded-full">{aiModel.split("/")[1]}</span>}
+          {/* === FINALER ACTION BUTTON === */}
+          <button onClick={() => handleGenerate(false)} disabled={!formValid || generating}
+            className="w-full bg-primary text-primary-foreground rounded-xl py-3.5 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+            {generating ? (
+              <><RefreshCw size={16} className="animate-spin" /> KI analysiert…</>
+            ) : (
+              <><Wand2 size={16} /> Exposé-Text generieren
+                {ctxFotos && images.length > 0 ? ` · ${Math.min(images.length, 5)} Fotos` : ""}
+                {ctxStandort ? " · Standort" : ""}
+                {ctxMarkt ? " · Markt" : ""}
+              </>
+            )}
+          </button>
         </div>
 
-        <div className="flex gap-2">
-          <button onClick={() => setExposeLaenge("kurz")}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "kurz" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}>
-            Kurz
-          </button>
-          <button onClick={() => setExposeLaenge("lang")}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${exposeLaenge === "lang" ? "bg-primary text-primary-foreground border-primary shadow-orange" : "bg-accent text-foreground border-border hover:bg-secondary"}`}>
-            Lang
-          </button>
-        </div>
-
-        <button onClick={() => handleGenerate(false)} disabled={!formValid || generating}
-          className="w-full bg-primary text-primary-foreground rounded-xl py-3 text-sm font-bold shadow-orange hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
-          {generating ? <><RefreshCw size={16} className="animate-spin" /> KI analysiert…</> : <><Wand2 size={16} /> Exposé-Text generieren{images.length > 0 ? ` (${images.length} Fotos)` : ""}</>}
-        </button>
-
+        {/* Generierter Text */}
         {aiText && (
-          <>
+          <div className="space-y-3 border-t border-border pt-4">
             <div className="bg-accent rounded-xl p-4 border border-border">
               <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-y-auto">{aiText}</pre>
             </div>
@@ -578,78 +713,8 @@ export default function Expose() {
                 <ArrowRight size={14} /> In Kurzbeschreibung übernehmen
               </button>
             </div>
-          </>
+          </div>
         )}
-      </div>
-
-      {/* 📄 PDF-Vorlage wählen – Drei-Säulen-Design */}
-      <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-4">
-        <div className="flex items-center gap-2">
-          <LayoutTemplate size={18} className="text-primary" />
-          <h2 className="font-bold text-foreground">PDF-Vorlage wählen</h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { id: "quick-check" as PdfTemplate, actionId: "expose_pdf_quick", icon: "⚡", label: "Quick-Check", sub: "Kompakt", desc: "Infografiken · Sterne-Ratings · Harte Fakten" },
-            { id: "expose-style" as PdfTemplate, actionId: "expose_pdf_classic", icon: "🏠", label: "Klassisch", sub: "Ausführlich", desc: "Emotionale Bilder · Sprachnotizen · NotebookLM" },
-            { id: "investment" as PdfTemplate, actionId: "expose_pdf_investment", icon: "📊", label: "Investment", sub: "Zahlenfokus", desc: "Tabellen · Marktdaten · Mietpreisentwicklung" },
-          ].map(t => (
-            <button
-              key={t.id}
-              onClick={async () => {
-                setSelectedTemplate(t.id);
-                const pdfParams: PdfWebhookParams = {
-                  objekt: {
-                    titel: form.titel,
-                    objektnummer: form.objektnummer,
-                    bezirk: form.bezirk,
-                    plz: form.plz,
-                    ort: form.ort,
-                    strasse: form.strasse,
-                    hnr: form.hnr,
-                    objektart: form.objektart,
-                    verkaufsart: form.verkaufsart,
-                    kaufpreis: form.kaufpreis,
-                    miete: form.miete,
-                    flaeche: form.flaeche,
-                    zimmer: form.zimmer,
-                    provisionsstellung: form.provisionsstellung,
-                    kaeufer_provision: form.kaeufer_provision,
-                    verkaeufer_provision: form.verkaeufer_provision,
-                  },
-                  texte: {
-                    ki_expose: aiText,
-                    kurzbeschreibung,
-                    beschreibung: form.beschreibung,
-                    sprachnotizen,
-                    notebook_lm: notebookLmText,
-                  },
-                  image_urls: images.filter(Boolean),
-                  bilder_anzahl: images.length,
-                };
-                const sendFn = t.actionId === ACTION_IDS.PDF_QUICK ? sendPdfQuick
-                  : t.actionId === ACTION_IDS.PDF_INVESTMENT ? sendPdfInvestment
-                  : sendPdfClassic;
-                await sendFn(pdfParams);
-              }}
-              className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all text-center min-h-[180px] justify-center ${
-                selectedTemplate === t.id
-                  ? "border-primary bg-primary/5 shadow-orange"
-                  : "border-border bg-card hover:bg-accent"
-              }`}
-            >
-              <span className="text-3xl">{t.icon}</span>
-              <div>
-                <span className="text-sm font-bold text-foreground block">{t.label}</span>
-                <span className="text-[10px] font-semibold text-primary">{t.sub}</span>
-              </div>
-              <span className="text-[10px] text-muted-foreground leading-tight">{t.desc}</span>
-              {selectedTemplate === t.id && (
-                <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">✓ Ausgewählt</span>
-              )}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Aktions-Buttons */}
