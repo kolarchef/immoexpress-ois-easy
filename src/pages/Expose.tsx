@@ -58,6 +58,8 @@ export default function Expose() {
   const [showPreview, setShowPreview] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<PdfTemplate>("expose-style");
   const [notebookLmText, setNotebookLmText] = useState("");
+  const [zielgruppe, setZielgruppe] = useState("");
+  const [verkaufsFokus, setVerkaufsFokus] = useState("");
   const [sprachnotizen, setSprachnotizen] = useState("");
   const [sendingWebhook, setSendingWebhook] = useState(false);
   const [magicEditOpen, setMagicEditOpen] = useState(false);
