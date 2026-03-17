@@ -149,18 +149,31 @@ export default function Expose() {
         ...form,
         beschreibung: [
           form.beschreibung,
-          sprachnotizen ? `\n\nSprachnotizen vom Objekt:\n${sprachnotizen}` : "",
-          notebookLmText ? `\n\nBrainy Intelligence Center:\n${notebookLmText}` : "",
-          zielgruppe ? `\n\nZielgruppe: ${zielgruppe}` : "",
-          verkaufsFokus ? `\n\nVerkaufs-Fokus: ${verkaufsFokus}` : "",
-          ctxStandort ? generateStandortContext() : "",
-          ctxMarkt ? generateMarktContext() : "",
           withKorrektur && korrekturText ? `\n\nKorrektur-Hinweis: ${korrekturText}` : "",
         ].filter(Boolean).join(""),
       };
+
+      // Build structured context for the edge function
+      const context = {
+        zielgruppe: zielgruppe || undefined,
+        verkaufsFokus: verkaufsFokus || undefined,
+        sprachnotizen: sprachnotizen || undefined,
+        analyseOutput: notebookLmText || undefined,
+        standortAnalyse: ctxStandort ? generateStandortContext() : undefined,
+        marktAnalyse: ctxMarkt ? generateMarktContext() : undefined,
+        fotosAnalysieren: ctxFotos,
+        standortEinbeziehen: ctxStandort,
+        marktBerücksichtigen: ctxMarkt,
+      };
+
       const useImages = ctxFotos && images.length > 0;
       const { data, error } = await supabase.functions.invoke("expose-ki", {
-        body: { form: formData, imageDataUrls: useImages ? images.slice(0, 5) : [], laenge: exposeLaenge },
+        body: {
+          form: formData,
+          imageDataUrls: useImages ? images.slice(0, 5) : [],
+          laenge: exposeLaenge,
+          context,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
