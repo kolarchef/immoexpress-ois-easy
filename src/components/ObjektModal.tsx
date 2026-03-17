@@ -30,6 +30,7 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
     kurzinfo: "", flaeche: "", zimmer: "", kaufpreis: "",
     kaeufer_provision: "", verkaeufer_provision: "",
     interne_notizen: "", beschreibung: "",
+    zielgruppe: "", verkaufs_fokus: "",
   });
   const [magicEditOpen, setMagicEditOpen] = useState(false);
   const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);
@@ -158,6 +159,8 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
         verkaeufer_provision: form.verkaeufer_provision ? parseFloat(form.verkaeufer_provision) : null,
         interne_notizen: form.interne_notizen || null,
         beschreibung: form.beschreibung || null,
+        zielgruppe: form.zielgruppe || null,
+        verkaufs_fokus: form.verkaufs_fokus || null,
         status: exportToImmoZ ? "aktiv" : "entwurf",
         immoz_exportiert: exportToImmoZ,
         immoz_export_datum: exportToImmoZ ? new Date().toISOString() : null,
@@ -188,7 +191,7 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
         toast({ title: "✅ Erfolgreich als Entwurf gespeichert", description: "Nur intern sichtbar – kann jederzeit veröffentlicht werden." });
       }
 
-      setForm({ objektnummer: "", objektart: "", verkaufsart: "Kauf", plz: "", ort: "", strasse: "", hnr: "", top: "", stock: "", kurzinfo: "", flaeche: "", zimmer: "", kaufpreis: "", kaeufer_provision: "", verkaeufer_provision: "", interne_notizen: "", beschreibung: "" });
+      setForm({ objektnummer: "", objektart: "", verkaufsart: "Kauf", plz: "", ort: "", strasse: "", hnr: "", top: "", stock: "", kurzinfo: "", flaeche: "", zimmer: "", kaufpreis: "", kaeufer_provision: "", verkaeufer_provision: "", interne_notizen: "", beschreibung: "", zielgruppe: "", verkaufs_fokus: "" });
       setPhotos([]); setPreviews([]); setTitleIndex(0); setPlanPreviews([]);
       onSaved?.();
       onClose();
@@ -367,6 +370,29 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Zielgruppe & Verkaufs-Fokus */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Zielgruppe</label>
+              <select className={inputCls} value={form.zielgruppe} onChange={e => setForm({ ...form, zielgruppe: e.target.value })}>
+                <option value="">Auswählen…</option>
+                <option>Investor</option>
+                <option>Familie</option>
+                <option>Erstkäufer</option>
+                <option>Luxus-Segment</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Verkaufs-Fokus</label>
+              <select className={inputCls} value={form.verkaufs_fokus} onChange={e => setForm({ ...form, verkaufs_fokus: e.target.value })}>
+                <option value="">Auswählen…</option>
+                <option>Rendite & Zahlen</option>
+                <option>Emotion & Wohngefühl</option>
+                <option>Lage & Infrastruktur</option>
+              </select>
+            </div>
           </div>
 
           {/* Beschreibung – groß */}

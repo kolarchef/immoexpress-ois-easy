@@ -1057,7 +1057,9 @@ export type Database = {
           updated_at: string
           user_id: string | null
           verkaeufer_provision: number | null
+          verkaufs_fokus: string | null
           verkaufsart: string | null
+          zielgruppe: string | null
           zimmer: number | null
         }
         Insert: {
@@ -1086,7 +1088,9 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           verkaeufer_provision?: number | null
+          verkaufs_fokus?: string | null
           verkaufsart?: string | null
+          zielgruppe?: string | null
           zimmer?: number | null
         }
         Update: {
@@ -1115,7 +1119,9 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           verkaeufer_provision?: number | null
+          verkaufs_fokus?: string | null
           verkaufsart?: string | null
+          zielgruppe?: string | null
           zimmer?: number | null
         }
         Relationships: [
