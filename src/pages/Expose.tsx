@@ -149,18 +149,31 @@ export default function Expose() {
         ...form,
         beschreibung: [
           form.beschreibung,
-          sprachnotizen ? `\n\nSprachnotizen vom Objekt:\n${sprachnotizen}` : "",
-          notebookLmText ? `\n\nBrainy Intelligence Center:\n${notebookLmText}` : "",
-          zielgruppe ? `\n\nZielgruppe: ${zielgruppe}` : "",
-          verkaufsFokus ? `\n\nVerkaufs-Fokus: ${verkaufsFokus}` : "",
-          ctxStandort ? generateStandortContext() : "",
-          ctxMarkt ? generateMarktContext() : "",
           withKorrektur && korrekturText ? `\n\nKorrektur-Hinweis: ${korrekturText}` : "",
         ].filter(Boolean).join(""),
       };
+
+      // Build structured context for the edge function
+      const context = {
+        zielgruppe: zielgruppe || undefined,
+        verkaufsFokus: verkaufsFokus || undefined,
+        sprachnotizen: sprachnotizen || undefined,
+        analyseOutput: notebookLmText || undefined,
+        standortAnalyse: ctxStandort ? generateStandortContext() : undefined,
+        marktAnalyse: ctxMarkt ? generateMarktContext() : undefined,
+        fotosAnalysieren: ctxFotos,
+        standortEinbeziehen: ctxStandort,
+        marktBerücksichtigen: ctxMarkt,
+      };
+
       const useImages = ctxFotos && images.length > 0;
       const { data, error } = await supabase.functions.invoke("expose-ki", {
-        body: { form: formData, imageDataUrls: useImages ? images.slice(0, 5) : [], laenge: exposeLaenge },
+        body: {
+          form: formData,
+          imageDataUrls: useImages ? images.slice(0, 5) : [],
+          laenge: exposeLaenge,
+          context,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -223,7 +236,30 @@ export default function Expose() {
           objekte_ids: [obj.id], anzahl: 1, status: "Erfolgreich",
           dateiname: `immoZ_export_${new Date().toLocaleDateString("de-AT").replace(/\./g, "")}.xml`,
         });
-        toast({ title: "✓ Gespeichert & an ImmoZ übertragen!" });
+        // Send final text + template to Make.com webhook
+        const pdfActionId = selectedTemplate === "quick-check" ? ACTION_IDS.PDF_QUICK
+          : selectedTemplate === "investment" ? ACTION_IDS.PDF_INVESTMENT
+          : ACTION_IDS.PDF_CLASSIC;
+        const sendFn = pdfActionId === ACTION_IDS.PDF_QUICK ? sendPdfQuick
+          : pdfActionId === ACTION_IDS.PDF_INVESTMENT ? sendPdfInvestment
+          : sendPdfClassic;
+        await sendFn({
+          objekt: {
+            titel: form.titel, objektnummer: form.objektnummer, bezirk: form.bezirk,
+            plz: form.plz, ort: form.ort, strasse: form.strasse, hnr: form.hnr,
+            objektart: form.objektart, verkaufsart: form.verkaufsart, kaufpreis: form.kaufpreis,
+            miete: form.miete, flaeche: form.flaeche, zimmer: form.zimmer,
+            provisionsstellung: form.provisionsstellung,
+            kaeufer_provision: form.kaeufer_provision, verkaeufer_provision: form.verkaeufer_provision,
+          },
+          texte: {
+            ki_expose: aiText, kurzbeschreibung, beschreibung: form.beschreibung,
+            sprachnotizen, notebook_lm: notebookLmText,
+          },
+          image_urls: images.filter(Boolean),
+          bilder_anzahl: images.length,
+        });
+        toast({ title: "✓ Gespeichert & an ImmoZ übertragen!", description: `PDF-Vorlage: ${pdfTemplates.find(t => t.id === selectedTemplate)?.label}` });
       } else {
         toast({ title: "✓ Als Entwurf gespeichert", description: "Objekt ist nur intern sichtbar." });
       }
