@@ -30,6 +30,7 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
     kurzinfo: "", flaeche: "", zimmer: "", kaufpreis: "",
     kaeufer_provision: "", verkaeufer_provision: "",
     interne_notizen: "", beschreibung: "",
+    zielgruppe: "", verkaufs_fokus: "",
   });
   const [magicEditOpen, setMagicEditOpen] = useState(false);
   const [magicEditPhoto, setMagicEditPhoto] = useState<string | null>(null);

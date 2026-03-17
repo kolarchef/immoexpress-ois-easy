@@ -457,17 +457,44 @@ export default function Expose() {
         )}
       </div>
 
-      {/* 📓 NotebookLM Import */}
+      {/* 🧠 Brainy Intelligence Center */}
       <div className="bg-card rounded-2xl p-5 shadow-card border border-border space-y-3">
         <div className="flex items-center gap-2">
           <BookOpen size={18} className="text-primary" />
-          <h2 className="font-bold text-foreground">NotebookLM-Daten</h2>
+          <h2 className="font-bold text-foreground">Brainy Intelligence Center</h2>
         </div>
-        <p className="text-xs text-muted-foreground">Füge strukturierte Analyse-Outputs aus NotebookLM ein – für Video-Skripte und detaillierte Berichte.</p>
+        <p className="text-xs text-muted-foreground">Füge strukturierte Analyse-Outputs ein – für Video-Skripte und detaillierte Berichte.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Zielgruppe</label>
+            <select
+              className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              value={zielgruppe} onChange={(e) => setZielgruppe(e.target.value)}
+            >
+              <option value="">Auswählen…</option>
+              <option>Investor</option>
+              <option>Familie</option>
+              <option>Erstkäufer</option>
+              <option>Luxus-Segment</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Verkaufs-Fokus</label>
+            <select
+              className="mt-1 w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              value={verkaufsFokus} onChange={(e) => setVerkaufsFokus(e.target.value)}
+            >
+              <option value="">Auswählen…</option>
+              <option>Rendite & Zahlen</option>
+              <option>Emotion & Wohngefühl</option>
+              <option>Lage & Infrastruktur</option>
+            </select>
+          </div>
+        </div>
         <textarea
           className="w-full bg-card border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
           style={{ minHeight: "300px" }}
-          placeholder="NotebookLM-Output hier einfügen (Marktdaten, Infrastruktur-Analyse, Mietpreisentwicklung…)"
+          placeholder="Analyse-Output hier einfügen (Marktdaten, Infrastruktur-Analyse, Mietpreisentwicklung…)"
           value={notebookLmText} onChange={(e) => setNotebookLmText(e.target.value)}
         />
         {notebookLmText && (
