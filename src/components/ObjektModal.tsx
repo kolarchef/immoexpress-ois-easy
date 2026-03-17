@@ -372,6 +372,29 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
             )}
           </div>
 
+          {/* Zielgruppe & Verkaufs-Fokus */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Zielgruppe</label>
+              <select className={inputCls} value={form.zielgruppe} onChange={e => setForm({ ...form, zielgruppe: e.target.value })}>
+                <option value="">Auswählen…</option>
+                <option>Investor</option>
+                <option>Familie</option>
+                <option>Erstkäufer</option>
+                <option>Luxus-Segment</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Verkaufs-Fokus</label>
+              <select className={inputCls} value={form.verkaufs_fokus} onChange={e => setForm({ ...form, verkaufs_fokus: e.target.value })}>
+                <option value="">Auswählen…</option>
+                <option>Rendite & Zahlen</option>
+                <option>Emotion & Wohngefühl</option>
+                <option>Lage & Infrastruktur</option>
+              </select>
+            </div>
+          </div>
+
           {/* Beschreibung – groß */}
           <div>
             <label className={labelCls}>Beschreibung</label>
