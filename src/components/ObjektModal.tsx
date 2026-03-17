@@ -159,6 +159,8 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
         verkaeufer_provision: form.verkaeufer_provision ? parseFloat(form.verkaeufer_provision) : null,
         interne_notizen: form.interne_notizen || null,
         beschreibung: form.beschreibung || null,
+        zielgruppe: form.zielgruppe || null,
+        verkaufs_fokus: form.verkaufs_fokus || null,
         status: exportToImmoZ ? "aktiv" : "entwurf",
         immoz_exportiert: exportToImmoZ,
         immoz_export_datum: exportToImmoZ ? new Date().toISOString() : null,
