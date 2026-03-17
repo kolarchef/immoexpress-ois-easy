@@ -189,7 +189,7 @@ export default function ObjektModal({ open, onClose, onSaved }: ObjektModalProps
         toast({ title: "✅ Erfolgreich als Entwurf gespeichert", description: "Nur intern sichtbar – kann jederzeit veröffentlicht werden." });
       }
 
-      setForm({ objektnummer: "", objektart: "", verkaufsart: "Kauf", plz: "", ort: "", strasse: "", hnr: "", top: "", stock: "", kurzinfo: "", flaeche: "", zimmer: "", kaufpreis: "", kaeufer_provision: "", verkaeufer_provision: "", interne_notizen: "", beschreibung: "" });
+      setForm({ objektnummer: "", objektart: "", verkaufsart: "Kauf", plz: "", ort: "", strasse: "", hnr: "", top: "", stock: "", kurzinfo: "", flaeche: "", zimmer: "", kaufpreis: "", kaeufer_provision: "", verkaeufer_provision: "", interne_notizen: "", beschreibung: "", zielgruppe: "", verkaufs_fokus: "" });
       setPhotos([]); setPreviews([]); setTitleIndex(0); setPlanPreviews([]);
       onSaved?.();
       onClose();
