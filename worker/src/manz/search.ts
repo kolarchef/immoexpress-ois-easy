@@ -1,7 +1,7 @@
 import type { Locator, Page } from "playwright";
-import { dumpDebug } from "../debug.js";
+import { dumpDebug, dumpDiagnostics } from "../debug.js";
 import type { GrundbuchHit, SearchAddressInput } from "../types.js";
-import { firstVisible } from "./session.js";
+import { allScopes, firstVisible, type Scope } from "./session.js";
 
 /**
  * Header-Text -> Feldname im Ergebnis. Die Spaltenreihenfolge wird NICHT
@@ -34,6 +34,31 @@ function normalizeHeader(text: string): string {
     .replace(/^strase$/, "strasse");
 }
 
+function streetFieldCandidates(scope: Scope): Locator[] {
+  return [
+    scope.getByLabel(/stra(ß|ss)e/i),
+    scope.locator('input[name*="strasse" i]'),
+    scope.locator('input[id*="strasse" i]'),
+    scope.locator('input[name*="street" i]'),
+  ];
+}
+
+/**
+ * Das MANZ-Suchformular kann direkt auf der Seite oder in einem iframe
+ * liegen. Wir suchen den Bereich, in dem das Straße-Feld sichtbar ist.
+ */
+async function findFormScope(page: Page): Promise<Scope | null> {
+  const deadline = Date.now() + 15000;
+  do {
+    for (const scope of allScopes(page)) {
+      const field = await firstVisible(streetFieldCandidates(scope), 800);
+      if (field) return scope;
+    }
+    await page.waitForTimeout(400);
+  } while (Date.now() < deadline);
+  return null;
+}
+
 async function fillFirstMatch(
   candidates: Locator[],
   value: string,
@@ -45,8 +70,9 @@ async function fillFirstMatch(
   if (!field) {
     if (required) {
       await dumpDebug(page, `suchformular-feld-fehlt-${fieldName}`);
+      await dumpDiagnostics(page, `suchformular-feld-fehlt-${fieldName}`);
       throw new Error(
-        `Suchformular: Feld "${fieldName}" nicht gefunden. Siehe debug/-Snapshot — ggf. Selektoren anhand der HAR-Dateien nachschärfen.`
+        `Suchformular: Feld "${fieldName}" nicht gefunden. Siehe debug/-Snapshot + Diagnose-JSON — dort stehen die echten Feldnamen.`
       );
     }
     console.warn(`[manz] Optionales Feld "${fieldName}" nicht gefunden — übersprungen.`);
@@ -55,60 +81,51 @@ async function fillFirstMatch(
   await field.fill(value);
 }
 
-async function fillSearchForm(page: Page, input: SearchAddressInput): Promise<void> {
+async function fillSearchForm(scope: Scope, page: Page, input: SearchAddressInput): Promise<void> {
   // Bundesland (falls als Auswahlfeld vorhanden) zuerst, da es andere Felder
   // zurücksetzen kann.
   if (input.region) {
     const regionSelect = await firstVisible(
       [
-        page.getByLabel(/bundesland/i),
-        page.locator('select[name*="bundesland" i]'),
-        page.locator('select[id*="bundesland" i]'),
+        scope.getByLabel(/bundesland/i),
+        scope.locator('select[name*="bundesland" i]'),
+        scope.locator('select[id*="bundesland" i]'),
       ],
       2000
     );
     if (regionSelect) {
-      await regionSelect.selectOption({ label: input.region }).catch(async () => {
-        console.warn(`[manz] Bundesland "${input.region}" nicht in Auswahlliste gefunden — übersprungen.`);
+      await regionSelect.selectOption({ label: input.region }).catch(() => {
+        console.warn(
+          `[manz] Bundesland "${input.region}" nicht in Auswahlliste gefunden — übersprungen.`
+        );
       });
     }
   }
 
   await fillFirstMatch(
     [
-      page.getByLabel(/politische gemeinde/i),
-      page.getByLabel(/gemeinde/i),
-      page.getByLabel(/^ort/i),
-      page.locator('input[name*="gemeinde" i]'),
-      page.locator('input[id*="gemeinde" i]'),
-      page.locator('input[name*="ort" i]'),
+      scope.getByLabel(/politische gemeinde/i),
+      scope.getByLabel(/gemeinde/i),
+      scope.getByLabel(/^ort/i),
+      scope.locator('input[name*="gemeinde" i]'),
+      scope.locator('input[id*="gemeinde" i]'),
+      scope.locator('input[name*="ort" i]'),
     ],
     input.city,
-    "Gemeinde/Ort",
+    "Gemeinde-Ort",
     true,
     page
   );
 
-  await fillFirstMatch(
-    [
-      page.getByLabel(/stra(ß|ss)e/i),
-      page.locator('input[name*="strasse" i]'),
-      page.locator('input[id*="strasse" i]'),
-      page.locator('input[name*="street" i]'),
-    ],
-    input.street,
-    "Straße",
-    true,
-    page
-  );
+  await fillFirstMatch(streetFieldCandidates(scope), input.street, "Strasse", true, page);
 
   if (input.houseNumber) {
     await fillFirstMatch(
       [
-        page.getByLabel(/hausnummer|hnr/i),
-        page.locator('input[name*="hausnummer" i]'),
-        page.locator('input[id*="hausnummer" i]'),
-        page.locator('input[name*="hnr" i]'),
+        scope.getByLabel(/hausnummer|hnr/i),
+        scope.locator('input[name*="hausnummer" i]'),
+        scope.locator('input[id*="hausnummer" i]'),
+        scope.locator('input[name*="hnr" i]'),
       ],
       input.houseNumber,
       "Hausnummer",
@@ -118,26 +135,29 @@ async function fillSearchForm(page: Page, input: SearchAddressInput): Promise<vo
   }
 }
 
-async function submitSearch(page: Page): Promise<void> {
+async function submitSearch(scope: Scope, page: Page): Promise<void> {
   const button = await firstVisible([
-    page.getByRole("button", { name: /^suchen$/i }),
-    page.getByRole("button", { name: /suchen/i }),
-    page.locator('input[type="submit"][value*="such" i]'),
-    page.locator('button[type="submit"]'),
+    scope.getByRole("button", { name: /^suchen$/i }),
+    scope.getByRole("button", { name: /suchen/i }),
+    scope.locator('input[type="submit"][value*="such" i]'),
+    scope.locator('button[type="submit"]'),
   ]);
   if (!button) {
     await dumpDebug(page, "suchen-button-fehlt");
+    await dumpDiagnostics(page, "suchen-button-fehlt");
     throw new Error('Suchformular: "Suchen"-Button nicht gefunden. Siehe debug/-Snapshot.');
   }
   await button.click();
-  await page.waitForLoadState("domcontentloaded");
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
   await page.waitForLoadState("networkidle").catch(() => {});
 }
 
 /** Findet die Ergebnistabelle: die Tabelle, deren Header EZ + KG/Gst enthält. */
-async function findResultTable(page: Page): Promise<{ table: Locator; columns: string[] } | null> {
-  const tables = page.locator("table");
-  const count = await tables.count();
+async function findResultTable(
+  scope: Scope
+): Promise<{ table: Locator; columns: string[] } | null> {
+  const tables = scope.locator("table");
+  const count = await tables.count().catch(() => 0);
   for (let i = 0; i < count; i++) {
     const table = tables.nth(i);
     const headerCells = table.locator("tr").first().locator("th, td");
@@ -150,40 +170,39 @@ async function findResultTable(page: Page): Promise<{ table: Locator; columns: s
   return null;
 }
 
+/** Wartet frame-übergreifend auf Ergebnistabelle oder "keine Treffer". */
+async function waitForResults(
+  page: Page,
+  timeoutMs = 30000
+): Promise<{ table: Locator; columns: string[] } | "empty" | null> {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    for (const scope of allScopes(page)) {
+      const result = await findResultTable(scope);
+      if (result) return result;
+
+      const noResults = scope
+        .getByText(/keine (treffer|ergebnisse|daten)|kein ergebnis/i)
+        .first();
+      if (await noResults.isVisible().catch(() => false)) return "empty";
+    }
+    await page.waitForTimeout(500);
+  } while (Date.now() < deadline);
+  return null;
+}
+
 async function parseResults(page: Page): Promise<GrundbuchHit[]> {
-  // Entweder erscheint eine Ergebnistabelle oder ein "keine Treffer"-Hinweis.
-  const noResults = page.getByText(/keine (treffer|ergebnisse|daten)|kein ergebnis/i);
-
-  const found = await Promise.race([
-    page
-      .waitForFunction(
-        // String statt Funktion: kein Bundler-Code in die Seite injizieren.
-        `Array.from(document.querySelectorAll("table tr:first-child")).some(function (row) {
-           var t = (row.innerText || "").toLowerCase();
-           return t.indexOf("ez") !== -1 && (t.indexOf("gst") !== -1 || t.indexOf("kg") !== -1);
-         })`,
-        undefined,
-        { timeout: 30000 }
-      )
-      .then(() => "table" as const)
-      .catch(() => null),
-    noResults
-      .first()
-      .waitFor({ state: "visible", timeout: 30000 })
-      .then(() => "empty" as const)
-      .catch(() => null),
-  ]);
-
-  if (found === "empty") return [];
-  const result = await findResultTable(page);
-  if (!result) {
+  const outcome = await waitForResults(page);
+  if (outcome === "empty") return [];
+  if (!outcome) {
     await dumpDebug(page, "ergebnistabelle-fehlt");
+    await dumpDiagnostics(page, "ergebnistabelle-fehlt");
     throw new Error(
-      "MANZ-Ergebnistabelle nicht gefunden (weder Treffer noch 'keine Treffer'-Hinweis). Siehe debug/-Snapshot."
+      "MANZ-Ergebnistabelle nicht gefunden (weder Treffer noch 'keine Treffer'-Hinweis). Siehe debug/-Snapshot + Diagnose-JSON."
     );
   }
 
-  const { table, columns } = result;
+  const { table, columns } = outcome;
   const rows = table.locator("tr");
   const rowCount = await rows.count();
   const hits: GrundbuchHit[] = [];
@@ -236,9 +255,21 @@ export async function searchAddress(
   input: SearchAddressInput
 ): Promise<GrundbuchHit[]> {
   await gotoAddressSearch(page);
-  await fillSearchForm(page, input);
-  await submitSearch(page);
+
+  const scope = await findFormScope(page);
+  if (!scope) {
+    await dumpDebug(page, "suchformular-nicht-gefunden");
+    await dumpDiagnostics(page, "suchformular-nicht-gefunden");
+    throw new Error(
+      "MANZ-Suchformular nicht gefunden (auch nicht in iframes). Siehe debug/-Snapshot + Diagnose-JSON."
+    );
+  }
+
+  await fillSearchForm(scope, page, input);
+  await submitSearch(scope, page);
   const hits = await parseResults(page);
-  console.log(`[manz] ${hits.length} Treffer für "${input.street} ${input.houseNumber}, ${input.city}"`);
+  console.log(
+    `[manz] ${hits.length} Treffer für "${input.street} ${input.houseNumber}, ${input.city}"`
+  );
   return hits;
 }

@@ -119,6 +119,18 @@ Die Browser-Session wird zwischen Requests wiederverwendet; bei abgelaufener
 Session wird automatisch einmal neu eingeloggt. Es läuft immer nur **eine**
 Suche gleichzeitig (interner Lock).
 
+### Wenn ein Selektor nicht greift: Diagnose-Dateien
+
+Schlägt ein Schritt fehl (Login-Feld, Grundbuch-Link, Suchformular,
+Ergebnistabelle), schreibt der Worker nach `debug/` neben Screenshot + HTML
+auch eine **`…-diagnose.json`**: alle Links (Text + href), Formularfelder
+(name/id/type/placeholder) und Buttons — über **alle Frames** hinweg, ohne
+Feld-Werte. Damit lässt sich der passende Selektor direkt ablesen und in
+`src/manz/session.ts` / `src/manz/search.ts` ergänzen.
+
+Das Suchformular und die Ergebnistabelle werden automatisch auch in
+**iframes** gesucht (MANZ-Anwendungen laufen teils in Frames).
+
 ### HAR-Dateien
 
 Wenn Selektoren auf der echten Seite nicht greifen: HAR-Dateien

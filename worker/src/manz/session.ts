@@ -2,11 +2,12 @@ import {
   chromium,
   type Browser,
   type BrowserContext,
+  type Frame,
   type Locator,
   type Page,
 } from "playwright";
 import { config } from "../config.js";
-import { dumpDebug } from "../debug.js";
+import { dumpDebug, dumpDiagnostics } from "../debug.js";
 
 const ISA_BASE_URL = "https://www.immoservice-austria.com/";
 const ADDRESS_SEARCH_PATH = "/ds/suche/grundstuecksadressensuche";
@@ -14,45 +15,77 @@ const ADDRESS_SEARCH_PATH = "/ds/suche/grundstuecksadressensuche";
 /** Fehler, der klar auf falsche Zugangsdaten / Login-Problem hinweist. */
 export class LoginError extends Error {}
 
-/** Gibt den ersten sichtbaren Locator aus einer Kandidatenliste zurück. */
+/**
+ * Suchbereich für Locators: die Seite selbst oder ein iframe darin.
+ * MANZ-Anwendungen laufen teils in iframes — Selektoren auf der Hauptseite
+ * finden dann nichts, obwohl das Formular sichtbar ist.
+ */
+export type Scope = Page | Frame;
+
+/** Alle Suchbereiche einer Seite: Hauptseite zuerst, dann alle iframes. */
+export function allScopes(page: Page): Scope[] {
+  return [page, ...page.frames().filter((frame) => frame.parentFrame() !== null)];
+}
+
+/**
+ * Pollt alle Kandidaten PARALLEL (statt jeden nacheinander mit vollem
+ * Timeout abzuwarten): schnell, wenn ein Element da ist, und mit klarer
+ * Obergrenze, wenn nicht.
+ */
 export async function firstVisible(
   candidates: Locator[],
   timeoutMs = 2500
 ): Promise<Locator | null> {
-  for (const candidate of candidates) {
-    try {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    for (const candidate of candidates) {
       const first = candidate.first();
-      await first.waitFor({ state: "visible", timeout: timeoutMs });
-      return first;
-    } catch {
-      // nächsten Kandidaten probieren
+      if (await first.isVisible().catch(() => false)) return first;
     }
-  }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  } while (Date.now() < deadline);
   return null;
 }
 
 /**
  * Usercentrics-/Cookie-Banner schließen. Playwright-Locators durchdringen
- * offene Shadow-DOMs automatisch, daher funktioniert das auch für
- * Usercentrics (#usercentrics-root).
+ * offene Shadow-DOMs automatisch (#usercentrics-root). Der Banner lädt oft
+ * verzögert, daher wird mehrfach probiert; ohne Usercentrics-Root und ohne
+ * sichtbaren Button brechen wir früh ab.
  */
-export async function dismissCookieBanner(page: Page): Promise<boolean> {
-  const button = await firstVisible([
+export async function dismissCookieBanner(page: Page, timeoutMs = 8000): Promise<boolean> {
+  const candidates = [
     page.locator('[data-testid="uc-accept-all-button"]'),
-    page.getByRole("button", { name: /alle akzeptieren/i }),
-    page.getByRole("button", { name: /alles akzeptieren/i }),
-    page.getByRole("button", { name: /accept all/i }),
-    page.getByRole("button", { name: /akzeptieren/i }),
-    page.getByRole("button", { name: /zustimmen/i }),
-  ]);
-  if (!button) return false;
-  try {
-    await button.click({ timeout: 5000 });
-    await page.waitForTimeout(500);
-    return true;
-  } catch {
-    return false;
-  }
+    page.getByRole("button", { name: /alle akzeptieren|alles akzeptieren|accept all/i }),
+    page.getByRole("button", { name: /akzeptieren|zustimmen|einverstanden/i }),
+  ];
+  const deadline = Date.now() + timeoutMs;
+  let misses = 0;
+
+  do {
+    const button = await firstVisible(candidates, 900);
+    if (button) {
+      const clicked = await button
+        .click({ timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+      if (clicked) {
+        await page.waitForTimeout(400);
+        console.log("[manz] Cookie-Banner geschlossen.");
+        return true;
+      }
+      misses = 0; // Button da, aber Klick blockiert — weiter versuchen
+    } else {
+      misses += 1;
+      const hasUsercentrics =
+        (await page.locator("#usercentrics-root").count().catch(() => 0)) > 0;
+      // Kein Usercentrics und zweimal kein Button: es gibt keinen Banner.
+      if (!hasUsercentrics && misses >= 2) return false;
+      // Usercentrics-Root da, aber nie ein Button (Consent schon erteilt).
+      if (hasUsercentrics && misses >= 4) return false;
+    }
+  } while (Date.now() < deadline);
+  return false;
 }
 
 /**
@@ -100,7 +133,7 @@ export class ManzSession {
     console.log("[manz] Login erfolgreich, öffne Grundbuch-Modul …");
 
     const manzPage = await this.openGrundbuchModule(page);
-    await dismissCookieBanner(manzPage);
+    await dismissCookieBanner(manzPage, 5000);
     console.log(`[manz] Grundbuch-Modul geöffnet: ${manzPage.url()}`);
     return manzPage;
   }
@@ -117,7 +150,7 @@ export class ManzSession {
     if (loginLink) {
       await loginLink.click();
       await page.waitForLoadState("domcontentloaded");
-      await dismissCookieBanner(page);
+      await dismissCookieBanner(page, 4000);
     }
   }
 
@@ -129,6 +162,7 @@ export class ManzSession {
         page.locator('input[id*="mail" i]'),
         page.locator('input[name*="user" i]'),
         page.getByLabel(/e-?mail/i),
+        page.getByPlaceholder(/e-?mail/i),
       ],
       timeoutMs
     );
@@ -138,13 +172,18 @@ export class ManzSession {
     const emailField = await this.findEmailField(page, 8000);
     if (!emailField) {
       await dumpDebug(page, "login-kein-email-feld");
+      await dumpDiagnostics(page, "login-kein-email-feld");
       throw new LoginError(
-        "Login-Formular nicht gefunden (kein E-Mail-Feld sichtbar). Siehe debug/-Snapshot."
+        "Login-Formular nicht gefunden (kein E-Mail-Feld sichtbar). Siehe debug/-Snapshot + Diagnose-JSON."
       );
     }
-    const passwordField = await firstVisible([page.locator('input[type="password"]')], 5000);
+    const passwordField = await firstVisible(
+      [page.locator('input[type="password"]'), page.getByPlaceholder(/passwort|password/i)],
+      5000
+    );
     if (!passwordField) {
       await dumpDebug(page, "login-kein-passwort-feld");
+      await dumpDiagnostics(page, "login-kein-passwort-feld");
       throw new LoginError("Login-Formular nicht gefunden (kein Passwort-Feld sichtbar).");
     }
 
@@ -164,7 +203,9 @@ export class ManzSession {
 
     // Erfolg = Modulübersicht/"auswahl" erreicht ODER Grundbuch-Link sichtbar.
     // Misserfolg = Fehlermeldung sichtbar.
-    const errorText = page.getByText(/fehler beim login|login fehlgeschlagen|passwort.*(falsch|ungültig)|ungültige.*anmeldedaten/i);
+    const errorText = page.getByText(
+      /fehler beim login|login fehlgeschlagen|passwort.*(falsch|ungültig)|ungültige.*anmeldedaten/i
+    );
     const grundbuchLink = this.grundbuchLinkLocator(page);
 
     const outcome = await Promise.race([
@@ -194,8 +235,9 @@ export class ManzSession {
       // Race lief in den Timeout — noch einmal direkt prüfen, bevor wir aufgeben.
       if (!(await grundbuchLink.first().isVisible().catch(() => false))) {
         await dumpDebug(page, "login-timeout");
+        await dumpDiagnostics(page, "login-timeout");
         throw new LoginError(
-          "Login-Ergebnis unklar: Weder Modulübersicht noch Fehlermeldung erschienen. Möglicherweise blockiert der Cookie-Banner. Siehe debug/-Snapshot."
+          "Login-Ergebnis unklar: Weder Modulübersicht noch Fehlermeldung erschienen. Möglicherweise blockiert der Cookie-Banner. Siehe debug/-Snapshot + Diagnose-JSON."
         );
       }
     }
@@ -218,59 +260,74 @@ export class ManzSession {
         page.getByText(/grundbuchimmo/i),
         page.getByText(/^\s*grundbuch\s*$/i),
       ],
-      6000
+      8000
     );
     if (!link) {
       await dumpDebug(page, "grundbuch-link-nicht-gefunden");
+      await dumpDiagnostics(page, "grundbuch-link-nicht-gefunden");
       throw new Error(
-        "Grundbuch-Modul nicht gefunden (kein Link mit 'grundbuchimmo'/'Grundbuch'). Siehe debug/-Snapshot."
+        "Grundbuch-Modul nicht gefunden (kein Link mit 'grundbuchimmo'/'Grundbuch'). Siehe debug/-Snapshot + Diagnose-JSON."
       );
     }
 
-    const popupPromise = page
-      .waitForEvent("popup", { timeout: 15000 })
-      .catch(() => null);
+    const popupPromise = page.waitForEvent("popup", { timeout: 15000 }).catch(() => null);
     await link.click();
     const popup = await popupPromise;
 
     const manzPage = popup ?? page;
     await manzPage.waitForLoadState("domcontentloaded");
     // MANZ braucht nach dem Rev-Proxy-Redirect oft einen Moment.
+    await manzPage
+      .waitForURL(/manz\.at|grundbuch/i, { timeout: 20000 })
+      .catch(() => {});
     await manzPage.waitForLoadState("networkidle").catch(() => {});
     return manzPage;
   }
 
-  /** Zur MANZ-Grundstücksadressensuche navigieren. */
+  /** Zur MANZ-Grundstücksadressensuche navigieren (auch in iframes suchen). */
   async gotoAddressSearch(page: Page): Promise<void> {
-    if (page.url().includes("grundstuecksadressensuche")) return;
+    if (this.isOnAddressSearch(page)) return;
 
-    const link = await firstVisible(
-      [
-        page.locator('a[href*="grundstuecksadressensuche" i]'),
-        page.getByRole("link", { name: /grundstücksadresse/i }),
-        page.getByRole("link", { name: /adressen?suche/i }),
-        page.getByText(/grundstücksadressensuche/i),
-      ],
-      6000
-    );
-    if (link) {
-      await link.click();
-      await page.waitForLoadState("domcontentloaded");
-      return;
+    for (const scope of allScopes(page)) {
+      const link = await firstVisible(
+        [
+          scope.locator('a[href*="grundstuecksadressensuche" i]'),
+          scope.getByRole("link", { name: /grundstücksadresse/i }),
+          scope.getByRole("link", { name: /adressen?suche/i }),
+          scope.getByText(/grundstücksadressensuche/i),
+        ],
+        2000
+      );
+      if (link) {
+        await link.click();
+        await page.waitForLoadState("domcontentloaded");
+        await page.waitForLoadState("networkidle").catch(() => {});
+        return;
+      }
     }
 
     // Fallback: URL aus dem Rev-Proxy-Pfad ableiten
     // (…/at.gv.bmj.grundbuch.web/<…>/ds/suche/grundstuecksadressensuche).
-    const match = page.url().match(/^(.*at\.gv\.bmj\.grundbuch\.web[^?#]*?)(\/ds\/.*)?$/);
-    if (match) {
-      const base = match[1].replace(/\/+$/, "");
-      await page.goto(`${base}${ADDRESS_SEARCH_PATH}`, { waitUntil: "domcontentloaded" });
-      if (page.url().includes("grundstuecksadressensuche")) return;
+    const urls = [page.url(), ...page.frames().map((frame) => frame.url())];
+    for (const url of urls) {
+      const match = url.match(/^(.*at\.gv\.bmj\.grundbuch\.web[^?#]*?)(\/ds\/.*)?$/);
+      if (match) {
+        const base = match[1].replace(/\/+$/, "");
+        await page.goto(`${base}${ADDRESS_SEARCH_PATH}`, { waitUntil: "domcontentloaded" });
+        if (this.isOnAddressSearch(page)) return;
+      }
     }
 
     await dumpDebug(page, "adresssuche-nicht-gefunden");
+    await dumpDiagnostics(page, "adresssuche-nicht-gefunden");
     throw new Error(
-      "MANZ-Adresssuche nicht erreichbar: Weder Link noch abgeleitete URL führten zu /ds/suche/grundstuecksadressensuche. Siehe debug/-Snapshot."
+      "MANZ-Adresssuche nicht erreichbar: Weder Link noch abgeleitete URL führten zu /ds/suche/grundstuecksadressensuche. Siehe debug/-Snapshot + Diagnose-JSON."
+    );
+  }
+
+  private isOnAddressSearch(page: Page): boolean {
+    return [page.url(), ...page.frames().map((frame) => frame.url())].some((url) =>
+      url.includes("grundstuecksadressensuche")
     );
   }
 }
