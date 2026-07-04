@@ -30,6 +30,13 @@ Im zweiten Terminal:
 npm run test:search               # Windows: npm.cmd run test:search
 ```
 
+Ohne Login/Netz testen (Formular + Parser gegen echtes MANZ-HTML aus den
+HAR-Aufnahmen in `test/fixtures/`):
+
+```bash
+npm run test:parse                # Windows: npm.cmd run test:parse
+```
+
 Erwartung: echte MANZ-Treffer für *Hochstraße 137, Perchtoldsdorf* mit
 EZ 330, KG 16121, Gst 2546/2 — dynamisch aus der Tabelle geparst, nicht
 hardcoded.
@@ -100,20 +107,28 @@ curl -s -X POST http://localhost:8787/search-address \
   -d '{"city":"Perchtoldsdorf","street":"Hochstraße","houseNumber":"137"}'
 ```
 
-## Ablauf (live)
+## Ablauf (live) — aus den echten HAR-Aufnahmen abgeleitet
 
-1. `https://www.immoservice-austria.com/` öffnen, Usercentrics-Cookie-Banner
-   schließen.
-2. Mit `ISA_EMAIL` / `ISA_PASSWORD` einloggen (robuste Selektoren, klare
-   Fehlermeldung bei „Fehler beim Login“).
-3. Grundbuch/Grundbuchimmo-Modul öffnen (mehrere Link-Strategien; neuer Tab
-   wird erkannt).
-4. Zur MANZ-Adresssuche `/ds/suche/grundstuecksadressensuche` navigieren.
-5. Formular befüllen, „Suchen“ klicken.
-6. Ergebnistabelle **dynamisch** parsen: Die Spalten (Politische Gemeinde,
+1. **Login**: `POST https://www.immoservice-austria.com/login` mit den
+   Formularfeldern `email`, `password`, `submit` (kein CSRF-Token) →
+   Redirect auf `/auswahl`. Läuft als direkter Formular-POST über den
+   Browser-Kontext (immun gegen Cookie-Banner); UI-Login mit robusten
+   Selektoren als Fallback.
+2. **MANZ starten**: `GET /grundbuchimmo/grundbuch` → SSO-Redirect zu
+   `dienste.manz.at` (setzt `JSESSIONID` / `AAA-SESSION-ID`). Der Link in der
+   Modulübersicht ist `target="_blank"` — der Worker navigiert die URL direkt
+   und braucht daher weder Klick noch Popup; Klick-Fallback ist trotzdem drin.
+3. **Adresssuche**: feste URL
+   `…/at.gv.bmj.grundbuch.web/ds/suche/grundstuecksadressensuche`.
+   Formularfelder (echte IDs): `#ortr` (ort=REGION), `#regionsb` (Bundesland,
+   Standard „Österreich“), `#ortsname`, `#strasse` (max. 25 Zeichen),
+   `#orientierungsnrn`+`#nummer` (Hausnummer; ohne Hausnummer: „ALLE“),
+   `#exakt`/`#erweitert` (searchMode exact/fuzzy), `#searchButton`.
+4. **Ergebnistabelle dynamisch parsen**: Die Spalten (Politische Gemeinde,
    PG Nr., Ort, Straße, Hnr., EZ, KG EZ, Gst, KG Gst) werden über die
    Header-Texte zugeordnet — keine festen Spaltenindizes, keine hardcodierten
-   Werte.
+   Werte. Der „Gehe zu“-Link (`auszugsuche?kg=…&ez=…`) wird als `auszugUrl`
+   mitgeliefert, aber **nie automatisch aufgerufen** (kostenpflichtig!).
 
 Die Browser-Session wird zwischen Requests wiederverwendet; bei abgelaufener
 Session wird automatisch einmal neu eingeloggt. Es läuft immer nur **eine**
@@ -133,12 +148,13 @@ Das Suchformular und die Ergebnistabelle werden automatisch auch in
 
 ### HAR-Dateien
 
-Wenn Selektoren auf der echten Seite nicht greifen: HAR-Dateien
-(`Grundbuch webseite auslesen 1.har`, `www.immoservice-austria Grundbuch.har`,
-`dienste.manz.at_Grundbuch links.har`, `dienste.manz.at_Archive 2.har`) in
-`worker/har/` legen (ist gitignored) und die Selektoren in
-`src/manz/session.ts` / `src/manz/search.ts` anhand der echten Feldnamen
-nachschärfen. Die Debug-Snapshots in `debug/` zeigen zusätzlich, wo es hakt.
+Die Selektoren, URLs und Formularfelder wurden bereits anhand der
+HAR-Aufnahmen der echten Sitzung gebaut (`www.immoservice-austria
+Grundbuch.har`, `dienste.manz.at_Grundbuch links.har`, …). Zwei daraus
+extrahierte Seiten liegen als Test-Fixtures in `test/fixtures/` (enthalten
+nur öffentliche Beispieldaten, keine Zugangsdaten). Neue HAR-Aufnahmen für
+spätere Analysen in `worker/har/` legen — der Ordner ist gitignored, weil
+HAR-Dateien Cookies/Session-Tokens enthalten können.
 
 ## Sicherheit & DSGVO
 

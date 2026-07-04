@@ -25,4 +25,7 @@ export interface GrundbuchHit {
   kgGst: string;
   address: string;
   source: "manz";
+  /** "Gehe zu"-Link aus der Trefferzeile (auszugsuche?kg=…&ez=…) — wird nur
+   *  gemerkt, nie automatisch aufgerufen (kostenpflichtig!). */
+  auszugUrl?: string;
 }

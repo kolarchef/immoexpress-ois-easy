@@ -9,7 +9,8 @@
     "start": "tsx src/server.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:search": "tsx scripts/test-search.ts"
+    "test:search": "tsx scripts/test-search.ts",
+    "test:parse": "tsx scripts/test-parse.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

@@ -9,16 +9,26 @@ import {
 import { config } from "../config.js";
 import { dumpDebug, dumpDiagnostics } from "../debug.js";
 
-const ISA_BASE_URL = "https://www.immoservice-austria.com/";
-const ADDRESS_SEARCH_PATH = "/ds/suche/grundstuecksadressensuche";
+/**
+ * URLs und Ablauf stammen aus den HAR-Aufnahmen der echten Sitzung:
+ * - POST https://www.immoservice-austria.com/login  (Felder: email, password, submit)
+ *   -> 302 /auswahl
+ * - GET  /grundbuchimmo/auswahl  (Modulübersicht, Link target="_blank")
+ * - GET  /grundbuchimmo/grundbuch  -> SSO-Redirect zu dienste.manz.at
+ *   (setzt JSESSIONID / AAA-SESSION-ID Cookies)
+ * - Adresssuche liegt unter einer FESTEN URL (kein Session-Teil im Pfad).
+ */
+const ISA_BASE = "https://www.immoservice-austria.com";
+const GRUNDBUCH_LAUNCH_URL = `${ISA_BASE}/grundbuchimmo/grundbuch`;
+const MODULE_OVERVIEW_URL = `${ISA_BASE}/grundbuchimmo/auswahl`;
+export const MANZ_ADDRESS_SEARCH_URL =
+  "https://dienste.manz.at/vst/rev-proxy/gb/at.gv.bmj.grundbuch.web/ds/suche/grundstuecksadressensuche";
 
 /** Fehler, der klar auf falsche Zugangsdaten / Login-Problem hinweist. */
 export class LoginError extends Error {}
 
 /**
  * Suchbereich für Locators: die Seite selbst oder ein iframe darin.
- * MANZ-Anwendungen laufen teils in iframes — Selektoren auf der Hauptseite
- * finden dann nichts, obwohl das Formular sichtbar ist.
  */
 export type Scope = Page | Frame;
 
@@ -120,55 +130,85 @@ export class ManzSession {
     this.browser = await chromium.launch({
       headless: config.headless,
       slowMo: config.slowMoMs || undefined,
+      executablePath: config.chromiumPath || undefined,
     });
     this.context = await this.browser.newContext({ locale: "de-AT" });
     const page = await this.context.newPage();
 
-    console.log("[manz] Öffne Immoservice Austria …");
-    await page.goto(ISA_BASE_URL, { waitUntil: "domcontentloaded" });
-    await dismissCookieBanner(page);
+    // 1) Login — bevorzugt als direkter Formular-POST über den
+    //    Browser-Kontext (teilt Cookies mit den Tabs): immun gegen
+    //    Cookie-Banner und Selektor-Änderungen. UI-Login als Fallback.
+    console.log("[manz] Login bei Immoservice Austria …");
+    const apiLoginOk = await this.apiLogin();
+    if (apiLoginOk) {
+      console.log("[manz] Login per Formular-POST erfolgreich.");
+    } else {
+      console.log("[manz] Formular-POST-Login fehlgeschlagen — versuche UI-Login …");
+      await this.uiLogin(page);
+    }
 
-    await this.openLoginForm(page);
-    await this.submitLogin(page);
-    console.log("[manz] Login erfolgreich, öffne Grundbuch-Modul …");
+    // 2) Grundbuch-Modul starten. Der Modul-Link ist target="_blank", die URL
+    //    selbst ist aber eine normale Navigation mit SSO-Redirect zu
+    //    dienste.manz.at — direkter Aufruf umgeht Banner und Popup.
+    console.log("[manz] Starte Grundbuch-Modul (SSO-Redirect zu MANZ) …");
+    await page.goto(GRUNDBUCH_LAUNCH_URL, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
 
-    const manzPage = await this.openGrundbuchModule(page);
-    await dismissCookieBanner(manzPage, 5000);
+    let manzPage: Page = page;
+    if (!page.url().includes("manz.at")) {
+      // Fallback: über die Modulübersicht klicken (öffnet ggf. neuen Tab).
+      console.log("[manz] Direkter Start ohne Redirect — versuche Klick in der Modulübersicht …");
+      manzPage = await this.openGrundbuchModuleByClick(page);
+    }
+
+    if (!manzPage.url().includes("manz.at")) {
+      await dumpDebug(manzPage, "manz-start-fehlgeschlagen");
+      await dumpDiagnostics(manzPage, "manz-start-fehlgeschlagen");
+      throw new LoginError(
+        "Grundbuch-Modul konnte nicht gestartet werden (kein Redirect zu dienste.manz.at). " +
+          "Meist bedeutet das: Login fehlgeschlagen oder Modul nicht freigeschaltet. Siehe debug/."
+      );
+    }
+
+    await dismissCookieBanner(manzPage, 4000);
     console.log(`[manz] Grundbuch-Modul geöffnet: ${manzPage.url()}`);
     return manzPage;
   }
 
-  /** Login-Formular sichtbar machen (falls hinter einem "Login"-Link). */
-  private async openLoginForm(page: Page): Promise<void> {
-    if (await this.findEmailField(page, 1500)) return;
+  /**
+   * Login wie im HAR aufgezeichnet: POST /login mit email/password/submit,
+   * Erfolg = Redirect auf /auswahl. Kein CSRF-Token nötig.
+   */
+  private async apiLogin(): Promise<boolean> {
+    if (!this.context) return false;
+    const response = await this.context.request
+      .post(`${ISA_BASE}/login`, {
+        form: { email: config.isaEmail, password: config.isaPassword, submit: " " },
+      })
+      .catch(() => null);
+    if (!response || !response.ok()) return false;
+    // Redirects werden gefolgt; bei Erfolg landen wir auf /auswahl.
+    return response.url().includes("auswahl");
+  }
 
-    const loginLink = await firstVisible([
-      page.getByRole("link", { name: /login|anmelden|einloggen/i }),
-      page.getByRole("button", { name: /login|anmelden|einloggen/i }),
-      page.locator('a[href*="login" i]'),
-    ]);
-    if (loginLink) {
-      await loginLink.click();
-      await page.waitForLoadState("domcontentloaded");
-      await dismissCookieBanner(page, 4000);
+  /** UI-Login als Fallback (Startseite -> Login-Formular -> absenden). */
+  private async uiLogin(page: Page): Promise<void> {
+    await page.goto(ISA_BASE, { waitUntil: "domcontentloaded" });
+    await dismissCookieBanner(page);
+
+    if (!(await this.findEmailField(page, 1500))) {
+      const loginLink = await firstVisible([
+        page.getByRole("link", { name: /login|anmelden|einloggen/i }),
+        page.getByRole("button", { name: /login|anmelden|einloggen/i }),
+        page.locator('a[href*="login" i]'),
+      ]);
+      if (loginLink) {
+        await loginLink.click();
+        await page.waitForLoadState("domcontentloaded");
+        await dismissCookieBanner(page, 4000);
+      }
     }
-  }
 
-  private async findEmailField(page: Page, timeoutMs = 2500): Promise<Locator | null> {
-    return firstVisible(
-      [
-        page.locator('input[type="email"]'),
-        page.locator('input[name*="mail" i]'),
-        page.locator('input[id*="mail" i]'),
-        page.locator('input[name*="user" i]'),
-        page.getByLabel(/e-?mail/i),
-        page.getByPlaceholder(/e-?mail/i),
-      ],
-      timeoutMs
-    );
-  }
-
-  private async submitLogin(page: Page): Promise<void> {
     const emailField = await this.findEmailField(page, 8000);
     if (!emailField) {
       await dumpDebug(page, "login-kein-email-feld");
@@ -178,7 +218,7 @@ export class ManzSession {
       );
     }
     const passwordField = await firstVisible(
-      [page.locator('input[type="password"]'), page.getByPlaceholder(/passwort|password/i)],
+      [page.locator('input[name="password"]'), page.locator('input[type="password"]')],
       5000
     );
     if (!passwordField) {
@@ -191,6 +231,7 @@ export class ManzSession {
     await passwordField.fill(config.isaPassword);
 
     const submit = await firstVisible([
+      page.locator('[name="submit"]'),
       page.getByRole("button", { name: /login|anmelden|einloggen/i }),
       page.locator('button[type="submit"]'),
       page.locator('input[type="submit"]'),
@@ -201,21 +242,12 @@ export class ManzSession {
       await passwordField.press("Enter");
     }
 
-    // Erfolg = Modulübersicht/"auswahl" erreicht ODER Grundbuch-Link sichtbar.
-    // Misserfolg = Fehlermeldung sichtbar.
     const errorText = page.getByText(
       /fehler beim login|login fehlgeschlagen|passwort.*(falsch|ungültig)|ungültige.*anmeldedaten/i
     );
-    const grundbuchLink = this.grundbuchLinkLocator(page);
-
     const outcome = await Promise.race([
       page
-        .waitForURL(/auswahl|modul|dashboard|start/i, { timeout: 25000 })
-        .then(() => "ok" as const)
-        .catch(() => null),
-      grundbuchLink
-        .first()
-        .waitFor({ state: "visible", timeout: 25000 })
+        .waitForURL(/\/auswahl/i, { timeout: 25000 })
         .then(() => "ok" as const)
         .catch(() => null),
       errorText
@@ -225,48 +257,45 @@ export class ManzSession {
         .catch(() => null),
     ]);
 
-    if (outcome === "error") {
+    if (outcome !== "ok") {
       await dumpDebug(page, "login-fehlgeschlagen");
+      if (outcome !== "error") await dumpDiagnostics(page, "login-fehlgeschlagen");
       throw new LoginError(
-        "Fehler beim Login: Immoservice hat die Anmeldung abgelehnt. Bitte ISA_EMAIL und ISA_PASSWORD in der .env prüfen."
+        "Fehler beim Login: Immoservice hat die Anmeldung nicht angenommen. Bitte ISA_EMAIL und ISA_PASSWORD in der .env prüfen."
       );
     }
-    if (outcome !== "ok") {
-      // Race lief in den Timeout — noch einmal direkt prüfen, bevor wir aufgeben.
-      if (!(await grundbuchLink.first().isVisible().catch(() => false))) {
-        await dumpDebug(page, "login-timeout");
-        await dumpDiagnostics(page, "login-timeout");
-        throw new LoginError(
-          "Login-Ergebnis unklar: Weder Modulübersicht noch Fehlermeldung erschienen. Möglicherweise blockiert der Cookie-Banner. Siehe debug/-Snapshot + Diagnose-JSON."
-        );
-      }
-    }
   }
 
-  private grundbuchLinkLocator(page: Page): Locator {
-    return page
-      .locator('a[href*="grundbuchimmo" i]')
-      .or(page.getByRole("link", { name: /grundbuchimmo/i }))
-      .or(page.getByRole("link", { name: /grundbuch/i }));
+  private async findEmailField(page: Page, timeoutMs = 2500): Promise<Locator | null> {
+    return firstVisible(
+      [
+        page.locator('input[name="email"]'),
+        page.locator('input[type="email"]'),
+        page.locator('input[name*="mail" i]'),
+        page.getByPlaceholder(/e-?mail/i),
+      ],
+      timeoutMs
+    );
   }
 
-  /** Grundbuch-/Grundbuchimmo-Modul öffnen; MANZ öffnet oft in neuem Tab. */
-  private async openGrundbuchModule(page: Page): Promise<Page> {
+  /** Fallback: Grundbuch-Link in der Modulübersicht klicken (target=_blank). */
+  private async openGrundbuchModuleByClick(page: Page): Promise<Page> {
+    await page.goto(MODULE_OVERVIEW_URL, { waitUntil: "domcontentloaded" });
+    await dismissCookieBanner(page, 4000);
+
     const link = await firstVisible(
       [
-        page.locator('a[href*="grundbuchimmo" i]'),
-        page.getByRole("link", { name: /grundbuchimmo/i }),
+        page.locator('a[href*="grundbuchimmo/grundbuch" i]'),
+        page.locator('a[href*="grundbuchimmo" i]', { hasText: /grundbuch/i }),
         page.getByRole("link", { name: /grundbuch/i }),
-        page.getByText(/grundbuchimmo/i),
-        page.getByText(/^\s*grundbuch\s*$/i),
       ],
       8000
     );
     if (!link) {
       await dumpDebug(page, "grundbuch-link-nicht-gefunden");
       await dumpDiagnostics(page, "grundbuch-link-nicht-gefunden");
-      throw new Error(
-        "Grundbuch-Modul nicht gefunden (kein Link mit 'grundbuchimmo'/'Grundbuch'). Siehe debug/-Snapshot + Diagnose-JSON."
+      throw new LoginError(
+        "Grundbuch-Modul nicht gefunden — vermutlich ist der Login fehlgeschlagen oder das Modul nicht freigeschaltet. Siehe debug/."
       );
     }
 
@@ -276,58 +305,24 @@ export class ManzSession {
 
     const manzPage = popup ?? page;
     await manzPage.waitForLoadState("domcontentloaded");
-    // MANZ braucht nach dem Rev-Proxy-Redirect oft einen Moment.
-    await manzPage
-      .waitForURL(/manz\.at|grundbuch/i, { timeout: 20000 })
-      .catch(() => {});
+    await manzPage.waitForURL(/manz\.at/i, { timeout: 20000 }).catch(() => {});
     await manzPage.waitForLoadState("networkidle").catch(() => {});
     return manzPage;
   }
 
-  /** Zur MANZ-Grundstücksadressensuche navigieren (auch in iframes suchen). */
+  /**
+   * Zur MANZ-Grundstücksadressensuche navigieren. Die URL ist fix (aus den
+   * HAR-Aufnahmen), die Session hängt nur an Cookies — direkter goto reicht.
+   */
   async gotoAddressSearch(page: Page): Promise<void> {
-    if (this.isOnAddressSearch(page)) return;
+    await page.goto(MANZ_ADDRESS_SEARCH_URL, { waitUntil: "domcontentloaded" });
+    if (page.url().includes("grundstuecksadressensuche")) return;
 
-    for (const scope of allScopes(page)) {
-      const link = await firstVisible(
-        [
-          scope.locator('a[href*="grundstuecksadressensuche" i]'),
-          scope.getByRole("link", { name: /grundstücksadresse/i }),
-          scope.getByRole("link", { name: /adressen?suche/i }),
-          scope.getByText(/grundstücksadressensuche/i),
-        ],
-        2000
-      );
-      if (link) {
-        await link.click();
-        await page.waitForLoadState("domcontentloaded");
-        await page.waitForLoadState("networkidle").catch(() => {});
-        return;
-      }
-    }
-
-    // Fallback: URL aus dem Rev-Proxy-Pfad ableiten
-    // (…/at.gv.bmj.grundbuch.web/<…>/ds/suche/grundstuecksadressensuche).
-    const urls = [page.url(), ...page.frames().map((frame) => frame.url())];
-    for (const url of urls) {
-      const match = url.match(/^(.*at\.gv\.bmj\.grundbuch\.web[^?#]*?)(\/ds\/.*)?$/);
-      if (match) {
-        const base = match[1].replace(/\/+$/, "");
-        await page.goto(`${base}${ADDRESS_SEARCH_PATH}`, { waitUntil: "domcontentloaded" });
-        if (this.isOnAddressSearch(page)) return;
-      }
-    }
-
-    await dumpDebug(page, "adresssuche-nicht-gefunden");
-    await dumpDiagnostics(page, "adresssuche-nicht-gefunden");
+    // Redirect woandershin = Session abgelaufen o.ä. — Aufrufer resettet.
+    await dumpDebug(page, "adresssuche-nicht-erreichbar");
+    await dumpDiagnostics(page, "adresssuche-nicht-erreichbar");
     throw new Error(
-      "MANZ-Adresssuche nicht erreichbar: Weder Link noch abgeleitete URL führten zu /ds/suche/grundstuecksadressensuche. Siehe debug/-Snapshot + Diagnose-JSON."
-    );
-  }
-
-  private isOnAddressSearch(page: Page): boolean {
-    return [page.url(), ...page.frames().map((frame) => frame.url())].some((url) =>
-      url.includes("grundstuecksadressensuche")
+      `MANZ-Adresssuche nicht erreichbar (gelandet auf: ${page.url()}). Session vermutlich abgelaufen.`
     );
   }
 }

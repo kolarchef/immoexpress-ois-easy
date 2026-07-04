@@ -22,6 +22,8 @@ const EnvSchema = z
     HEADLESS: boolFromString("true"),
     SLOW_MO_MS: z.coerce.number().int().min(0).default(0),
     DEBUG_DUMPS: boolFromString("true"),
+    // Optional: Pfad zu einem vorhandenen Chromium (sonst Playwright-Download)
+    CHROMIUM_PATH: z.string().default(""),
   })
   .refine(
     (env) => env.GRUNDBUCH_MODE !== "live" || (env.ISA_EMAIL !== "" && env.ISA_PASSWORD !== ""),
@@ -51,4 +53,5 @@ export const config = {
   headless: parsed.data.HEADLESS,
   slowMoMs: parsed.data.SLOW_MO_MS,
   debugDumps: parsed.data.DEBUG_DUMPS,
+  chromiumPath: parsed.data.CHROMIUM_PATH,
 } as const;

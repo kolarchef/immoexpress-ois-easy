@@ -4,10 +4,26 @@ import type { GrundbuchHit, SearchAddressInput } from "../types.js";
 import { allScopes, firstVisible, type Scope } from "./session.js";
 
 /**
- * Header-Text -> Feldname im Ergebnis. Die Spaltenreihenfolge wird NICHT
- * angenommen, sondern pro Suche aus der echten MANZ-Tabelle gelesen.
+ * Formular und Tabelle entsprechen der echten MANZ-Seite (aus den
+ * HAR-Aufnahmen). Felder der Grundstücksadressensuche:
+ *   ort            Radio: REGION | POLGEM             (#ortr / #ortp)
+ *   regionsb       Select Bundesland (inkl. "Österreich")
+ *   ortsname       Text Ortsname
+ *   pg             Text PG-Nummer (optional)
+ *   strasse        Text Straße (maxlength 25)
+ *   orientierungsnr Radio: NUMMER | NUMMERNBEREICH | ALLE | NURSTRASSE
+ *   nummer         Text Hausnummer
+ *   phonetisch     Radio: false (#exakt) | true (#erweitert)
+ *   searchButton   Submit "Suchen"
  */
-const HEADER_MAP: Record<string, keyof Omit<GrundbuchHit, "address" | "source">> = {
+
+/**
+ * Header-Text -> Feldname im Ergebnis. Die Spaltenreihenfolge wird NICHT
+ * angenommen, sondern pro Suche aus der echten MANZ-Tabelle gelesen
+ * (Header: Politische Gemeinde, PG Nr., Ort, Straße, Hnr., EZ, KG EZ,
+ * Gst, KG Gst, Gehe zu ...).
+ */
+const HEADER_MAP: Record<string, keyof Omit<GrundbuchHit, "address" | "source" | "auszugUrl">> = {
   politischegemeinde: "politischeGemeinde",
   pgnr: "pgNr",
   ort: "ort",
@@ -30,23 +46,18 @@ function normalizeHeader(text: string): string {
     .replace(/ö/g, "oe")
     .replace(/ü/g, "ue")
     .replace(/[^a-z0-9]/g, "")
-    // MANZ schreibt "Straße" -> normalisiert "strasse"; Umlaut-Varianten angleichen
     .replace(/^strase$/, "strasse");
 }
 
 function streetFieldCandidates(scope: Scope): Locator[] {
   return [
+    scope.locator("#strasse"),
+    scope.locator('input[name="strasse"]'),
     scope.getByLabel(/stra(ß|ss)e/i),
-    scope.locator('input[name*="strasse" i]'),
-    scope.locator('input[id*="strasse" i]'),
-    scope.locator('input[name*="street" i]'),
   ];
 }
 
-/**
- * Das MANZ-Suchformular kann direkt auf der Seite oder in einem iframe
- * liegen. Wir suchen den Bereich, in dem das Straße-Feld sichtbar ist.
- */
+/** Das Formular liegt direkt auf der Seite; iframes nur als Sicherheitsnetz. */
 async function findFormScope(page: Page): Promise<Scope | null> {
   const deadline = Date.now() + 15000;
   do {
@@ -59,12 +70,23 @@ async function findFormScope(page: Page): Promise<Scope | null> {
   return null;
 }
 
-async function fillFirstMatch(
+async function checkRadio(scope: Scope, candidates: Locator[], name: string): Promise<boolean> {
+  const radio = await firstVisible(candidates, 2000);
+  if (!radio) {
+    console.warn(`[manz] Radio "${name}" nicht gefunden — Standardwert bleibt aktiv.`);
+    return false;
+  }
+  await radio.check().catch(async () => radio.click().catch(() => {}));
+  return true;
+}
+
+async function fillField(
+  scope: Scope,
+  page: Page,
   candidates: Locator[],
   value: string,
   fieldName: string,
-  required: boolean,
-  page: Page
+  required: boolean
 ): Promise<void> {
   const field = await firstVisible(candidates, 3000);
   if (!field) {
@@ -72,7 +94,7 @@ async function fillFirstMatch(
       await dumpDebug(page, `suchformular-feld-fehlt-${fieldName}`);
       await dumpDiagnostics(page, `suchformular-feld-fehlt-${fieldName}`);
       throw new Error(
-        `Suchformular: Feld "${fieldName}" nicht gefunden. Siehe debug/-Snapshot + Diagnose-JSON — dort stehen die echten Feldnamen.`
+        `Suchformular: Feld "${fieldName}" nicht gefunden. Siehe debug/-Snapshot + Diagnose-JSON.`
       );
     }
     console.warn(`[manz] Optionales Feld "${fieldName}" nicht gefunden — übersprungen.`);
@@ -81,66 +103,90 @@ async function fillFirstMatch(
   await field.fill(value);
 }
 
-async function fillSearchForm(scope: Scope, page: Page, input: SearchAddressInput): Promise<void> {
-  // Bundesland (falls als Auswahlfeld vorhanden) zuerst, da es andere Felder
-  // zurücksetzen kann.
-  if (input.region) {
-    const regionSelect = await firstVisible(
-      [
-        scope.getByLabel(/bundesland/i),
-        scope.locator('select[name*="bundesland" i]'),
-        scope.locator('select[id*="bundesland" i]'),
-      ],
-      2000
-    );
-    if (regionSelect) {
-      await regionSelect.selectOption({ label: input.region }).catch(() => {
-        console.warn(
-          `[manz] Bundesland "${input.region}" nicht in Auswahlliste gefunden — übersprungen.`
-        );
-      });
-    }
-  }
-
-  await fillFirstMatch(
-    [
-      scope.getByLabel(/politische gemeinde/i),
-      scope.getByLabel(/gemeinde/i),
-      scope.getByLabel(/^ort/i),
-      scope.locator('input[name*="gemeinde" i]'),
-      scope.locator('input[id*="gemeinde" i]'),
-      scope.locator('input[name*="ort" i]'),
-    ],
-    input.city,
-    "Gemeinde-Ort",
-    true,
-    page
+export async function fillSearchForm(
+  scope: Scope,
+  page: Page,
+  input: SearchAddressInput
+): Promise<void> {
+  // Suchvariante "REGION" (Bundesland + Ortsname) — wie in der
+  // aufgezeichneten, funktionierenden Suche. Ohne region: "Österreich".
+  await checkRadio(
+    scope,
+    [scope.locator("#ortr"), scope.locator('input[name="ort"][value="REGION"]')],
+    "ort=REGION"
   );
 
-  await fillFirstMatch(streetFieldCandidates(scope), input.street, "Strasse", true, page);
+  const regionSelect = await firstVisible(
+    [scope.locator("#regionsb"), scope.locator('select[name="regionsb"]')],
+    2500
+  );
+  if (regionSelect) {
+    const region = input.region?.trim() || "Österreich";
+    await regionSelect.selectOption({ label: region }).catch(async () => {
+      console.warn(`[manz] Bundesland "${region}" unbekannt — verwende "Österreich".`);
+      await regionSelect.selectOption({ label: "Österreich" }).catch(() => {});
+    });
+  }
+
+  await fillField(
+    scope,
+    page,
+    [scope.locator("#ortsname"), scope.locator('input[name="ortsname"]')],
+    input.city,
+    "ortsname",
+    true
+  );
+
+  // maxlength 25 auf der MANZ-Seite — längere Eingaben schneidet der
+  // Browser ohnehin ab, wir loggen es nur zur Nachvollziehbarkeit.
+  if (input.street.length > 25) {
+    console.warn(`[manz] Straße länger als 25 Zeichen — MANZ schneidet ab: "${input.street}"`);
+  }
+  await fillField(scope, page, streetFieldCandidates(scope), input.street, "strasse", true);
 
   if (input.houseNumber) {
-    await fillFirstMatch(
+    await checkRadio(
+      scope,
       [
-        scope.getByLabel(/hausnummer|hnr/i),
-        scope.locator('input[name*="hausnummer" i]'),
-        scope.locator('input[id*="hausnummer" i]'),
-        scope.locator('input[name*="hnr" i]'),
+        scope.locator("#orientierungsnrn"),
+        scope.locator('input[name="orientierungsnr"][value="NUMMER"]'),
       ],
+      "orientierungsnr=NUMMER"
+    );
+    await fillField(
+      scope,
+      page,
+      [scope.locator("#nummer"), scope.locator('input[name="nummer"]')],
       input.houseNumber,
-      "Hausnummer",
-      false,
-      page
+      "nummer",
+      false
+    );
+  } else {
+    // Ohne Hausnummer: alle Hausnummern der Straße suchen.
+    await checkRadio(
+      scope,
+      [
+        scope.locator("#orientierungsnrallestr"),
+        scope.locator('input[name="orientierungsnr"][value="ALLE"]'),
+      ],
+      "orientierungsnr=ALLE"
     );
   }
+
+  // searchMode: exact -> phonetisch=false (#exakt), fuzzy -> true (#erweitert)
+  const modeCandidates =
+    input.searchMode === "fuzzy"
+      ? [scope.locator("#erweitert"), scope.locator('input[name="phonetisch"][value="true"]')]
+      : [scope.locator("#exakt"), scope.locator('input[name="phonetisch"][value="false"]')];
+  await checkRadio(scope, modeCandidates, `phonetisch (${input.searchMode})`);
 }
 
 async function submitSearch(scope: Scope, page: Page): Promise<void> {
   const button = await firstVisible([
-    scope.getByRole("button", { name: /^suchen$/i }),
-    scope.getByRole("button", { name: /suchen/i }),
+    scope.locator("#searchButton"),
+    scope.locator('input[name="searchButton"]'),
     scope.locator('input[type="submit"][value*="such" i]'),
-    scope.locator('button[type="submit"]'),
+    scope.getByRole("button", { name: /suchen/i }),
   ]);
   if (!button) {
     await dumpDebug(page, "suchen-button-fehlt");
@@ -182,7 +228,7 @@ async function waitForResults(
       if (result) return result;
 
       const noResults = scope
-        .getByText(/keine (treffer|ergebnisse|daten)|kein ergebnis/i)
+        .getByText(/keine (treffer|ergebnisse|daten|adressen)|kein ergebnis|nicht gefunden/i)
         .first();
       if (await noResults.isVisible().catch(() => false)) return "empty";
     }
@@ -191,7 +237,7 @@ async function waitForResults(
   return null;
 }
 
-async function parseResults(page: Page): Promise<GrundbuchHit[]> {
+export async function parseResults(page: Page): Promise<GrundbuchHit[]> {
   const outcome = await waitForResults(page);
   if (outcome === "empty") return [];
   if (!outcome) {
@@ -208,8 +254,9 @@ async function parseResults(page: Page): Promise<GrundbuchHit[]> {
   const hits: GrundbuchHit[] = [];
 
   for (let r = 1; r < rowCount; r++) {
-    const cells = await rows.nth(r).locator("th, td").allInnerTexts();
-    if (cells.length < 3) continue; // Trenner-/Footer-Zeilen überspringen
+    const row = rows.nth(r);
+    const cells = await row.locator("th, td").allInnerTexts();
+    if (cells.length < 3) continue; // Trenner-/Kopfzeilen überspringen
 
     const hit: GrundbuchHit = {
       politischeGemeinde: "",
@@ -232,6 +279,20 @@ async function parseResults(page: Page): Promise<GrundbuchHit[]> {
 
     // Zeilen ohne EZ und ohne Gst sind keine echten Treffer (z.B. Paging-Zeile).
     if (!hit.ez && !hit.grundstuecksnummer) continue;
+
+    // "Gehe zu ..."-Link (auszugsuche?kg=…&ez=…) für den späteren
+    // /request-extract mitnehmen — NICHT klicken, nur die URL merken.
+    const auszugLink = row.locator('a[href*="auszugsuche"]').first();
+    if ((await auszugLink.count().catch(() => 0)) > 0) {
+      const href = await auszugLink.getAttribute("href").catch(() => null);
+      if (href) {
+        try {
+          hit.auszugUrl = new URL(href, page.url()).toString();
+        } catch {
+          hit.auszugUrl = href;
+        }
+      }
+    }
 
     hit.address = [
       [hit.strasse, hit.hausnummer].filter(Boolean).join(" "),

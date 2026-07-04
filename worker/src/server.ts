@@ -50,6 +50,8 @@ const MOCK_HIT: GrundbuchHit = {
   kgGst: "16121",
   address: "Hochstraße 137, Perchtoldsdorf",
   source: "manz",
+  auszugUrl:
+    "https://dienste.manz.at/vst/rev-proxy/gb/at.gv.bmj.grundbuch.web/ds/auszug/auszugsuche?kg=16121&ez=330",
 };
 
 async function runLiveSearch(input: SearchAddressInput): Promise<GrundbuchHit[]> {
